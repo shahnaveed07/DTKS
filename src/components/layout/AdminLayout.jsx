@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
+import BrandLogo from '../common/BrandLogo.jsx';
 
 const ADMIN_NAV = [
   { label: 'Overview', to: '/admin', icon: LayoutDashboard, end: true },
@@ -50,9 +51,13 @@ export default function AdminLayout({ title, children }) {
     <div className="min-h-screen flex bg-[#F7FAF7] text-[#17231C] overflow-x-hidden">
       {/* Desktop White Sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 border-r border-[#E3EBE5] bg-white">
-        <div className="h-16 px-5 flex items-center border-b border-[#E3EBE5]">
-          <Link to="/" className="font-display text-sm font-bold tracking-tight text-[#116438] truncate">
-            DreamTech Kashmir
+        <div className="h-[72px] px-5 flex items-center border-b border-[#E3EBE5]">
+          <Link
+            to="/"
+            aria-label="DreamTech Kashmir Solutions"
+            className="inline-flex items-center rounded-lg focus-visible:outline-2 focus-visible:outline-[#16834A]"
+          >
+            <BrandLogo variant="admin" />
           </Link>
         </div>
 
@@ -115,10 +120,14 @@ export default function AdminLayout({ title, children }) {
             onClick={() => setSidebarOpen(false)}
           />
           <aside className="relative w-72 max-w-[85vw] flex flex-col bg-white border-r border-[#E3EBE5] h-full z-10">
-            <div className="h-16 px-4 flex items-center justify-between border-b border-[#E3EBE5]">
-              <span className="font-display text-sm font-bold text-[#116438]">
-                Admin Prototype
-              </span>
+            <div className="h-[72px] px-4 flex items-center justify-between border-b border-[#E3EBE5]">
+              <Link
+                to="/"
+                aria-label="DreamTech Kashmir Solutions"
+                className="inline-flex items-center"
+              >
+                <BrandLogo variant="admin" />
+              </Link>
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
@@ -174,7 +183,7 @@ export default function AdminLayout({ title, children }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-[#E3EBE5] bg-white flex items-center justify-between gap-4">
+        <header className="h-[72px] px-4 sm:px-6 lg:px-8 border-b border-[#E3EBE5] bg-white flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"

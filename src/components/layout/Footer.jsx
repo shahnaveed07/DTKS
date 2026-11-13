@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
+import BrandLogo from '../common/BrandLogo.jsx';
 
 export default function Footer() {
   const { settings, services } = useApp();
@@ -18,9 +19,10 @@ export default function Footer() {
           <div className="lg:col-span-3">
             <Link
               to="/"
-              className="font-display text-lg font-bold tracking-tight text-white"
+              aria-label={settings.companyName}
+              className="inline-flex items-center bg-white rounded-xl px-3.5 py-2 shadow-xs border border-white/20 focus-visible:outline-2 focus-visible:outline-white"
             >
-              {settings.companyName}
+              <BrandLogo variant="footer" alt={settings.companyName} />
             </Link>
             <p className="mt-3 text-sm text-[#D6EBDD] leading-relaxed">
               Delivering fast, responsive business websites, portfolios, landing pages, e-commerce storefronts, and custom web experiences.

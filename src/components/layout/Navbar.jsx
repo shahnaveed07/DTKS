@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import BrandLogo from '../common/BrandLogo.jsx';
 
 const NAV_LINKS = [
   { label: 'Home', to: '/' },
@@ -21,13 +22,14 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#E3EBE5] bg-white/95 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
-        {/* Zone 1: Single-line Brand Wordmark */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-6">
+        {/* Zone 1: Brand Logo */}
         <Link
           to="/"
-          className="font-display text-base sm:text-lg font-bold tracking-tight text-[#116438] whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-[#16834A] rounded"
+          aria-label="DreamTech Kashmir Solutions — Home"
+          className="inline-flex items-center shrink-0 focus-visible:outline-2 focus-visible:outline-[#16834A] rounded-lg"
         >
-          DreamTech Kashmir Solutions
+          <BrandLogo variant="navbar" />
         </Link>
 
         {/* Zone 2: Clean single-line navigation links */}
