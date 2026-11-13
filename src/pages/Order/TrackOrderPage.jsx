@@ -3,13 +3,13 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { Search, Info, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { ORDER_STATUSES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { findTrackedOrder, formatCurrency } from '../../utils/orderUtils.js';
 
 export default function TrackOrderPage() {
   const [searchParams] = useSearchParams();
-  const { orders } = useApp();
+  const { orders, settings } = useApp();
 
   const [referenceId, setReferenceId] = useState(searchParams.get('ref') || '');
   const [email, setEmail] = useState(searchParams.get('email') || '');
@@ -45,10 +45,7 @@ export default function TrackOrderPage() {
 
   return (
     <>
-      <PageHead
-        title="Track Order (Demo)"
-        description="Look up your DreamTech Kashmir Solutions project request status using your reference ID and email."
-      />
+      <SEO noindex settings={settings} />
 
       <section className="border-b border-[#E3EBE5] bg-white py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">

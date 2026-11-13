@@ -7,6 +7,10 @@ export default function ImageWithFallback({
   className = '',
   fallbackTitle = 'Project Preview',
   loading = 'lazy',
+  decoding = 'async',
+  fetchPriority,
+  width,
+  height,
 }) {
   const [hasError, setHasError] = useState(false);
 
@@ -29,7 +33,11 @@ export default function ImageWithFallback({
     <img
       src={src}
       alt={alt}
+      width={width}
+      height={height}
       loading={loading}
+      decoding={decoding}
+      fetchPriority={fetchPriority}
       referrerPolicy="no-referrer"
       onError={() => setHasError(true)}
       className={className}

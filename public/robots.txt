@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /track-order
+
+Sitemap: https://dtks.pages.dev/sitemap.xml

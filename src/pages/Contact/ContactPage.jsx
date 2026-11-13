@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin, Clock, CheckCircle2, Send, MessageSquare } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import { validateContactForm } from '../../utils/orderUtils.js';
 
 const EMPTY_FORM = {
@@ -46,10 +46,7 @@ export default function ContactPage() {
 
   return (
     <>
-      <PageHead
-        title="Contact Us"
-        description="Get in touch with DreamTech Kashmir Solutions for project discussions, consultations, and technical questions."
-      />
+      <SEO settings={settings} />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -58,10 +55,14 @@ export default function ContactPage() {
               Contact &amp; Inquiries
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-              Speak With DreamTech Kashmir Solutions
+              Speak With DreamTech Kashmir Solutions (DTKS)
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Have a business question, partnership inquiry, or technical requirement you want to discuss before submitting a full project order? Send us a message below.
+              Have a website project question, redesign requirement, or business inquiry in Kashmir or beyond? Send us a message below or{' '}
+              <Link to="/packages" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
+                compare website packages
+              </Link>{' '}
+              first.
             </p>
           </div>
         </div>

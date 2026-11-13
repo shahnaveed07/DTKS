@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 
 export default function AdminSettingsPage() {
   const { settings, updateSettings } = useApp();
@@ -33,7 +33,7 @@ export default function AdminSettingsPage() {
 
   return (
     <>
-      <PageHead title="Website Settings | Admin" />
+      <SEO noindex fullTitle="Website Settings | Admin | DTKS" />
 
       <form onSubmit={handleSave} className="space-y-8 max-w-4xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

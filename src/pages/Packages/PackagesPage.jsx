@@ -1,18 +1,19 @@
 import { Link } from 'react-router-dom';
 import { Check, ArrowRight, Server, ShieldCheck, Info } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
+import { buildPackagesOfferCatalogSchema } from '../../seo/structuredData.js';
 import { formatCurrency } from '../../utils/orderUtils.js';
 
 export default function PackagesPage() {
-  const { packages, addons, maintenancePlans } = useApp();
+  const { packages, addons, maintenancePlans, settings } = useApp();
   const activePackages = packages.filter((p) => p.active);
 
   return (
     <>
-      <PageHead
-        title="Website Packages & Pricing"
-        description="Explore DreamTech Kashmir Solutions website packages (Starter, Business, Professional, E-Commerce, Custom), add-on website services, hosting options, and optional maintenance plans."
+      <SEO
+        settings={settings}
+        extraSchemas={[buildPackagesOfferCatalogSchema(packages)]}
       />
 
       {/* Header */}
@@ -21,13 +22,13 @@ export default function PackagesPage() {
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold text-[#16834A]">
-                Website Packages &amp; Hybrid Pricing
+                DTKS Website Packages &amp; Hybrid Pricing
               </p>
               <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-                Transparent Website Packages &amp; Custom Quotes
+                Website Development Packages &amp; Pricing
               </h1>
               <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-                Predefined website packages display starting estimates when configured. Final project pricing is confirmed after reviewing your exact pages, functionality, domain/hosting setup, and delivery date.
+                Explore transparent starting pricing across Starter, Business, Professional, E-Commerce, and Custom website packages from DreamTech Kashmir Solutions (DTKS). Final project pricing is confirmed after reviewing your required pages, functionality, and hosting setup.
               </p>
             </div>
             <Link

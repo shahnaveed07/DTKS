@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext.jsx';
 import PublicLayout from './components/layout/PublicLayout.jsx';
@@ -18,15 +18,31 @@ import RequestQuotePage from './pages/Order/RequestQuotePage.jsx';
 import TrackOrderPage from './pages/Order/TrackOrderPage.jsx';
 import LegalPage from './pages/Legal/LegalPage.jsx';
 
-import AdminDashboardPage from './pages/Admin/AdminDashboardPage.jsx';
-import AdminOrdersPage from './pages/Admin/AdminOrdersPage.jsx';
-import AdminPackagesPage from './pages/Admin/AdminPackagesPage.jsx';
-import AdminPortfolioPage from './pages/Admin/AdminPortfolioPage.jsx';
-import AdminTeamPage from './pages/Admin/AdminTeamPage.jsx';
-import AdminInquiriesPage from './pages/Admin/AdminInquiriesPage.jsx';
-import AdminSettingsPage from './pages/Admin/AdminSettingsPage.jsx';
+const AdminDashboardPage = lazy(() => import('./pages/Admin/AdminDashboardPage.jsx'));
+const AdminOrdersPage = lazy(() => import('./pages/Admin/AdminOrdersPage.jsx'));
+const AdminPackagesPage = lazy(() => import('./pages/Admin/AdminPackagesPage.jsx'));
+const AdminPortfolioPage = lazy(() => import('./pages/Admin/AdminPortfolioPage.jsx'));
+const AdminTeamPage = lazy(() => import('./pages/Admin/AdminTeamPage.jsx'));
+const AdminInquiriesPage = lazy(() => import('./pages/Admin/AdminInquiriesPage.jsx'));
+const AdminSettingsPage = lazy(() => import('./pages/Admin/AdminSettingsPage.jsx'));
 
-function ScrollToTop() {
+function AdminRouteFallback() {
+  return (
+    <div className="rounded-xl border border-[#E3EBE5] bg-white p-8 text-sm text-[#64756B]">
+      Loading admin module...
+    </div>
+  );
+}
+
+function renderAdmin(title, element) {
+  return (
+    <AdminLayout title={title}>
+      <Suspense fallback={<AdminRouteFallback />}>{element}</Suspense>
+    </AdminLayout>
+  );
+}
+
+export function ScrollToTop() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
     if (hash) {
@@ -41,40 +57,48 @@ function ScrollToTop() {
   return null;
 }
 
+export function AppRoutes() {
+  return (
+    <>
+      <ScrollToTop />
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<PublicLayout><HomePage /></PublicLayout>} />
+        <Route path="/services" element={<PublicLayout><ServicesPage /></PublicLayout>} />
+        <Route path="/packages" element={<PublicLayout><PackagesPage /></PublicLayout>} />
+        <Route path="/portfolio" element={<PublicLayout><PortfolioPage /></PublicLayout>} />
+        <Route path="/portfolio/:slug" element={<PublicLayout><ProjectDetailPage /></PublicLayout>} />
+        <Route path="/team" element={<PublicLayout><TeamPage /></PublicLayout>} />
+        <Route path="/about" element={<PublicLayout><AboutPage /></PublicLayout>} />
+        <Route path="/contact" element={<PublicLayout><ContactPage /></PublicLayout>} />
+        <Route path="/request-quote" element={<PublicLayout><RequestQuotePage /></PublicLayout>} />
+        <Route path="/track-order" element={<PublicLayout><TrackOrderPage /></PublicLayout>} />
+        <Route path="/privacy-policy" element={<PublicLayout><LegalPage type="privacy" /></PublicLayout>} />
+        <Route path="/terms" element={<PublicLayout><LegalPage type="terms" /></PublicLayout>} />
+
+        {/* Admin Prototype Routes (code-split) */}
+        <Route path="/admin" element={renderAdmin('Overview', <AdminDashboardPage />)} />
+        <Route path="/admin/orders" element={renderAdmin('Orders', <AdminOrdersPage />)} />
+        <Route path="/admin/packages" element={renderAdmin('Packages', <AdminPackagesPage />)} />
+        <Route path="/admin/portfolio" element={renderAdmin('Portfolio', <AdminPortfolioPage />)} />
+        <Route path="/admin/team" element={renderAdmin('Team', <AdminTeamPage />)} />
+        <Route path="/admin/inquiries" element={renderAdmin('Inquiries', <AdminInquiriesPage />)} />
+        <Route path="/admin/settings" element={renderAdmin('Website Settings', <AdminSettingsPage />)} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <ToastContainer />
+      <ConfirmDialog />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <AppProvider>
       <BrowserRouter>
-        <ScrollToTop />
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<PublicLayout><HomePage /></PublicLayout>} />
-          <Route path="/services" element={<PublicLayout><ServicesPage /></PublicLayout>} />
-          <Route path="/packages" element={<PublicLayout><PackagesPage /></PublicLayout>} />
-          <Route path="/portfolio" element={<PublicLayout><PortfolioPage /></PublicLayout>} />
-          <Route path="/portfolio/:slug" element={<PublicLayout><ProjectDetailPage /></PublicLayout>} />
-          <Route path="/team" element={<PublicLayout><TeamPage /></PublicLayout>} />
-          <Route path="/about" element={<PublicLayout><AboutPage /></PublicLayout>} />
-          <Route path="/contact" element={<PublicLayout><ContactPage /></PublicLayout>} />
-          <Route path="/request-quote" element={<PublicLayout><RequestQuotePage /></PublicLayout>} />
-          <Route path="/track-order" element={<PublicLayout><TrackOrderPage /></PublicLayout>} />
-          <Route path="/privacy-policy" element={<PublicLayout><LegalPage type="privacy" /></PublicLayout>} />
-          <Route path="/terms" element={<PublicLayout><LegalPage type="terms" /></PublicLayout>} />
-
-          {/* Admin Prototype Routes */}
-          <Route path="/admin" element={<AdminLayout title="Overview"><AdminDashboardPage /></AdminLayout>} />
-          <Route path="/admin/orders" element={<AdminLayout title="Orders"><AdminOrdersPage /></AdminLayout>} />
-          <Route path="/admin/packages" element={<AdminLayout title="Packages"><AdminPackagesPage /></AdminLayout>} />
-          <Route path="/admin/portfolio" element={<AdminLayout title="Portfolio"><AdminPortfolioPage /></AdminLayout>} />
-          <Route path="/admin/team" element={<AdminLayout title="Team"><AdminTeamPage /></AdminLayout>} />
-          <Route path="/admin/inquiries" element={<AdminLayout title="Inquiries"><AdminInquiriesPage /></AdminLayout>} />
-          <Route path="/admin/settings" element={<AdminLayout title="Website Settings"><AdminSettingsPage /></AdminLayout>} />
-
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        <ToastContainer />
-        <ConfirmDialog />
+        <AppRoutes />
       </BrowserRouter>
     </AppProvider>
   );

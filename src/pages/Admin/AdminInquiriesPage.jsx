@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { INQUIRY_STATUSES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
@@ -26,7 +26,7 @@ export default function AdminInquiriesPage() {
 
   return (
     <>
-      <PageHead title="Manage Inquiries | Admin" />
+      <SEO noindex fullTitle="Manage Inquiries | Admin | DTKS" />
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

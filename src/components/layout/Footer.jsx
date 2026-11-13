@@ -25,7 +25,7 @@ export default function Footer() {
               <BrandLogo variant="footer" alt={settings.companyName} />
             </Link>
             <p className="mt-3 text-sm text-[#D6EBDD] leading-relaxed">
-              Delivering fast, responsive business websites, portfolios, landing pages, e-commerce storefronts, and custom web experiences.
+              DreamTech Kashmir Solutions (DTKS) builds fast, responsive business websites, portfolios, landing pages, e-commerce storefronts, and custom websites for clients in Kashmir and beyond.
             </p>
             <div className="mt-5 flex items-center gap-3">
               <Link
@@ -66,6 +66,11 @@ export default function Footer() {
               <li>
                 <Link to="/request-quote" className="text-[#D6EBDD] hover:text-white transition-colors">
                   Request a Quote
+                </Link>
+              </li>
+              <li>
+                <Link to="/contact" className="text-[#D6EBDD] hover:text-white transition-colors">
+                  Contact Us
                 </Link>
               </li>
               <li>

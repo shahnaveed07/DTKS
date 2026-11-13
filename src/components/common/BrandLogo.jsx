@@ -8,7 +8,7 @@ const VARIANT_CLASSES = {
 
 export default function BrandLogo({
   variant = 'navbar',
-  alt = 'DreamTech Kashmir Solutions',
+  alt = 'DreamTech Kashmir Solutions (DTKS) logo',
   className = '',
 }) {
   const sizeClass = VARIANT_CLASSES[variant] || VARIANT_CLASSES.navbar;
@@ -20,6 +20,8 @@ export default function BrandLogo({
       <img
         src={LOGO_SRC}
         alt={alt}
+        width={1254}
+        height={1254}
         className="w-full h-full object-cover object-[49%_46.5%] scale-[1.18] origin-[49%_46.5%]"
         decoding="async"
       />

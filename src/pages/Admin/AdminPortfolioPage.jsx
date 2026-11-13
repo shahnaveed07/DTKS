@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Edit3, Trash2, X, Eye, EyeOff, Star, Upload } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { PORTFOLIO_CATEGORIES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 
 const EMPTY_PROJECT = {
@@ -19,7 +19,7 @@ const EMPTY_PROJECT = {
   published: true,
   featured: false,
   completionDate: '',
-  coverImage: '/assets/images/portfolio_webapp_showcase_1794577652813.jpg',
+  coverImage: '/assets/images/dtks-corporate-website-showcase.jpg',
   galleryText: '',
   liveUrl: '',
   githubUrl: '',
@@ -27,10 +27,10 @@ const EMPTY_PROJECT = {
 };
 
 const BUNDLED_IMAGES = [
-  { label: 'Corporate Website', path: '/assets/images/portfolio_webapp_showcase_1794577652813.jpg' },
-  { label: 'E-Commerce Storefront', path: '/assets/images/portfolio_ecommerce_showcase_1794577653883.jpg' },
-  { label: 'Emerald Web Studio', path: '/assets/images/hero_emerald_studio_1794579090899.jpg' },
-  { label: 'Editorial Web Studio', path: '/assets/images/hero_software_studio_1794577652777.jpg' },
+  { label: 'Corporate Website', path: '/assets/images/dtks-corporate-website-showcase.jpg' },
+  { label: 'E-Commerce Storefront', path: '/assets/images/dtks-ecommerce-website-showcase.jpg' },
+  { label: 'Emerald Web Studio', path: '/assets/images/dreamtech-kashmir-website-studio.jpg' },
+  { label: 'Educational Showcase', path: '/assets/images/dtks-educational-website-showcase.jpg' },
 ];
 
 export default function AdminPortfolioPage() {
@@ -122,7 +122,7 @@ export default function AdminPortfolioPage() {
 
   return (
     <>
-      <PageHead title="Manage Portfolio | Admin" />
+      <SEO noindex fullTitle="Manage Portfolio | Admin | DTKS" />
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

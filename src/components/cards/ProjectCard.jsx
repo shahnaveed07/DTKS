@@ -8,8 +8,11 @@ export default function ProjectCard({ project }) {
       <div className="aspect-4/3 w-full overflow-hidden bg-[#F7FAF7] border-b border-[#E3EBE5]">
         <ImageWithFallback
           src={project.coverImage}
-          alt={`${project.title} preview`}
+          alt={`${project.title} — ${project.category} showcase by DreamTech Kashmir Solutions`}
           fallbackTitle={project.title}
+          width={1200}
+          height={896}
+          loading="lazy"
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
         />
       </div>

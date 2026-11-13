@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Layers, Shield, Sliders, Headphones, Users } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
+import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import ServiceCard from '../../components/cards/ServiceCard.jsx';
 import ProjectCard from '../../components/cards/ProjectCard.jsx';
@@ -64,9 +65,10 @@ export default function HomePage() {
 
   return (
     <>
-      <PageHead
-        title="Website Design & Development"
-        description={settings.heroSupportText}
+      <SEO
+        fullTitle={ROUTE_SEO['/'].title}
+        description={ROUTE_SEO['/'].description}
+        settings={settings}
       />
 
       {/* Section 2: Hero Section */}
@@ -75,7 +77,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
             <div className="lg:col-span-6 flex flex-col justify-center">
               <p className="text-xs font-semibold tracking-wide text-[#16834A] mb-3">
-                DreamTech Kashmir Solutions · Website Design &amp; Development
+                DreamTech Kashmir Solutions (DTKS) · Website Development in Kashmir
               </p>
               <h1
                 className="font-display font-bold tracking-tight text-[#17231C] leading-[1.12] max-w-2xl"
@@ -117,10 +119,13 @@ export default function HomePage() {
             <div className="lg:col-span-6 flex">
               <div className="w-full rounded-xl overflow-hidden border border-[#E3EBE5] bg-[#F7FAF7] shadow-sm aspect-16/9 lg:aspect-auto lg:min-h-[380px]">
                 <ImageWithFallback
-                  src="/assets/images/hero_emerald_studio_1794579090899.jpg"
-                  alt="DreamTech Kashmir Solutions website design and development studio"
-                  fallbackTitle="DreamTech Website Studio"
+                  src="/assets/images/dreamtech-kashmir-website-studio.jpg"
+                  alt="DreamTech Kashmir Solutions (DTKS) website design and development studio"
+                  fallbackTitle="DTKS Website Studio"
+                  width={1376}
+                  height={768}
                   loading="eager"
+                  fetchPriority="high"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -282,10 +287,10 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-12">
             <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#17231C] tracking-tight">
-              Why Choose DreamTech Kashmir Solutions
+              Why Choose DreamTech Kashmir Solutions (DTKS)
             </h2>
             <p className="mt-2 text-sm sm:text-base text-[#64756B]">
-              Practical engineering standards focused on reliability, clear pricing, and long-term maintainability.
+              Practical website engineering standards focused on speed, clear pricing, and long-term maintainability across Srinagar and Jammu &amp; Kashmir.
             </p>
           </div>
 
@@ -330,14 +335,14 @@ export default function HomePage() {
               to="/request-quote"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap"
             >
-              <span>Order a Website</span>
+              <span>Request a Website Quote</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
               to="/packages"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#F7FAF7] transition-colors whitespace-nowrap"
             >
-              <span>Explore Website Packages</span>
+              <span>View Packages</span>
             </Link>
           </div>
         </div>

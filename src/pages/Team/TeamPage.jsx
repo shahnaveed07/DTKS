@@ -1,19 +1,16 @@
 import { Github, Linkedin, Globe, Info, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
 export default function TeamPage() {
-  const { team } = useApp();
+  const { team, settings } = useApp();
   const visibleMembers = team.filter((m) => m.visible);
   const hasPlaceholders = visibleMembers.some((m) => m.isPlaceholder);
 
   return (
     <>
-      <PageHead
-        title="Our Team"
-        description="Meet the website architecture, frontend, backend, UI/UX design, e-commerce, and deployment specialists at DreamTech Kashmir Solutions."
-      />
+      <SEO settings={settings} />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -25,7 +22,7 @@ export default function TeamPage() {
               Website Design &amp; Engineering Team
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Our multidisciplinary web specialists cover website architecture, full-stack web engineering, UI/UX systems, e-commerce storefronts, and SEO deployment.
+              The DreamTech Kashmir Solutions (DTKS) multidisciplinary web team covers website architecture, full-stack web engineering, UI/UX systems, e-commerce storefronts, and technical SEO deployment.
             </p>
           </div>
 
@@ -54,7 +51,11 @@ export default function TeamPage() {
                       {member.avatarUrl ? (
                         <img
                           src={member.avatarUrl}
-                          alt={member.fullName}
+                          alt={`${member.fullName} — ${member.role} at DreamTech Kashmir Solutions`}
+                          width={64}
+                          height={64}
+                          loading="lazy"
+                          decoding="async"
                           referrerPolicy="no-referrer"
                           className="w-16 h-16 rounded-xl object-cover border border-[#E3EBE5] shrink-0"
                         />

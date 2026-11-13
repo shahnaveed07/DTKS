@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Search, Eye, Trash2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { ORDER_STATUSES, WEBSITE_CATEGORIES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import { filterOrders, formatCurrency } from '../../utils/orderUtils.js';
@@ -93,7 +93,7 @@ export default function AdminOrdersPage() {
 
   return (
     <>
-      <PageHead title="Manage Website Orders | Admin" />
+      <SEO noindex fullTitle="Manage Website Orders | Admin | DTKS" />
 
       <div className="space-y-6">
         <div>

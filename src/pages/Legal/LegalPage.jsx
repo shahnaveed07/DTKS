@@ -1,4 +1,4 @@
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 export default function LegalPage({ type = 'privacy' }) {
@@ -7,10 +7,7 @@ export default function LegalPage({ type = 'privacy' }) {
 
   return (
     <>
-      <PageHead
-        title={isPrivacy ? 'Privacy Policy' : 'Terms & Conditions'}
-        description={`${isPrivacy ? 'Privacy Policy' : 'Terms & Conditions'} for ${settings.companyName}.`}
-      />
+      <SEO settings={settings} />
 
       <section className="py-14 bg-[#F7FAF7]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6">

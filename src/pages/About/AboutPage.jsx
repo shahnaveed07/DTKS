@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Code2, ShieldCheck, Layers } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 
 const PRINCIPLES = [
@@ -27,26 +27,30 @@ export default function AboutPage() {
 
   return (
     <>
-      <PageHead
-        title="About Us"
-        description="Learn about DreamTech Kashmir Solutions, our website design and development standards, and how we partner with businesses and professionals."
-      />
+      <SEO settings={settings} />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14 lg:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
             <div className="lg:col-span-7 flex flex-col justify-center">
               <p className="text-xs font-semibold text-[#16834A]">
-                About {settings.companyName}
+                About {settings.companyName} (DTKS)
               </p>
               <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
                 Practical Website Engineering Rooted in Clarity and Trust
               </h1>
               <p className="mt-5 text-base text-[#64756B] leading-relaxed">
-                {settings.companyName} is a dedicated website design and development studio helping local businesses, institutions, hospitality brands, and independent professionals establish a credible online presence.
+                {settings.companyName} (DTKS) is a website design and development company based in Kashmir, helping local businesses, institutions, hospitality brands, and independent professionals establish a credible online presence.
               </p>
               <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-                Whether a client needs an authoritative corporate website, a personal portfolio, a focused campaign landing page, an online storefront, or a booking website, we deliver each site with responsive UI/UX, transparent pricing, and reliable hosting and maintenance options.
+                Whether a client needs an authoritative corporate website, a personal portfolio, a focused campaign landing page, an online storefront, or a booking portal, we deliver each project with responsive UI/UX, transparent pricing, and reliable hosting and maintenance options. Explore our{' '}
+                <Link to="/services" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
+                  website development services
+                </Link>{' '}
+                or{' '}
+                <Link to="/portfolio" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
+                  website portfolio
+                </Link>.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
@@ -69,9 +73,12 @@ export default function AboutPage() {
             <div className="lg:col-span-5 flex">
               <div className="w-full rounded-xl overflow-hidden border border-[#E3EBE5] bg-[#F7FAF7] shadow-sm aspect-4/3 lg:aspect-auto">
                 <ImageWithFallback
-                  src="/assets/images/hero_emerald_studio_1794579090899.jpg"
-                  alt="DreamTech Kashmir Solutions development studio environment"
+                  src="/assets/images/dreamtech-kashmir-website-studio.jpg"
+                  alt="DreamTech Kashmir Solutions (DTKS) website design and engineering workspace"
                   fallbackTitle="DreamTech Studio"
+                  width={1376}
+                  height={768}
+                  loading="eager"
                   className="w-full h-full object-cover"
                 />
               </div>

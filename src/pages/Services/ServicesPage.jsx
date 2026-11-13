@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { SUPPORTING_SERVICES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
+import { buildServiceCatalogSchema } from '../../seo/structuredData.js';
 import { formatCurrency } from '../../utils/orderUtils.js';
 
 const ICON_MAP = {
@@ -46,26 +47,30 @@ const ICON_MAP = {
 };
 
 export default function ServicesPage() {
-  const { services } = useApp();
+  const { services, settings } = useApp();
 
   return (
     <>
-      <PageHead
-        title="Website Services"
-        description="Explore all 10 website design and development categories plus supporting UI/UX, redesign, hosting, domain, SEO, maintenance, and speed optimization services."
+      <SEO
+        settings={settings}
+        extraSchemas={[buildServiceCatalogSchema(services)]}
       />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold text-[#16834A]">
-              Website Design &amp; Development Capabilities
+              Website Design &amp; Development · DTKS Kashmir
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-              Website Services We Offer
+              Website Design &amp; Development Services
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              DreamTech Kashmir Solutions focuses exclusively on designing, building, optimizing, and maintaining modern websites. Select any category below to start a tailored website quotation.
+              DreamTech Kashmir Solutions (DTKS) focuses exclusively on designing, developing, redesigning, and maintaining modern websites across Srinagar and Jammu &amp; Kashmir. Select any category below or{' '}
+              <Link to="/packages" className="text-[#16834A] font-medium hover:underline">
+                compare website packages
+              </Link>{' '}
+              to start a tailored quotation.
             </p>
           </div>
         </div>

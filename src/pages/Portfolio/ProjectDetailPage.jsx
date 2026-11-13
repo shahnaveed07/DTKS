@@ -11,20 +11,21 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
+import { buildProjectSchema } from '../../seo/structuredData.js';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
 export default function ProjectDetailPage() {
   const { slug } = useParams();
-  const { portfolio } = useApp();
+  const { portfolio, settings } = useApp();
   const project = portfolio.find((p) => p.slug === slug);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   if (!project) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <PageHead title="Project Not Found" />
+        <SEO noindex fullTitle="Project Not Found | DreamTech Kashmir Solutions (DTKS)" settings={settings} />
         <EmptyState
           title="Project not found"
           description="The requested portfolio entry could not be found or may have been unpublished."
@@ -52,7 +53,20 @@ export default function ProjectDetailPage() {
 
   return (
     <>
-      <PageHead title={project.title} description={project.shortOverview} />
+      <SEO
+        fullTitle={`${project.title} | DTKS Portfolio`}
+        description={project.shortOverview || project.description}
+        noindex={!project.published}
+        ogImage={project.coverImage}
+        ogImageAlt={`${project.title} — ${project.category} by DreamTech Kashmir Solutions (DTKS)`}
+        breadcrumbs={[
+          { name: 'Home', path: '/' },
+          { name: 'Portfolio', path: '/portfolio' },
+          { name: project.title, path: `/portfolio/${project.slug}` },
+        ]}
+        extraSchemas={[buildProjectSchema(project)]}
+        settings={settings}
+      />
 
       <div className="bg-[#F7FAF7] py-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -90,9 +104,12 @@ export default function ProjectDetailPage() {
             <div className="relative rounded-xl overflow-hidden border border-[#E3EBE5] bg-white shadow-xs aspect-16/9">
               <ImageWithFallback
                 src={currentImage}
-                alt={`${project.title} screenshot ${activeImageIndex + 1}`}
+                alt={`${project.title} screenshot ${activeImageIndex + 1} by DreamTech Kashmir Solutions`}
                 fallbackTitle={project.title}
+                width={1200}
+                height={896}
                 loading="eager"
+                fetchPriority="high"
                 className="w-full h-full object-cover"
               />
               {gallery.length > 1 && (

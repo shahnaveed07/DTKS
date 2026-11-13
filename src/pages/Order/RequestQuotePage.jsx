@@ -15,7 +15,7 @@ import {
   HOSTING_PREFERENCES,
   MAINTENANCE_PREFERENCES,
 } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import { validateOrderStep, formatCurrency } from '../../utils/orderUtils.js';
 
 const STEPS = [
@@ -163,7 +163,7 @@ export default function RequestQuotePage() {
   if (submittedOrder) {
     return (
       <>
-        <PageHead title="Website Order Submitted" />
+        <SEO noindex fullTitle="Website Order Submitted | DreamTech Kashmir Solutions (DTKS)" settings={settings} />
         <section className="py-16 bg-[#F7FAF7]">
           <div className="max-w-2xl mx-auto px-4 sm:px-6">
             <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-8">
@@ -240,10 +240,7 @@ export default function RequestQuotePage() {
 
   return (
     <>
-      <PageHead
-        title="Order a Website / Request a Quote"
-        description="Submit your website category, business details, required pages, design preferences, domain/hosting choice, and delivery date for a tailored website quote."
-      />
+      <SEO settings={settings} />
 
       <section className="border-b border-[#E3EBE5] bg-white py-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">

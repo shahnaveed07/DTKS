@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Edit3, Trash2, X, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { WEBSITE_CATEGORIES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import { formatCurrency } from '../../utils/orderUtils.js';
 
 const EMPTY_PACKAGE = {
@@ -117,7 +117,7 @@ export default function AdminPackagesPage() {
 
   return (
     <>
-      <PageHead title="Manage Packages | Admin" />
+      <SEO noindex fullTitle="Manage Packages | Admin | DTKS" />
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

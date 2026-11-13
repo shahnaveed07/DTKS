@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { TEAM_ROLES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 
 const EMPTY_MEMBER = {
   fullName: '',
@@ -126,7 +126,7 @@ export default function AdminTeamPage() {
 
   return (
     <>
-      <PageHead title="Manage Team | Admin" />
+      <SEO noindex fullTitle="Manage Team | Admin | DTKS" />
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

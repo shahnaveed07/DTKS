@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
+import SEO from '../common/SEO.jsx';
 
 const ADMIN_NAV = [
   { label: 'Overview', to: '/admin', icon: LayoutDashboard, end: true },
@@ -49,6 +50,11 @@ export default function AdminLayout({ title, children }) {
 
   return (
     <div className="min-h-screen flex bg-[#F7FAF7] text-[#17231C] overflow-x-hidden">
+      <SEO
+        noindex
+        fullTitle={title ? `${title} | Admin | DTKS` : 'Admin | DTKS'}
+        description="Administrative prototype interface for DreamTech Kashmir Solutions (DTKS)."
+      />
       {/* Desktop White Sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 border-r border-[#E3EBE5] bg-white">
         <div className="h-[72px] px-5 flex items-center border-b border-[#E3EBE5]">

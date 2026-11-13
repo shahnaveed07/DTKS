@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { computeDashboardStats, formatCurrency } from '../../utils/orderUtils.js';
 
@@ -25,7 +25,7 @@ export default function AdminDashboardPage() {
 
   return (
     <>
-      <PageHead title="Admin Dashboard (Demo)" />
+      <SEO noindex fullTitle="Overview | Admin | DTKS" />
 
       <div className="space-y-8">
         <div>

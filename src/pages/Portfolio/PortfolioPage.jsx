@@ -2,12 +2,13 @@ import { useState, useMemo } from 'react';
 import { Search, Info } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { PORTFOLIO_CATEGORIES } from '../../data/seedData.js';
-import PageHead from '../../components/common/PageHead.jsx';
+import SEO from '../../components/common/SEO.jsx';
+import { buildPortfolioSchema } from '../../seo/structuredData.js';
 import ProjectCard from '../../components/cards/ProjectCard.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
 export default function PortfolioPage() {
-  const { portfolio } = useApp();
+  const { portfolio, settings } = useApp();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -39,22 +40,22 @@ export default function PortfolioPage() {
 
   return (
     <>
-      <PageHead
-        title="Website Portfolio"
-        description="Explore business websites, e-commerce websites, portfolio websites, landing pages, educational websites, and custom websites by DreamTech Kashmir Solutions."
+      <SEO
+        settings={settings}
+        extraSchemas={[buildPortfolioSchema(publishedProjects)]}
       />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold text-[#16834A]">
-              Website Portfolio
+              DTKS Website Portfolio
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-              Our Website Work &amp; Showcases
+              Our Website Development Portfolio
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Browse websites designed and developed by DreamTech Kashmir Solutions across Business, E-Commerce, Portfolio, Landing Pages, Educational, and Other website categories.
+              Browse websites designed and developed by DreamTech Kashmir Solutions (DTKS) across Business, E-Commerce, Portfolio, Landing Pages, Educational, and Other website categories.
             </p>
           </div>
 
