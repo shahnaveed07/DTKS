@@ -1,9 +1,9 @@
-const LOGO_SRC = '/assets/aistudio/DreamTech_Kashmir_Solutions_Logo_ce2eb216.png';
+const LOGO_SRC = '/assets/aistudio/file_000000001b088208817ae4b752e73385__1__6d1528fc.png';
 
 const VARIANT_CLASSES = {
-  navbar: 'w-[108px] sm:w-[118px] aspect-[7/4]',
-  footer: 'w-[148px] aspect-[7/4]',
-  admin: 'w-[100px] aspect-[7/4]',
+  navbar: 'w-[104px] sm:w-[116px] aspect-[15/8] rounded-lg border border-[#021022]/15 shadow-xs',
+  footer: 'w-[164px] aspect-[15/8] rounded-xl border border-white/20 shadow-sm',
+  admin: 'w-[104px] aspect-[15/8] rounded-lg border border-[#021022]/15 shadow-xs',
 };
 
 export default function BrandLogo({
@@ -14,11 +14,13 @@ export default function BrandLogo({
   const sizeClass = VARIANT_CLASSES[variant] || VARIANT_CLASSES.navbar;
 
   return (
-    <span className={`inline-block overflow-hidden shrink-0 select-none ${sizeClass} ${className}`}>
+    <span
+      className={`inline-block overflow-hidden shrink-0 select-none bg-[#021022] ${sizeClass} ${className}`}
+    >
       <img
         src={LOGO_SRC}
         alt={alt}
-        className="w-full h-full object-cover object-center"
+        className="w-full h-full object-cover object-[49%_46.5%] scale-[1.18] origin-[49%_46.5%]"
         decoding="async"
       />
     </span>

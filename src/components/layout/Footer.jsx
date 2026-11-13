@@ -20,7 +20,7 @@ export default function Footer() {
             <Link
               to="/"
               aria-label={settings.companyName}
-              className="inline-flex items-center bg-white rounded-xl px-3.5 py-2 shadow-xs border border-white/20 focus-visible:outline-2 focus-visible:outline-white"
+              className="inline-flex items-center rounded-xl focus-visible:outline-2 focus-visible:outline-white"
             >
               <BrandLogo variant="footer" alt={settings.companyName} />
             </Link>
