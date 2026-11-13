@@ -1,0 +1,8 @@
+{
+  "name": "DreamTech Kashmir Solutions",
+  "description": "Official software development company website and frontend business management prototype for DreamTech Kashmir Solutions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
