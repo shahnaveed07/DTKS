@@ -4,7 +4,7 @@ export default function PageHead({ title, description }) {
   useEffect(() => {
     const fullTitle = title
       ? `${title} | DreamTech Kashmir Solutions`
-      : 'DreamTech Kashmir Solutions — Software, Web & Mobile Engineering';
+      : 'DreamTech Kashmir Solutions — Website Design & Development';
     document.title = fullTitle;
 
     if (description) {

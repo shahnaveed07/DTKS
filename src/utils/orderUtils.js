@@ -31,31 +31,37 @@ export function validateOrderStep(step, formData) {
 
   if (step === 1) {
     if (!formData.service || !formData.service.trim()) {
-      errors.service = 'Please select a service category to continue.';
+      errors.service = 'Please select a website category to continue.';
     }
   }
 
   if (step === 2) {
     if (!formData.packageId || !formData.packageId.trim()) {
-      errors.packageId = 'Please choose a package or select Custom Quote.';
+      errors.packageId = 'Please choose a website package or select Custom Quote.';
     }
   }
 
   if (step === 3) {
     if (!formData.projectName || formData.projectName.trim().length < 2) {
-      errors.projectName = 'Please enter a project name (at least 2 characters).';
+      errors.projectName = 'Please enter a website project title (at least 2 characters).';
+    }
+    if (!formData.businessName || formData.businessName.trim().length < 2) {
+      errors.businessName = 'Please enter your business, brand, or personal name.';
     }
     if (!formData.projectDescription || formData.projectDescription.trim().length < 15) {
-      errors.projectDescription = 'Please describe your project goals (at least 15 characters).';
+      errors.projectDescription = 'Please describe your website purpose and goals (at least 15 characters).';
     }
   }
 
   if (step === 4) {
+    if (!formData.domainPreference) {
+      errors.domainPreference = 'Please select a domain preference.';
+    }
     if (!formData.hostingPreference) {
       errors.hostingPreference = 'Please select a hosting preference.';
     }
     if (!formData.maintenanceInterest) {
-      errors.maintenanceInterest = 'Please indicate your maintenance preference.';
+      errors.maintenanceInterest = 'Please indicate your website maintenance preference.';
     }
   }
 
@@ -63,8 +69,8 @@ export function validateOrderStep(step, formData) {
     if (!formData.estimatedBudget) {
       errors.estimatedBudget = 'Please select an estimated budget range.';
     }
-    if (!formData.expectedTimeline) {
-      errors.expectedTimeline = 'Please select an expected delivery timeline.';
+    if (!formData.expectedDeliveryDate && !formData.expectedTimeline) {
+      errors.expectedDeliveryDate = 'Please select an expected delivery date.';
     }
   }
 
@@ -147,6 +153,7 @@ export function filterOrders(orders = [], { query = '', status = 'All', service 
       order.customerEmail,
       order.businessName,
       order.service,
+      order.hostingPreference,
     ]
       .filter(Boolean)
       .join(' ')
@@ -188,6 +195,8 @@ export function computeDashboardStats({ orders = [], inquiries = [], portfolio =
     activeProjects: orders.filter((o) => activeStatuses.has(o.status)).length,
     completedProjects: orders.filter((o) => o.status === 'Completed').length,
     pendingQuotations: orders.filter((o) => pendingQuoteStatuses.has(o.status)).length,
+    managedHostingOrders: orders.filter((o) => o.hostingPreference === 'DreamTech-managed').length,
+    maintenanceInterestedOrders: orders.filter((o) => o.maintenanceInterest === 'Interested').length,
     portfolioProjects: portfolio.filter((p) => p.published).length,
     teamMembers: team.filter((t) => t.visible).length,
   };

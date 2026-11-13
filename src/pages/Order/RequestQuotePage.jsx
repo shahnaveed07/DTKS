@@ -9,26 +9,21 @@ import {
   Edit3,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
+import {
+  WEBSITE_CATEGORIES,
+  DOMAIN_PREFERENCES,
+  HOSTING_PREFERENCES,
+  MAINTENANCE_PREFERENCES,
+} from '../../data/seedData.js';
 import PageHead from '../../components/common/PageHead.jsx';
 import { validateOrderStep, formatCurrency } from '../../utils/orderUtils.js';
 
-const SERVICE_OPTIONS = [
-  'Website Development',
-  'Web Application',
-  'Android Application',
-  'Custom Software',
-  'E-Commerce',
-  'Game Development',
-  'UI/UX Design',
-  'Other',
-];
-
 const STEPS = [
-  { number: 1, title: 'Service' },
+  { number: 1, title: 'Category' },
   { number: 2, title: 'Package' },
-  { number: 3, title: 'Requirements' },
-  { number: 4, title: 'Hosting' },
-  { number: 5, title: 'Budget' },
+  { number: 3, title: 'Website Details' },
+  { number: 4, title: 'Domain & Hosting' },
+  { number: 5, title: 'Budget & Date' },
   { number: 6, title: 'Contact' },
   { number: 7, title: 'Review' },
 ];
@@ -46,9 +41,11 @@ const INITIAL_FORM = {
   preferredDesignStyle: '',
   requiredIntegrations: '',
   additionalInstructions: '',
+  domainPreference: 'Need domain advice',
   hostingPreference: 'Need advice',
   maintenanceInterest: 'Need more information',
   estimatedBudget: '',
+  expectedDeliveryDate: '',
   expectedTimeline: '',
   urgency: 'Standard',
   customerName: '',
@@ -65,7 +62,7 @@ export default function RequestQuotePage() {
   const [formData, setFormData] = useState(() => {
     const paramService = searchParams.get('service') || '';
     const paramPkg = searchParams.get('package') || '';
-    const matchedService = SERVICE_OPTIONS.find(
+    const matchedService = WEBSITE_CATEGORIES.find(
       (s) => s.toLowerCase() === paramService.toLowerCase()
     );
     return {
@@ -142,7 +139,11 @@ export default function RequestQuotePage() {
         return;
       }
     }
-    const created = submitOrder(formData);
+    const created = submitOrder({
+      ...formData,
+      hostingNotes: '',
+      maintenancePlanSelected: formData.maintenanceInterest === 'Interested' ? 'Pending Consultation' : 'None',
+    });
     setSubmittedOrder(created);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -162,7 +163,7 @@ export default function RequestQuotePage() {
   if (submittedOrder) {
     return (
       <>
-        <PageHead title="Order Request Submitted" />
+        <PageHead title="Website Order Submitted" />
         <section className="py-16 bg-[#F7FAF7]">
           <div className="max-w-2xl mx-auto px-4 sm:px-6">
             <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-8">
@@ -171,10 +172,10 @@ export default function RequestQuotePage() {
               </div>
 
               <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#17231C]">
-                Order Request Saved Locally
+                Website Order Saved Locally
               </h1>
               <p className="mt-2 text-sm text-[#64756B] leading-relaxed">
-                Your development request has been persisted in your browser&apos;s LocalStorage for this frontend prototype. Use the reference ID below to inspect or update it in Order Tracking and Admin Orders.
+                Your website development request has been stored in your browser&apos;s LocalStorage for this frontend prototype. Use the reference ID below to inspect or update it in Order Tracking and Admin Orders.
               </p>
 
               <div className="mt-6 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -199,9 +200,9 @@ export default function RequestQuotePage() {
                   Next Steps
                 </h2>
                 <ol className="list-decimal list-inside space-y-1.5 text-xs sm:text-sm text-[#64756B]">
-                  <li>Requirements enter <strong className="text-[#17231C]">New Request</strong> status.</li>
-                  <li>Our team reviews your scope, hosting choice, and timeline to prepare a formal quotation.</li>
-                  <li>You can inspect progress anytime on the Track Order page using your Reference ID and email ({submittedOrder.customerEmail}).</li>
+                  <li>Your website request enters <strong className="text-[#17231C]">New Request</strong> status.</li>
+                  <li>Our team reviews your pages, design style, domain/hosting setup, and expected delivery date ({submittedOrder.expectedDeliveryDate}).</li>
+                  <li>Track updates anytime using Reference ID and email ({submittedOrder.customerEmail}).</li>
                 </ol>
               </div>
 
@@ -227,7 +228,7 @@ export default function RequestQuotePage() {
                   }}
                   className="px-4 py-2.5 text-sm font-medium text-[#64756B] hover:text-[#17231C]"
                 >
-                  Submit Another Request
+                  Submit Another Website Request
                 </button>
               </div>
             </div>
@@ -240,25 +241,25 @@ export default function RequestQuotePage() {
   return (
     <>
       <PageHead
-        title="Start Your Project / Request a Quote"
-        description="Submit your website, web app, Android app, or custom software requirements through our 7-step project request wizard."
+        title="Order a Website / Request a Quote"
+        description="Submit your website category, business details, required pages, design preferences, domain/hosting choice, and delivery date for a tailored website quote."
       />
 
       <section className="border-b border-[#E3EBE5] bg-white py-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <p className="text-xs font-semibold text-[#16834A]">
-            Project Order &amp; Quotation Builder
+            Website Order &amp; Quotation Builder
           </p>
           <h1 className="mt-1.5 font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#17231C]">
-            Request a Development Quote
+            Order a Website or Request a Quote
           </h1>
           <p className="mt-2 text-sm text-[#64756B]">
-            No account required. Complete the seven steps below to generate your project request reference.
+            Complete the seven steps below to share your website requirements and generate your order reference.
           </p>
 
           {/* Stepper */}
           <nav aria-label="Order progress" className="mt-7 overflow-x-auto pb-1">
-            <ol className="flex items-center justify-between min-w-[540px] gap-2">
+            <ol className="flex items-center justify-between min-w-[600px] gap-2">
               {STEPS.map((item) => {
                 const isCurrent = item.number === step;
                 const isDone = item.number < step;
@@ -303,17 +304,17 @@ export default function RequestQuotePage() {
       <section className="py-10 bg-[#F7FAF7]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6 sm:p-8">
-            {/* Step 1: Select Service */}
+            {/* Step 1: Select Website Category */}
             {step === 1 && (
               <div>
                 <h2 className="font-display text-xl font-bold text-[#17231C]">
-                  Step 1: Select Service Category
+                  Step 1: Select Website Category
                 </h2>
                 <p className="mt-1 text-sm text-[#64756B]">
-                  Choose the primary type of solution you want to build.
+                  Choose the type of website you want DreamTech Kashmir Solutions to design and develop.
                 </p>
                 <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {SERVICE_OPTIONS.map((option) => {
+                  {WEBSITE_CATEGORIES.map((option) => {
                     const selected = formData.service === option;
                     return (
                       <button
@@ -327,7 +328,7 @@ export default function RequestQuotePage() {
                         }`}
                       >
                         <span className="text-sm font-medium">{option}</span>
-                        {selected && <Check className="w-4 h-4 text-[#16834A]" />}
+                        {selected && <Check className="w-4 h-4 text-[#16834A] shrink-0" />}
                       </button>
                     );
                   })}
@@ -336,14 +337,14 @@ export default function RequestQuotePage() {
               </div>
             )}
 
-            {/* Step 2: Select Package */}
+            {/* Step 2: Select Website Package */}
             {step === 2 && (
               <div>
                 <h2 className="font-display text-xl font-bold text-[#17231C]">
-                  Step 2: Select Package or Custom Quote
+                  Step 2: Select Website Package or Custom Quote
                 </h2>
                 <p className="mt-1 text-sm text-[#64756B]">
-                  Pick a starting package for reference or select Custom Quote for tailored scoping.
+                  Choose a starting website package for reference or request a tailored custom quote.
                 </p>
 
                 <div className="mt-6 space-y-3">
@@ -387,7 +388,7 @@ export default function RequestQuotePage() {
                     type="button"
                     onClick={() => {
                       updateField('packageId', 'custom');
-                      updateField('packageTitle', 'Custom Quote / No Fixed Package');
+                      updateField('packageTitle', 'Custom Website Quote');
                     }}
                     className={`w-full text-left p-4 rounded-lg border transition-colors flex items-center justify-between gap-3 ${
                       formData.packageId === 'custom'
@@ -397,10 +398,10 @@ export default function RequestQuotePage() {
                   >
                     <div>
                       <span className="text-sm font-semibold text-[#17231C]">
-                        No Package / Request Custom Quotation
+                        No Package / Request Custom Website Quote
                       </span>
                       <p className="mt-1 text-xs text-[#64756B]">
-                        Scope and pricing calculated directly from your requirements in Step 3.
+                        Scope and pricing calculated directly from your website requirements in Step 3.
                       </p>
                     </div>
                     <span className="text-xs font-semibold text-[#16834A] whitespace-nowrap">
@@ -412,29 +413,29 @@ export default function RequestQuotePage() {
               </div>
             )}
 
-            {/* Step 3: Project Requirements */}
+            {/* Step 3: Website Requirements */}
             {step === 3 && (
               <div className="space-y-5">
                 <div>
                   <h2 className="font-display text-xl font-bold text-[#17231C]">
-                    Step 3: Project Requirements
+                    Step 3: Website Scope &amp; Design Preferences
                   </h2>
                   <p className="mt-1 text-sm text-[#64756B]">
-                    Describe what you need built so we can prepare an accurate estimate.
+                    Provide your business name, website purpose, required pages, features, and design preferences.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label htmlFor="req-project-name" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                      Project Name *
+                      Website Project Title *
                     </label>
                     <input
                       id="req-project-name"
                       type="text"
                       value={formData.projectName}
                       onChange={(e) => updateField('projectName', e.target.value)}
-                      placeholder="e.g., Company Portal & Booking System"
+                      placeholder="e.g., Company Showcase & Booking Website"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
                     {errors.projectName && <p className="mt-1 text-xs text-red-600">{errors.projectName}</p>}
@@ -442,29 +443,30 @@ export default function RequestQuotePage() {
 
                   <div>
                     <label htmlFor="req-business-name" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                      Business / Organization Name
+                      Business / Brand Name *
                     </label>
                     <input
                       id="req-business-name"
                       type="text"
                       value={formData.businessName}
                       onChange={(e) => updateField('businessName', e.target.value)}
-                      placeholder="Optional business or brand name"
+                      placeholder="e.g., Saffron Valley Hospitality"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
+                    {errors.businessName && <p className="mt-1 text-xs text-red-600">{errors.businessName}</p>}
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="req-description" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                    Project Description *
+                    Website Purpose &amp; Goals *
                   </label>
                   <textarea
                     id="req-description"
                     rows={4}
                     value={formData.projectDescription}
                     onChange={(e) => updateField('projectDescription', e.target.value)}
-                    placeholder="Explain the goal of your website, app, or software and who will use it..."
+                    placeholder="Describe the primary purpose of your website, target audience, and key conversion goals..."
                     className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                   {errors.projectDescription && (
@@ -475,14 +477,14 @@ export default function RequestQuotePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label htmlFor="req-pages" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                      Required Pages / Screens
+                      Required Pages
                     </label>
                     <input
                       id="req-pages"
                       type="text"
                       value={formData.requiredPages}
                       onChange={(e) => updateField('requiredPages', e.target.value)}
-                      placeholder="e.g., Home, Catalog, Cart, Admin Panel"
+                      placeholder="e.g., Home, About, Services, Gallery, Contact"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
                   </div>
@@ -495,7 +497,7 @@ export default function RequestQuotePage() {
                       type="text"
                       value={formData.requiredFunctionality}
                       onChange={(e) => updateField('requiredFunctionality', e.target.value)}
-                      placeholder="e.g., Login, search filters, PDF invoices"
+                      placeholder="e.g., Booking form, product search, online cart"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
                   </div>
@@ -504,27 +506,27 @@ export default function RequestQuotePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label htmlFor="req-references" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                      Reference Websites / Apps
+                      Reference Websites
                     </label>
                     <input
                       id="req-references"
                       type="text"
                       value={formData.referenceWebsites}
                       onChange={(e) => updateField('referenceWebsites', e.target.value)}
-                      placeholder="URLs or names of styles you admire"
+                      placeholder="URLs of websites whose layout or look you like"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
                   </div>
                   <div>
                     <label htmlFor="req-style" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                      Preferred Design Style
+                      Design Preferences
                     </label>
                     <input
                       id="req-style"
                       type="text"
                       value={formData.preferredDesignStyle}
                       onChange={(e) => updateField('preferredDesignStyle', e.target.value)}
-                      placeholder="e.g., Clean corporate, modern light, minimal"
+                      placeholder="e.g., Clean white & green, minimal editorial, modern"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
                   </div>
@@ -533,27 +535,27 @@ export default function RequestQuotePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label htmlFor="req-integrations" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                      Required Integrations
+                      Supporting Services / Integrations Needed
                     </label>
                     <input
                       id="req-integrations"
                       type="text"
                       value={formData.requiredIntegrations}
                       onChange={(e) => updateField('requiredIntegrations', e.target.value)}
-                      placeholder="e.g., Payment gateway, WhatsApp link, Maps"
+                      placeholder="e.g., SEO setup, speed optimization, WhatsApp, Maps"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
                   </div>
                   <div>
                     <label htmlFor="req-notes" className="block text-xs font-semibold text-[#17231C] mb-1.5">
-                      Additional Instructions
+                      Additional Notes
                     </label>
                     <input
                       id="req-notes"
                       type="text"
                       value={formData.additionalInstructions}
                       onChange={(e) => updateField('additionalInstructions', e.target.value)}
-                      placeholder="Any special constraints or notes"
+                      placeholder="Existing website URL for redesign or special notes"
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                     />
                   </div>
@@ -561,37 +563,50 @@ export default function RequestQuotePage() {
               </div>
             )}
 
-            {/* Step 4: Hosting & Maintenance */}
+            {/* Step 4: Domain, Hosting & Maintenance */}
             {step === 4 && (
               <div className="space-y-8">
                 <div>
                   <h2 className="font-display text-xl font-bold text-[#17231C]">
-                    Step 4: Hosting &amp; Maintenance Preferences
+                    Step 4: Domain, Hosting &amp; Maintenance Preferences
                   </h2>
                   <p className="mt-1 text-sm text-[#64756B]">
-                    Clarify how you prefer to manage domain, hosting, and optional ongoing maintenance.
+                    Specify your website domain registration status, hosting preference, and optional maintenance interest.
                   </p>
                 </div>
 
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-[#64756B] mb-3">
-                    Hosting Preference *
+                    Domain Name Preference *
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {[
-                      {
-                        value: 'Customer-managed',
-                        desc: 'You purchase domain/hosting directly and retain billing ownership.',
-                      },
-                      {
-                        value: 'DreamTech-managed',
-                        desc: 'DreamTech arranges hosting and tracks renewals (quoted separately).',
-                      },
-                      {
-                        value: 'Need advice',
-                        desc: 'Help me choose the right setup during our requirement discussion.',
-                      },
-                    ].map((opt) => (
+                    {DOMAIN_PREFERENCES.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => updateField('domainPreference', opt.value)}
+                        className={`text-left p-4 rounded-lg border transition-colors ${
+                          formData.domainPreference === opt.value
+                            ? 'border-[#16834A] bg-[#E8F5EC]'
+                            : 'border-[#E3EBE5] hover:border-[#16834A]/60'
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-[#17231C]">{opt.value}</p>
+                        <p className="mt-1 text-xs text-[#64756B]">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                  {errors.domainPreference && (
+                    <p className="mt-2 text-xs text-red-600">{errors.domainPreference}</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#64756B] mb-3">
+                    Website Hosting Preference *
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {HOSTING_PREFERENCES.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
@@ -614,14 +629,10 @@ export default function RequestQuotePage() {
 
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-[#64756B] mb-3">
-                    Optional Maintenance Plan Interest *
+                    Optional Website Maintenance Plan *
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {[
-                      { value: 'Interested', desc: 'Include optional Basic/Standard/Premium maintenance details in quote.' },
-                      { value: 'Not interested', desc: 'Development and handover only without a recurring plan.' },
-                      { value: 'Need more information', desc: 'Share maintenance options separately after project launch.' },
-                    ].map((opt) => (
+                    {MAINTENANCE_PREFERENCES.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
@@ -644,15 +655,15 @@ export default function RequestQuotePage() {
               </div>
             )}
 
-            {/* Step 5: Budget & Timeline */}
+            {/* Step 5: Estimated Budget & Expected Delivery Date */}
             {step === 5 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="font-display text-xl font-bold text-[#17231C]">
-                    Step 5: Estimated Budget &amp; Timeline
+                    Step 5: Estimated Budget &amp; Expected Delivery Date
                   </h2>
                   <p className="mt-1 text-sm text-[#64756B]">
-                    Select your target budget range and expected delivery timeframe.
+                    Select your target website budget and the date you would like your website launched.
                   </p>
                 </div>
 
@@ -676,26 +687,24 @@ export default function RequestQuotePage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label htmlFor="ord-timeline" className="block text-xs font-semibold text-[#17231C] mb-2">
-                      Expected Delivery Timeline *
+                    <label htmlFor="ord-delivery-date" className="block text-xs font-semibold text-[#17231C] mb-2">
+                      Expected Delivery Date *
                     </label>
-                    <select
-                      id="ord-timeline"
-                      value={formData.expectedTimeline}
-                      onChange={(e) => updateField('expectedTimeline', e.target.value)}
+                    <input
+                      id="ord-delivery-date"
+                      type="date"
+                      value={formData.expectedDeliveryDate}
+                      onChange={(e) => updateField('expectedDeliveryDate', e.target.value)}
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                    >
-                      <option value="">Select timeline...</option>
-                      {(settings.timelineOptions || []).map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                    {errors.expectedTimeline && <p className="mt-1 text-xs text-red-600">{errors.expectedTimeline}</p>}
+                    />
+                    {errors.expectedDeliveryDate && (
+                      <p className="mt-1 text-xs text-red-600">{errors.expectedDeliveryDate}</p>
+                    )}
                   </div>
 
                   <div>
                     <label htmlFor="ord-urgency" className="block text-xs font-semibold text-[#17231C] mb-2">
-                      Project Urgency
+                      Delivery Priority
                     </label>
                     <select
                       id="ord-urgency"
@@ -712,12 +721,12 @@ export default function RequestQuotePage() {
               </div>
             )}
 
-            {/* Step 6: Customer Information */}
+            {/* Step 6: Customer Contact Details */}
             {step === 6 && (
               <div className="space-y-5">
                 <div>
                   <h2 className="font-display text-xl font-bold text-[#17231C]">
-                    Step 6: Your Contact Information
+                    Step 6: Customer Contact Details
                   </h2>
                   <p className="mt-1 text-sm text-[#64756B]">
                     Your email is also used alongside your order reference ID on the Order Tracking page.
@@ -795,17 +804,17 @@ export default function RequestQuotePage() {
               <div className="space-y-6">
                 <div>
                   <h2 className="font-display text-xl font-bold text-[#17231C]">
-                    Step 7: Review &amp; Submit Request
+                    Step 7: Review &amp; Submit Website Order
                   </h2>
                   <p className="mt-1 text-sm text-[#64756B]">
-                    Review all entered details carefully. Use the edit links to update any section before submitting.
+                    Review all website details carefully. Use the edit links to update any section before submitting.
                   </p>
                 </div>
 
                 <div className="divide-y divide-[#E3EBE5] rounded-xl border border-[#E3EBE5] bg-[#F7FAF7]">
                   <div className="p-4 flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs text-[#64756B]">Service &amp; Package</p>
+                      <p className="text-xs text-[#64756B]">Website Category &amp; Package</p>
                       <p className="text-sm font-semibold text-[#17231C] mt-0.5">
                         {formData.service} · {formData.packageTitle || formData.packageId}
                       </p>
@@ -822,17 +831,31 @@ export default function RequestQuotePage() {
 
                   <div className="p-4 flex items-start justify-between gap-4">
                     <div className="space-y-1">
-                      <p className="text-xs text-[#64756B]">Project Requirements</p>
+                      <p className="text-xs text-[#64756B]">Website Details &amp; Design Preferences</p>
                       <p className="text-sm font-semibold text-[#17231C]">
-                        {formData.projectName}
-                        {formData.businessName ? ` (${formData.businessName})` : ''}
+                        {formData.projectName} ({formData.businessName})
                       </p>
                       <p className="text-xs text-[#64756B]">
-                        {formData.projectDescription}
+                        Purpose: {formData.projectDescription}
                       </p>
                       {formData.requiredPages && (
                         <p className="text-xs text-[#64756B]">
-                          Pages/Screens: {formData.requiredPages}
+                          Required Pages: {formData.requiredPages}
+                        </p>
+                      )}
+                      {formData.requiredFunctionality && (
+                        <p className="text-xs text-[#64756B]">
+                          Functionality: {formData.requiredFunctionality}
+                        </p>
+                      )}
+                      {formData.referenceWebsites && (
+                        <p className="text-xs text-[#64756B]">
+                          Reference Websites: {formData.referenceWebsites}
+                        </p>
+                      )}
+                      {formData.preferredDesignStyle && (
+                        <p className="text-xs text-[#64756B]">
+                          Design Preferences: {formData.preferredDesignStyle}
                         </p>
                       )}
                     </div>
@@ -848,15 +871,15 @@ export default function RequestQuotePage() {
 
                   <div className="p-4 flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs text-[#64756B]">Hosting &amp; Maintenance</p>
+                      <p className="text-xs text-[#64756B]">Domain, Hosting &amp; Maintenance</p>
                       <p className="text-sm font-medium text-[#17231C] mt-0.5">
-                        Hosting: {formData.hostingPreference} · Maintenance: {formData.maintenanceInterest}
+                        Domain: {formData.domainPreference} · Hosting: {formData.hostingPreference} · Maintenance: {formData.maintenanceInterest}
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setStep(4)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-[#16834A] hover:text-[#116438] hover:underline"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[#16834A] hover:text-[#116438] hover:underline shrink-0"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Edit</span>
@@ -865,15 +888,15 @@ export default function RequestQuotePage() {
 
                   <div className="p-4 flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs text-[#64756B]">Budget &amp; Timeline</p>
+                      <p className="text-xs text-[#64756B]">Budget &amp; Expected Delivery Date</p>
                       <p className="text-sm font-medium text-[#17231C] mt-0.5">
-                        {formData.estimatedBudget} · {formData.expectedTimeline} ({formData.urgency})
+                        {formData.estimatedBudget} · Target Delivery: {formData.expectedDeliveryDate} ({formData.urgency})
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setStep(5)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-[#16834A] hover:text-[#116438] hover:underline"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[#16834A] hover:text-[#116438] hover:underline shrink-0"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Edit</span>
@@ -882,7 +905,7 @@ export default function RequestQuotePage() {
 
                   <div className="p-4 flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs text-[#64756B]">Customer Details</p>
+                      <p className="text-xs text-[#64756B]">Customer Contact Details</p>
                       <p className="text-sm font-medium text-[#17231C] mt-0.5">
                         {formData.customerName} · {formData.customerEmail} · {formData.customerPhone} · {formData.customerCity}
                       </p>
@@ -890,7 +913,7 @@ export default function RequestQuotePage() {
                     <button
                       type="button"
                       onClick={() => setStep(6)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-[#16834A] hover:text-[#116438] hover:underline"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[#16834A] hover:text-[#116438] hover:underline shrink-0"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Edit</span>
@@ -931,7 +954,7 @@ export default function RequestQuotePage() {
                   className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Submit Order Request</span>
+                  <span>Submit Website Order</span>
                 </button>
               )}
             </div>

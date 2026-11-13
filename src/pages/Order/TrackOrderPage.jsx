@@ -177,6 +177,26 @@ export default function TrackOrderPage() {
                   </dd>
                 </div>
                 <div>
+                  <dt className="text-xs text-[#64756B]">Expected Delivery</dt>
+                  <dd className="mt-1 font-medium text-[#17231C]">
+                    {matchedOrder.expectedDeliveryDate || matchedOrder.expectedTimeline || 'To be confirmed'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[#64756B]">Domain &amp; Hosting</dt>
+                  <dd className="mt-1 font-medium text-[#17231C]">
+                    {matchedOrder.domainPreference || 'Standard'} · {matchedOrder.hostingPreference}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[#64756B]">Maintenance Preference</dt>
+                  <dd className="mt-1 font-medium text-[#17231C]">
+                    {matchedOrder.maintenancePlanSelected && matchedOrder.maintenancePlanSelected !== 'Undecided'
+                      ? `${matchedOrder.maintenanceInterest} (${matchedOrder.maintenancePlanSelected})`
+                      : matchedOrder.maintenanceInterest}
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-xs text-[#64756B]">Estimated Budget</dt>
                   <dd className="mt-1 font-medium text-[#17231C]">
                     {matchedOrder.estimatedBudget}

@@ -1,4 +1,4 @@
-const STORAGE_PREFIX = 'dks_v1_';
+const STORAGE_PREFIX = 'dks_v2_';
 
 export const storageAdapter = {
   getItem(key, fallbackValue) {

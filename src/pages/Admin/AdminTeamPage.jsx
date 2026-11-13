@@ -17,7 +17,7 @@ import PageHead from '../../components/common/PageHead.jsx';
 
 const EMPTY_MEMBER = {
   fullName: '',
-  role: 'Full-Stack Developer',
+  role: 'Full-Stack Web Developer',
   title: '',
   bio: '',
   skillsText: '',

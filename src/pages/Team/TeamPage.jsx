@@ -12,7 +12,7 @@ export default function TeamPage() {
     <>
       <PageHead
         title="Our Team"
-        description="Meet the engineering, design, and project leadership roles at DreamTech Kashmir Solutions."
+        description="Meet the website architecture, frontend, backend, UI/UX design, e-commerce, and deployment specialists at DreamTech Kashmir Solutions."
       />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
@@ -22,10 +22,10 @@ export default function TeamPage() {
               Team &amp; Roles
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-              Engineering &amp; Design Team
+              Website Design &amp; Engineering Team
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Our multidisciplinary roles span architecture, full-stack web engineering, native Android development, and UI/UX systems.
+              Our multidisciplinary web specialists cover website architecture, full-stack web engineering, UI/UX systems, e-commerce storefronts, and SEO deployment.
             </p>
           </div>
 

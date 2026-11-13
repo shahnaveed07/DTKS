@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Plus, Edit3, Trash2, X, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
+import { WEBSITE_CATEGORIES } from '../../data/seedData.js';
 import PageHead from '../../components/common/PageHead.jsx';
 import { formatCurrency } from '../../utils/orderUtils.js';
 
 const EMPTY_PACKAGE = {
   title: '',
-  category: 'Website Development',
+  category: 'Business & Corporate Websites',
   description: '',
   startingPrice: '',
   currency: 'INR',
@@ -341,7 +342,7 @@ export default function AdminPackagesPage() {
                 </div>
                 <div>
                   <label htmlFor="pkg-category" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Category
+                    Website Category
                   </label>
                   <select
                     id="pkg-category"
@@ -349,11 +350,9 @@ export default function AdminPackagesPage() {
                     onChange={(e) => setPkgForm((f) => ({ ...f, category: e.target.value }))}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   >
-                    <option value="Website Development">Website Development</option>
-                    <option value="Web Application">Web Application</option>
-                    <option value="E-Commerce">E-Commerce</option>
-                    <option value="Android Application">Android Application</option>
-                    <option value="Custom Software">Custom Software</option>
+                    {WEBSITE_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -436,6 +435,33 @@ export default function AdminPackagesPage() {
                     type="text"
                     value={pkgForm.supportDuration}
                     onChange={(e) => setPkgForm((f) => ({ ...f, supportDuration: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="pkg-hosting" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Hosting Option
+                  </label>
+                  <input
+                    id="pkg-hosting"
+                    type="text"
+                    value={pkgForm.hostingOption}
+                    onChange={(e) => setPkgForm((f) => ({ ...f, hostingOption: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pkg-maint" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Maintenance Option
+                  </label>
+                  <input
+                    id="pkg-maint"
+                    type="text"
+                    value={pkgForm.maintenanceOption}
+                    onChange={(e) => setPkgForm((f) => ({ ...f, maintenanceOption: e.target.value }))}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>

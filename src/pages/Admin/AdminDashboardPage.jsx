@@ -10,14 +10,14 @@ export default function AdminDashboardPage() {
   const stats = computeDashboardStats({ orders, inquiries, portfolio, team });
 
   const kpis = [
-    { label: 'Total Orders', value: stats.totalOrders, to: '/admin/orders' },
-    { label: 'New Inquiries', value: stats.newInquiries, to: '/admin/inquiries' },
-    { label: 'Orders Under Review', value: stats.ordersUnderReview, to: '/admin/orders' },
-    { label: 'Active Projects', value: stats.activeProjects, to: '/admin/orders' },
-    { label: 'Completed Projects', value: stats.completedProjects, to: '/admin/orders' },
+    { label: 'Website Orders', value: stats.totalOrders, to: '/admin/orders' },
+    { label: 'Active Website Builds', value: stats.activeProjects, to: '/admin/orders' },
     { label: 'Pending Quotations', value: stats.pendingQuotations, to: '/admin/orders' },
+    { label: 'Completed Websites', value: stats.completedProjects, to: '/admin/orders' },
+    { label: 'DreamTech Hosting', value: stats.managedHostingOrders, to: '/admin/orders' },
+    { label: 'Maintenance Requests', value: stats.maintenanceInterestedOrders, to: '/admin/packages' },
     { label: 'Published Portfolio', value: stats.portfolioProjects, to: '/admin/portfolio' },
-    { label: 'Visible Team Roles', value: stats.teamMembers, to: '/admin/team' },
+    { label: 'New Inquiries', value: stats.newInquiries, to: '/admin/inquiries' },
   ];
 
   const recentOrders = orders.slice(0, 5);
@@ -30,10 +30,10 @@ export default function AdminDashboardPage() {
       <div className="space-y-8">
         <div>
           <h1 className="font-display text-2xl font-bold text-[#17231C]">
-            Operations Overview
+            Website Operations Overview
           </h1>
           <p className="mt-1 text-sm text-[#64756B]">
-            Manage incoming project orders, packages, portfolio showcases, team profiles, and inquiries stored in this browser.
+            Manage incoming website development orders, quotations, project progress, hosting arrangements, maintenance plans, packages, portfolio, team, and inquiries.
           </p>
         </div>
 
@@ -55,11 +55,11 @@ export default function AdminDashboardPage() {
           ))}
         </div>
 
-        {/* Recent Orders Table */}
+        {/* Recent Website Orders Table */}
         <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs overflow-hidden">
           <div className="px-6 py-4 border-b border-[#E3EBE5] flex items-center justify-between">
             <h2 className="font-display text-base font-semibold text-[#17231C]">
-              Recent Order Requests
+              Recent Website Orders
             </h2>
             <Link
               to="/admin/orders"
@@ -74,11 +74,11 @@ export default function AdminDashboardPage() {
               <thead>
                 <tr className="border-b border-[#E3EBE5] bg-[#E8F5EC]/50 text-xs text-[#116438]">
                   <th className="py-3 px-4 font-semibold">Reference</th>
-                  <th className="py-3 px-4 font-semibold">Project</th>
+                  <th className="py-3 px-4 font-semibold">Website &amp; Category</th>
                   <th className="py-3 px-4 font-semibold">Customer</th>
-                  <th className="py-3 px-4 font-semibold">Service</th>
+                  <th className="py-3 px-4 font-semibold">Hosting</th>
                   <th className="py-3 px-4 font-semibold">Quote</th>
-                  <th className="py-3 px-4 font-semibold">Status</th>
+                  <th className="py-3 px-4 font-semibold">Progress</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E3EBE5]">
@@ -87,14 +87,15 @@ export default function AdminDashboardPage() {
                     <td className="py-3 px-4 font-mono-tabular text-xs font-semibold text-[#16834A] whitespace-nowrap">
                       {order.referenceId}
                     </td>
-                    <td className="py-3 px-4 font-medium text-[#17231C]">
-                      {order.projectName}
+                    <td className="py-3 px-4">
+                      <p className="font-medium text-[#17231C]">{order.projectName}</p>
+                      <p className="text-xs text-[#64756B]">{order.service}</p>
                     </td>
                     <td className="py-3 px-4 text-[#64756B]">
                       {order.customerName}
                     </td>
-                    <td className="py-3 px-4 text-[#64756B] whitespace-nowrap">
-                      {order.service}
+                    <td className="py-3 px-4 text-xs text-[#64756B] whitespace-nowrap">
+                      {order.hostingPreference}
                     </td>
                     <td className="py-3 px-4 font-mono-tabular text-[#17231C] whitespace-nowrap">
                       {order.quotationAmount

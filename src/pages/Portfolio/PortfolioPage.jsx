@@ -40,21 +40,21 @@ export default function PortfolioPage() {
   return (
     <>
       <PageHead
-        title="Our Work & Portfolio"
-        description="Explore websites, web applications, Android apps, custom software, and interactive projects by DreamTech Kashmir Solutions."
+        title="Website Portfolio"
+        description="Explore business websites, e-commerce websites, portfolio websites, landing pages, educational websites, and custom websites by DreamTech Kashmir Solutions."
       />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold text-[#16834A]">
-              Portfolio
+              Website Portfolio
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-              Our Work &amp; Engineering Showcases
+              Our Website Work &amp; Showcases
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Browse projects across websites, custom web software, Android applications, and interactive builds. Filter by category or technology stack below.
+              Browse websites designed and developed by DreamTech Kashmir Solutions across Business, E-Commerce, Portfolio, Landing Pages, Educational, and Other website categories.
             </p>
           </div>
 

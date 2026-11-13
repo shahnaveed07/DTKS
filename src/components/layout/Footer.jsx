@@ -23,7 +23,7 @@ export default function Footer() {
               {settings.companyName}
             </Link>
             <p className="mt-3 text-sm text-[#D6EBDD] leading-relaxed">
-              Delivering structured websites, custom web applications, mobile apps, and digital software systems for growing businesses.
+              Delivering fast, responsive business websites, portfolios, landing pages, e-commerce storefronts, and custom web experiences.
             </p>
             <div className="mt-5 flex items-center gap-3">
               <Link

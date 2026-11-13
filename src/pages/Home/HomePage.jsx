@@ -19,33 +19,33 @@ const PROCESS_STEPS = [
 const WHY_CHOOSE_US = [
   {
     icon: Sliders,
-    title: 'Customized Solutions',
-    description: 'Every website and software platform is structured around your actual business operations rather than rigid one-size templates.',
+    title: 'Tailored Website Architecture',
+    description: 'Every website is structured around your actual business goals and audience journey rather than rigid generic templates.',
   },
   {
     icon: Layers,
-    title: 'Responsive Design',
+    title: 'Responsive Web Design',
     description: 'Consistent usability across desktops, laptops, tablets, and mobile phones with clean layouts and touch-ready controls.',
   },
   {
     icon: CheckCircle2,
     title: 'Transparent Pricing',
-    description: 'Clear starting packages combined with itemized custom quotations so you know what is included before work begins.',
+    description: 'Clear starting website packages combined with itemized custom quotations so you know what is included before work begins.',
   },
   {
     icon: Shield,
-    title: 'Quality Development',
-    description: 'Modular architecture, readable codebases, and data models designed for smooth future API and database expansion.',
+    title: 'Clean, Scalable Code',
+    description: 'Modular frontend architecture, SEO-ready markup, and fast asset delivery designed for long-term site growth.',
   },
   {
     icon: Headphones,
-    title: 'Ongoing Technical Support',
-    description: 'Dedicated post-launch bug coverage and optional maintenance plans for backups, security reviews, and updates.',
+    title: 'Hosting & Maintenance Clarity',
+    description: 'Dedicated post-launch bug coverage, transparent domain/hosting ownership, and optional ongoing maintenance plans.',
   },
   {
     icon: Users,
     title: 'Customer-Focused Approach',
-    description: 'Direct communication from initial discovery through handover, with clear ownership of your domains and digital assets.',
+    description: 'Direct communication from initial discovery through launch handover, with complete ownership of your domain and site assets.',
   },
 ];
 
@@ -65,7 +65,7 @@ export default function HomePage() {
   return (
     <>
       <PageHead
-        title="Software, Web & Mobile Development"
+        title="Website Design & Development"
         description={settings.heroSupportText}
       />
 
@@ -75,13 +75,13 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
             <div className="lg:col-span-6 flex flex-col justify-center">
               <p className="text-xs font-semibold tracking-wide text-[#16834A] mb-3">
-                DreamTech Kashmir Solutions · Software &amp; Digital Engineering
+                DreamTech Kashmir Solutions · Website Design &amp; Development
               </p>
               <h1
                 className="font-display font-bold tracking-tight text-[#17231C] leading-[1.12] max-w-2xl"
                 style={{ fontSize: 'clamp(2.25rem, 4vw, 3.5rem)', textWrap: 'balance' }}
               >
-                {settings.tagline || 'Turning Ideas Into Digital Reality.'}
+                {settings.tagline || 'Modern Websites Built for Growth and Trust.'}
               </h1>
               <p className="mt-5 text-base sm:text-lg text-[#64756B] leading-relaxed max-w-xl">
                 {settings.heroSupportText}
@@ -92,21 +92,21 @@ export default function HomePage() {
                   to="/request-quote"
                   className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap"
                 >
-                  <span>Start Your Project</span>
+                  <span>Order a Website</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   to="/portfolio"
                   className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors whitespace-nowrap"
                 >
-                  <span>Explore Our Work</span>
+                  <span>Explore Website Work</span>
                 </Link>
               </div>
 
               <div className="mt-8 pt-6 border-t border-[#E3EBE5] flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[#64756B]">
-                <span>Websites &amp; Web Apps</span>
+                <span>Business &amp; Portfolio Websites</span>
                 <span aria-hidden="true">·</span>
-                <span>Android &amp; Custom Software</span>
+                <span>E-Commerce &amp; Booking Websites</span>
                 <span aria-hidden="true">·</span>
                 <Link to="/track-order" className="text-[#16834A] hover:text-[#116438] hover:underline font-medium whitespace-nowrap">
                   Track an Existing Request
@@ -118,8 +118,8 @@ export default function HomePage() {
               <div className="w-full rounded-xl overflow-hidden border border-[#E3EBE5] bg-[#F7FAF7] shadow-sm aspect-16/9 lg:aspect-auto lg:min-h-[380px]">
                 <ImageWithFallback
                   src="/src/assets/images/hero_emerald_studio_1794579090899.jpg"
-                  alt="Clean architectural software engineering studio displaying emerald interface modules"
-                  fallbackTitle="DreamTech Engineering Studio"
+                  alt="DreamTech Kashmir Solutions website design and development studio"
+                  fallbackTitle="DreamTech Website Studio"
                   loading="eager"
                   className="w-full h-full object-cover"
                 />
@@ -163,10 +163,10 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
             <div>
               <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#17231C] tracking-tight">
-                Core Software &amp; Digital Services
+                Website Design &amp; Development Services
               </h2>
               <p className="mt-2 text-sm sm:text-base text-[#64756B] max-w-2xl">
-                End-to-end engineering across websites, business applications, Android platforms, and ongoing technical support.
+                Dedicated website solutions across 10 specialized categories—from corporate sites and landing pages to e-commerce and booking portals.
               </p>
             </div>
             <Link
@@ -178,10 +178,23 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             {services.map((service, idx) => (
               <ServiceCard key={service.id} service={service} index={idx} />
             ))}
+          </div>
+
+          <div className="mt-8 rounded-xl border border-[#E3EBE5] bg-white p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-xs sm:text-sm text-[#64756B]">
+              <span className="font-semibold text-[#17231C]">Supporting Website Services:</span>{' '}
+              Website UI/UX Design · Website Redesign · Website Hosting Setup · Domain Registration Assistance · Website Maintenance · SEO Setup · Speed Optimization
+            </div>
+            <Link
+              to="/services#supporting-services"
+              className="text-xs font-semibold text-[#16834A] hover:text-[#116438] hover:underline whitespace-nowrap shrink-0"
+            >
+              Explore Supporting Services
+            </Link>
           </div>
         </div>
       </section>
@@ -192,12 +205,12 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
             <div>
               <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#17231C] tracking-tight">
-                Featured Work &amp; Capabilities
+                Featured Websites &amp; Showcases
               </h2>
               <p className="mt-2 text-sm sm:text-base text-[#64756B] max-w-2xl">
                 {hasSampleFeatured
-                  ? 'Showing editable sample capability showcases. Verified client projects added in Admin appear here automatically.'
-                  : 'Selected software, web, and mobile platforms delivered by our engineering team.'}
+                  ? 'Showing editable sample website showcases. Verified client websites added in Admin appear here automatically.'
+                  : 'Selected business, portfolio, e-commerce, and educational websites crafted by our team.'}
               </p>
             </div>
             <Link
@@ -307,24 +320,24 @@ export default function HomePage() {
             className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-[#116438] mx-auto max-w-2xl"
             style={{ textWrap: 'balance' }}
           >
-            Have an Idea? Let&apos;s Build Something Great.
+            Ready to Launch Your Website? Let&apos;s Build It Together.
           </h2>
           <p className="mt-4 text-sm sm:text-base text-[#17231C]/80 max-w-xl mx-auto">
-            Share your project requirements through our structured quote builder or reach out to discuss your software roadmap.
+            Share your website goals, required pages, and preferred launch date through our structured quotation builder.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link
               to="/request-quote"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap"
             >
-              <span>Start Your Project</span>
+              <span>Order a Website</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
               to="/packages"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#F7FAF7] transition-colors whitespace-nowrap"
             >
-              <span>Explore Packages</span>
+              <span>Explore Website Packages</span>
             </Link>
           </div>
         </div>

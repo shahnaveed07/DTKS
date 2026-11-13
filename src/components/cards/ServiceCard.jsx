@@ -1,25 +1,31 @@
 import { Link } from 'react-router-dom';
 import {
   Globe,
-  LayoutGrid,
-  Smartphone,
-  Terminal,
-  Compass,
-  Gamepad2,
+  Briefcase,
+  UserSquare2,
+  LayoutTemplate,
   ShoppingBag,
-  ShieldCheck,
+  UtensilsCrossed,
+  GraduationCap,
+  Building2,
+  Newspaper,
+  CalendarCheck,
+  Code2,
   ArrowRight,
 } from 'lucide-react';
 
 const ICON_MAP = {
   Globe,
-  LayoutGrid,
-  Smartphone,
-  Terminal,
-  Compass,
-  Gamepad2,
+  Briefcase,
+  UserSquare2,
+  LayoutTemplate,
   ShoppingBag,
-  ShieldCheck,
+  UtensilsCrossed,
+  GraduationCap,
+  Building2,
+  Newspaper,
+  CalendarCheck,
+  Code2,
 };
 
 export default function ServiceCard({ service, index }) {

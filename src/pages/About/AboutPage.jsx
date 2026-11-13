@@ -17,8 +17,8 @@ const PRINCIPLES = [
   },
   {
     icon: Layers,
-    title: 'Built for Growth & Real Operations',
-    description: 'From business websites to operational dashboards and Android apps, we focus on workflows that save staff hours and present your business professionally.',
+    title: 'Built for Web Performance & Operations',
+    description: 'From business websites to e-commerce storefronts and appointment portals, we focus on clear workflows that earn visitor trust and convert inquiries.',
   },
 ];
 
@@ -29,7 +29,7 @@ export default function AboutPage() {
     <>
       <PageHead
         title="About Us"
-        description="Learn about DreamTech Kashmir Solutions, our engineering principles, and how we partner with businesses, startups, and individuals."
+        description="Learn about DreamTech Kashmir Solutions, our website design and development standards, and how we partner with businesses and professionals."
       />
 
       <section className="border-b border-[#E3EBE5] bg-white py-14 lg:py-20">
@@ -40,13 +40,13 @@ export default function AboutPage() {
                 About {settings.companyName}
               </p>
               <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-                Practical Software Engineering Rooted in Clarity and Trust
+                Practical Website Engineering Rooted in Clarity and Trust
               </h1>
               <p className="mt-5 text-base text-[#64756B] leading-relaxed">
-                {settings.companyName} is a technology and software development studio dedicated to helping local enterprises, emerging startups, and independent professionals build dependable digital products.
+                {settings.companyName} is a dedicated website design and development studio helping local businesses, institutions, hospitality brands, and independent professionals establish a credible online presence.
               </p>
               <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-                Whether a client needs an authoritative corporate website, a custom web platform to replace manual spreadsheets, an Android companion app, or an online storefront, we approach each build with disciplined UI/UX, transparent estimates, and ongoing technical accountability.
+                Whether a client needs an authoritative corporate website, a personal portfolio, a focused campaign landing page, an online storefront, or a booking website, we deliver each site with responsive UI/UX, transparent pricing, and reliable hosting and maintenance options.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">

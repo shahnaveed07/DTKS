@@ -7,7 +7,7 @@ import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 
 const EMPTY_PROJECT = {
   title: '',
-  category: 'Web Applications',
+  category: 'Business Websites',
   shortOverview: '',
   description: '',
   problemAddressed: '',
@@ -27,11 +27,10 @@ const EMPTY_PROJECT = {
 };
 
 const BUNDLED_IMAGES = [
-  { label: 'Web App Studio', path: '/src/assets/images/portfolio_webapp_showcase_1794577652813.jpg' },
-  { label: 'Android App', path: '/src/assets/images/portfolio_android_showcase_1794577653597.jpg' },
-  { label: 'E-Commerce', path: '/src/assets/images/portfolio_ecommerce_showcase_1794577653883.jpg' },
-  { label: 'Game Environment', path: '/src/assets/images/portfolio_game_showcase_1794577686929.jpg' },
-  { label: 'Emerald Studio', path: '/src/assets/images/hero_emerald_studio_1794579090899.jpg' },
+  { label: 'Corporate Website', path: '/src/assets/images/portfolio_webapp_showcase_1794577652813.jpg' },
+  { label: 'E-Commerce Storefront', path: '/src/assets/images/portfolio_ecommerce_showcase_1794577653883.jpg' },
+  { label: 'Emerald Web Studio', path: '/src/assets/images/hero_emerald_studio_1794579090899.jpg' },
+  { label: 'Editorial Web Studio', path: '/src/assets/images/hero_software_studio_1794577652777.jpg' },
 ];
 
 export default function AdminPortfolioPage() {

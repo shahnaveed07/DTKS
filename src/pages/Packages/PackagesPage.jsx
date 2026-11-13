@@ -11,8 +11,8 @@ export default function PackagesPage() {
   return (
     <>
       <PageHead
-        title="Packages & Pricing"
-        description="Explore hybrid starting packages, custom quotation options, add-on services, hosting options, and optional maintenance plans."
+        title="Website Packages & Pricing"
+        description="Explore DreamTech Kashmir Solutions website packages (Starter, Business, Professional, E-Commerce, Custom), add-on website services, hosting options, and optional maintenance plans."
       />
 
       {/* Header */}
@@ -21,20 +21,20 @@ export default function PackagesPage() {
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold text-[#16834A]">
-                Hybrid Pricing Model
+                Website Packages &amp; Hybrid Pricing
               </p>
               <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-                Transparent Packages &amp; Custom Quotations
+                Transparent Website Packages &amp; Custom Quotes
               </h1>
               <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-                Predefined packages display starting estimates when configured. Final project pricing is always confirmed after reviewing your exact functional scope, integrations, and timeline.
+                Predefined website packages display starting estimates when configured. Final project pricing is confirmed after reviewing your exact pages, functionality, domain/hosting setup, and delivery date.
               </p>
             </div>
             <Link
               to="/request-quote?package=custom"
               className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap shrink-0"
             >
-              <span>Request Custom Quote</span>
+              <span>Request Custom Website Quote</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -125,6 +125,10 @@ export default function PackagesPage() {
                           <div className="flex justify-between gap-4">
                             <dt className="text-[#64756B]">Hosting</dt>
                             <dd className="font-medium text-[#17231C] text-right">{pkg.hostingOption}</dd>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-[#64756B]">Maintenance</dt>
+                            <dd className="font-medium text-[#17231C] text-right">{pkg.maintenanceOption || 'Optional Maintenance Plan'}</dd>
                           </div>
                         </dl>
                       </div>
