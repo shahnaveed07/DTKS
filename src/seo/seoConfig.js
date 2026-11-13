@@ -1,4 +1,4 @@
-const DEFAULT_PRODUCTION_URL = 'https://dtks.pages.dev';
+const OFFICIAL_PRODUCTION_URL = 'https://dreamtechkashmirsolutions.studio';
 
 function readEnv(key) {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
@@ -10,9 +10,28 @@ function readEnv(key) {
   return '';
 }
 
+function isDisallowedCanonicalHost(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      parsed.protocol !== 'https:' ||
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.pages.dev') ||
+      host.endsWith('.run.app')
+    );
+  } catch {
+    return true;
+  }
+}
+
 export function getSiteUrl() {
   const raw = readEnv('VITE_SITE_URL');
-  return (raw || DEFAULT_PRODUCTION_URL).replace(/\/+$/, '');
+  if (!raw || isDisallowedCanonicalHost(raw)) {
+    return OFFICIAL_PRODUCTION_URL;
+  }
+  return raw.replace(/\/+$/, '').replace(/^https?:\/\/www\./i, 'https://');
 }
 
 export function getVerificationMeta() {
@@ -187,7 +206,9 @@ export const ROUTE_SEO = {
       'Submit your website category, required pages, design preferences, domain and hosting choice, and target launch date for a tailored quotation from DTKS.',
     robots: 'index, follow',
     ogType: 'website',
-    inSitemap: false,
+    inSitemap: true,
+    priority: '0.8',
+    changefreq: 'monthly',
     breadcrumbs: [
       { name: 'Home', path: '/' },
       { name: 'Request a Quote', path: '/request-quote' },

@@ -22,11 +22,29 @@ test('normalizeCanonicalPath strips trailing slashes, hashes, and query strings'
   assert.equal(normalizeCanonicalPath('about'), '/about');
 });
 
-test('buildCanonicalUrl uses configured site URL and avoids duplicate trailing slashes', () => {
+test('buildCanonicalUrl uses official non-www HTTPS domain and rejects preview/localhost URLs', () => {
+  const prev = process.env.VITE_SITE_URL;
+  try {
+    process.env.VITE_SITE_URL = 'https://dtks.pages.dev';
+    assert.equal(getSiteUrl(), 'https://dreamtechkashmirsolutions.studio');
+    process.env.VITE_SITE_URL = 'http://localhost:3000';
+    assert.equal(getSiteUrl(), 'https://dreamtechkashmirsolutions.studio');
+    delete process.env.VITE_SITE_URL;
+  } finally {
+    if (prev !== undefined) process.env.VITE_SITE_URL = prev;
+    else delete process.env.VITE_SITE_URL;
+  }
+
   const origin = getSiteUrl();
-  assert.equal(buildCanonicalUrl('/'), `${origin}/`);
-  assert.equal(buildCanonicalUrl('/services/'), `${origin}/services`);
-  assert.equal(buildCanonicalUrl('/portfolio?filter=all'), `${origin}/portfolio`);
+  assert.equal(origin, 'https://dreamtechkashmirsolutions.studio');
+  assert.equal(buildCanonicalUrl('/'), 'https://dreamtechkashmirsolutions.studio/');
+  assert.equal(buildCanonicalUrl('/services/'), 'https://dreamtechkashmirsolutions.studio/services');
+  assert.equal(
+    buildCanonicalUrl('/portfolio?filter=all'),
+    'https://dreamtechkashmirsolutions.studio/portfolio'
+  );
+  assert.equal(ROUTE_SEO['/request-quote'].inSitemap, true);
+  assert.equal(ROUTE_SEO['/track-order'].inSitemap, false);
 });
 
 test('every indexable route has unique title and description', () => {

@@ -99,9 +99,10 @@ function buildRobotsTxt(siteUrl) {
   return [
     'User-agent: *',
     'Allow: /',
-    'Disallow: /admin',
+    '',
     'Disallow: /admin/',
     'Disallow: /track-order',
+    'Disallow: /order-success',
     '',
     `Sitemap: ${siteUrl}/sitemap.xml`,
     '',
