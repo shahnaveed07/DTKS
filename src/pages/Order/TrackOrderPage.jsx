@@ -32,13 +32,6 @@ export default function TrackOrderPage() {
     setSearched(true);
   };
 
-  const handleFillDemo = () => {
-    setReferenceId('DKS-2026-0001');
-    setEmail('demo.customer@example.com');
-    setMatchedOrder(findTrackedOrder(orders, 'DKS-2026-0001', 'demo.customer@example.com'));
-    setSearched(true);
-  };
-
   const activeStepIndex = matchedOrder
     ? ORDER_STATUSES.indexOf(matchedOrder.status)
     : -1;
@@ -59,20 +52,11 @@ export default function TrackOrderPage() {
             Enter the Reference ID generated during order submission along with your email address.
           </p>
 
-          <div className="mt-5 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-2.5 text-xs text-[#17231C]/80">
-              <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
-              <span>
-                Frontend demonstration feature reading from local browser storage, not secure server-side production tracking.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="text-xs font-semibold text-[#16834A] hover:text-[#116438] hover:underline whitespace-nowrap shrink-0 text-left sm:text-right"
-            >
-              Load Sample (DKS-2026-0001)
-            </button>
+          <div className="mt-5 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 px-4 py-3 flex items-start gap-2.5 text-xs text-[#17231C]/80">
+            <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
+            <span>
+              Frontend preview mode: order status lookup reads from your browser&apos;s LocalStorage until the production backend API is connected.
+            </span>
           </div>
         </div>
       </section>

@@ -120,11 +120,11 @@ export function validateContactForm(data) {
 
 export function formatCurrency(amount, currency = 'INR') {
   if (amount === null || amount === undefined || amount === '') {
-    return 'Request Pricing';
+    return 'Request a Quote';
   }
   const numeric = Number(amount);
   if (Number.isNaN(numeric)) {
-    return 'Request Pricing';
+    return 'Request a Quote';
   }
   try {
     return new Intl.NumberFormat('en-IN', {
@@ -178,13 +178,20 @@ export function findTrackedOrder(orders = [], referenceId = '', email = '') {
 }
 
 export function computeDashboardStats({ orders = [], inquiries = [], portfolio = [], team = [] }) {
-  const activeStatuses = new Set(['Approved', 'In Progress', 'Under Testing']);
+  const activeStatuses = new Set([
+    'Confirmed',
+    'Approved',
+    'In Progress',
+    'Ready for Review',
+    'Under Testing',
+  ]);
   const reviewStatuses = new Set(['New Request', 'Under Review', 'Requirements Clarification']);
   const pendingQuoteStatuses = new Set([
     'New Request',
     'Under Review',
     'Requirements Clarification',
     'Quotation Sent',
+    'Awaiting Confirmation',
     'Awaiting Customer Approval',
   ]);
 

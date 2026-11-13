@@ -4,9 +4,11 @@ import { useApp } from '../../context/AppContext.jsx';
 import { PORTFOLIO_CATEGORIES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
+import EmptyState from '../../components/common/EmptyState.jsx';
 
 const EMPTY_PROJECT = {
   title: '',
+  slug: '',
   category: 'Business Websites',
   shortOverview: '',
   description: '',
@@ -15,23 +17,17 @@ const EMPTY_PROJECT = {
   featuresText: '',
   techText: '',
   status: 'Completed',
+  visibility: 'private',
   isSample: false,
-  published: true,
+  published: false,
   featured: false,
   completionDate: '',
-  coverImage: '/assets/images/dtks-corporate-website-showcase.jpg',
+  coverImage: '',
   galleryText: '',
   liveUrl: '',
   githubUrl: '',
   demoVideoUrl: '',
 };
-
-const BUNDLED_IMAGES = [
-  { label: 'Corporate Website', path: '/assets/images/dtks-corporate-website-showcase.jpg' },
-  { label: 'E-Commerce Storefront', path: '/assets/images/dtks-ecommerce-website-showcase.jpg' },
-  { label: 'Emerald Web Studio', path: '/assets/images/dreamtech-kashmir-website-studio.jpg' },
-  { label: 'Educational Showcase', path: '/assets/images/dtks-educational-website-showcase.jpg' },
-];
 
 export default function AdminPortfolioPage() {
   const { portfolio, createProject, updateProject, deleteProject, requestConfirm } = useApp();
@@ -48,7 +44,9 @@ export default function AdminPortfolioPage() {
   const openEdit = (proj) => {
     setEditing(proj);
     setForm({
+      ...EMPTY_PROJECT,
       ...proj,
+      visibility: proj.visibility || (proj.published ? 'public' : 'private'),
       featuresText: (proj.keyFeatures || []).join('\n'),
       techText: (proj.technologies || []).join(', '),
       galleryText: (proj.gallery || []).join('\n'),
@@ -75,8 +73,16 @@ export default function AdminPortfolioPage() {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const isPublished = Boolean(form.published);
+    const visibility = isPublished
+      ? form.visibility === 'private'
+        ? 'public'
+        : form.visibility || 'public'
+      : form.visibility || 'private';
+
     const payload = {
       title: form.title.trim(),
+      ...(form.slug.trim() ? { slug: form.slug.trim() } : {}),
       category: form.category,
       shortOverview: form.shortOverview.trim(),
       description: form.description.trim() || form.shortOverview.trim(),
@@ -91,8 +97,9 @@ export default function AdminPortfolioPage() {
         .map((s) => s.trim())
         .filter(Boolean),
       status: form.status.trim() || 'Completed',
-      isSample: Boolean(form.isSample),
-      published: Boolean(form.published),
+      visibility,
+      isSample: false,
+      published: isPublished,
       featured: Boolean(form.featured),
       completionDate: form.completionDate.trim(),
       coverImage: form.coverImage.trim(),
@@ -131,7 +138,7 @@ export default function AdminPortfolioPage() {
               Portfolio Projects
             </h1>
             <p className="mt-1 text-sm text-[#64756B]">
-              Add completed work, upload screenshots, manage galleries, and toggle public or featured visibility.
+              Add verified completed websites, upload real screenshots, manage galleries, and control publication visibility. New projects default to unpublished until verified.
             </p>
           </div>
           <button
@@ -144,84 +151,98 @@ export default function AdminPortfolioPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {portfolio.map((proj) => (
-            <div
-              key={proj.id}
-              className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs overflow-hidden flex flex-col justify-between"
-            >
-              <div>
-                <div className="aspect-16/9 bg-[#F7FAF7] border-b border-[#E3EBE5]">
-                  <ImageWithFallback
-                    src={proj.coverImage}
-                    alt={proj.title}
-                    fallbackTitle={proj.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[#16834A]">{proj.category}</span>
-                    <span className="text-[#64756B]">
-                      {proj.published ? 'Published' : 'Draft'} · {proj.status}
-                    </span>
+        {portfolio.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {portfolio.map((proj) => (
+              <div
+                key={proj.id}
+                className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs overflow-hidden flex flex-col justify-between"
+              >
+                <div>
+                  <div className="aspect-16/9 bg-[#F7FAF7] border-b border-[#E3EBE5]">
+                    <ImageWithFallback
+                      src={proj.coverImage}
+                      alt={proj.title}
+                      fallbackTitle={proj.title}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-                  <h2 className="mt-1.5 font-display text-lg font-bold text-[#17231C]">
-                    {proj.title}
-                  </h2>
-                  <p className="mt-1.5 text-sm text-[#64756B] line-clamp-2">
-                    {proj.shortOverview}
-                  </p>
-                </div>
-              </div>
-
-              <div className="px-5 py-3.5 border-t border-[#E3EBE5] flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateProject(proj.id, { published: !proj.published })}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
-                  >
-                    {proj.published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    <span>{proj.published ? 'Unpublish' : 'Publish'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateProject(proj.id, { featured: !proj.featured })}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border ${
-                      proj.featured
-                        ? 'border-[#16834A] bg-[#E8F5EC] text-[#116438]'
-                        : 'border-[#E3EBE5] text-[#64756B]'
-                    }`}
-                  >
-                    <Star className="w-3 h-3" />
-                    <span>{proj.featured ? 'Featured' : 'Feature'}</span>
-                  </button>
+                  <div className="p-5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-[#16834A]">{proj.category}</span>
+                      <span className="text-[#64756B]">
+                        {proj.published ? 'Published' : 'Unpublished Draft'} · {proj.status}
+                      </span>
+                    </div>
+                    <h2 className="mt-1.5 font-display text-lg font-bold text-[#17231C]">
+                      {proj.title}
+                    </h2>
+                    <p className="mt-1.5 text-sm text-[#64756B] line-clamp-2">
+                      {proj.shortOverview || proj.description}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(proj)}
-                    aria-label={`Edit ${proj.title}`}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A]"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Edit</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(proj)}
-                    aria-label={`Delete ${proj.title}`}
-                    className="p-1.5 rounded-md border border-[#E3EBE5] text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                <div className="px-5 py-3.5 border-t border-[#E3EBE5] flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateProject(proj.id, {
+                          published: !proj.published,
+                          visibility: !proj.published ? 'public' : 'private',
+                        })
+                      }
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
+                    >
+                      {proj.published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      <span>{proj.published ? 'Unpublish' : 'Publish'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateProject(proj.id, { featured: !proj.featured })}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border ${
+                        proj.featured
+                          ? 'border-[#16834A] bg-[#E8F5EC] text-[#116438]'
+                          : 'border-[#E3EBE5] text-[#64756B]'
+                      }`}
+                    >
+                      <Star className="w-3 h-3" />
+                      <span>{proj.featured ? 'Featured' : 'Feature'}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(proj)}
+                      aria-label={`Edit ${proj.title}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A]"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(proj)}
+                      aria-label={`Delete ${proj.title}`}
+                      className="p-1.5 rounded-md border border-[#E3EBE5] text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="Our project portfolio is being updated."
+            description="No portfolio projects have been added yet. Add your first verified client website or production build to showcase it on the public Portfolio page."
+            actionLabel="Add First Project"
+            onAction={openCreate}
+          />
+        )}
       </div>
 
       {/* Add/Edit Project Modal */}
@@ -259,9 +280,26 @@ export default function AdminPortfolioPage() {
                     required
                     value={form.title}
                     onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    placeholder="Enter actual project name."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
+                <div>
+                  <label htmlFor="proj-slug" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    URL Slug (Optional — auto-generated if blank)
+                  </label>
+                  <input
+                    id="proj-slug"
+                    type="text"
+                    value={form.slug}
+                    onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
+                    placeholder="e.g., kashmir-handicrafts-store"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="proj-category" className="block text-xs font-semibold text-[#17231C] mb-1">
                     Category
@@ -277,11 +315,32 @@ export default function AdminPortfolioPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label htmlFor="proj-visibility" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Project Visibility
+                  </label>
+                  <select
+                    id="proj-visibility"
+                    value={form.visibility}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        visibility: e.target.value,
+                        published: e.target.value === 'public' ? true : f.published,
+                      }))
+                    }
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  >
+                    <option value="private">Private / Draft (Unpublished)</option>
+                    <option value="public">Public (Published on Website)</option>
+                    <option value="unlisted">Unlisted (Direct Link Only)</option>
+                  </select>
+                </div>
               </div>
 
               <div>
                 <label htmlFor="proj-overview" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Short Overview *
+                  Project Summary *
                 </label>
                 <textarea
                   id="proj-overview"
@@ -289,6 +348,21 @@ export default function AdminPortfolioPage() {
                   required
                   value={form.shortOverview}
                   onChange={(e) => setForm((f) => ({ ...f, shortOverview: e.target.value }))}
+                  placeholder="Describe the real website and functionality delivered."
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="proj-desc" className="block text-xs font-semibold text-[#17231C] mb-1">
+                  Full Project Description
+                </label>
+                <textarea
+                  id="proj-desc"
+                  rows={2}
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Describe the real website and functionality delivered."
                   className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                 />
               </div>
@@ -322,8 +396,37 @@ export default function AdminPortfolioPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
+                  <label htmlFor="proj-features" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Key Features (One per line)
+                  </label>
+                  <textarea
+                    id="proj-features"
+                    rows={3}
+                    value={form.featuresText}
+                    onChange={(e) => setForm((f) => ({ ...f, featuresText: e.target.value }))}
+                    placeholder="Responsive product catalog&#10;Lead capture inquiry workflow"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="proj-gallery" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Gallery Image URLs (One per line)
+                  </label>
+                  <textarea
+                    id="proj-gallery"
+                    rows={3}
+                    value={form.galleryText}
+                    onChange={(e) => setForm((f) => ({ ...f, galleryText: e.target.value }))}
+                    placeholder="Upload actual screenshot or project image."
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
                   <label htmlFor="proj-tech" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Technologies (Comma separated)
+                    Technologies Used (Comma separated)
                   </label>
                   <input
                     id="proj-tech"
@@ -336,7 +439,7 @@ export default function AdminPortfolioPage() {
                 </div>
                 <div>
                   <label htmlFor="proj-date" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Completion Date (Optional)
+                    Completion Date
                   </label>
                   <input
                     id="proj-date"
@@ -351,60 +454,49 @@ export default function AdminPortfolioPage() {
 
               <div>
                 <label htmlFor="proj-cover" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Cover Image (Select preset, paste URL, or upload)
+                  Screenshot / Cover Image (Upload or image URL)
                 </label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {BUNDLED_IMAGES.map((img) => (
-                    <button
-                      key={img.path}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, coverImage: img.path }))}
-                      className={`px-2.5 py-1 text-xs rounded border ${
-                        form.coverImage === img.path
-                          ? 'border-[#16834A] bg-[#E8F5EC] text-[#116438] font-medium'
-                          : 'border-[#E3EBE5] text-[#64756B]'
-                      }`}
-                    >
-                      {img.label}
-                    </button>
-                  ))}
-                  <label className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-[#E3EBE5] text-[#17231C] cursor-pointer hover:bg-[#F7FAF7]">
-                    <Upload className="w-3 h-3" />
-                    <span>Upload Image</span>
+                <div className="flex items-center gap-3">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] cursor-pointer hover:bg-[#F7FAF7] shrink-0">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Screenshot</span>
                     <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   </label>
+                  <input
+                    id="proj-cover"
+                    type="text"
+                    value={form.coverImage}
+                    onChange={(e) => setForm((f) => ({ ...f, coverImage: e.target.value }))}
+                    placeholder="Upload actual screenshot or project image."
+                    className="flex-1 px-3 py-2 text-xs rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
                 </div>
-                <input
-                  id="proj-cover"
-                  type="text"
-                  value={form.coverImage}
-                  onChange={(e) => setForm((f) => ({ ...f, coverImage: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label htmlFor="proj-live" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Live URL
+                    Live Website URL
                   </label>
                   <input
                     id="proj-live"
                     type="url"
                     value={form.liveUrl}
                     onChange={(e) => setForm((f) => ({ ...f, liveUrl: e.target.value }))}
+                    placeholder="Enter verified public website URL."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
                 <div>
                   <label htmlFor="proj-github" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    GitHub URL
+                    GitHub / Repository URL
                   </label>
                   <input
                     id="proj-github"
                     type="url"
                     value={form.githubUrl}
                     onChange={(e) => setForm((f) => ({ ...f, githubUrl: e.target.value }))}
+                    placeholder="Enter public repository URL, if approved for sharing."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
@@ -427,10 +519,16 @@ export default function AdminPortfolioPage() {
                   <input
                     type="checkbox"
                     checked={form.published}
-                    onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        published: e.target.checked,
+                        visibility: e.target.checked ? 'public' : 'private',
+                      }))
+                    }
                     className="accent-[#16834A]"
                   />
-                  <span>Published</span>
+                  <span>Published on Public Portfolio</span>
                 </label>
                 <label className="inline-flex items-center gap-2 text-[#17231C]">
                   <input
@@ -440,15 +538,6 @@ export default function AdminPortfolioPage() {
                     className="accent-[#16834A]"
                   />
                   <span>Featured on Home</span>
-                </label>
-                <label className="inline-flex items-center gap-2 text-[#17231C]">
-                  <input
-                    type="checkbox"
-                    checked={form.isSample}
-                    onChange={(e) => setForm((f) => ({ ...f, isSample: e.target.checked }))}
-                    className="accent-[#16834A]"
-                  />
-                  <span>Mark as Sample Showcase</span>
                 </label>
               </div>
 

@@ -226,6 +226,11 @@ export default function AdminOrdersPage() {
               </table>
             </div>
           </div>
+        ) : orders.length === 0 ? (
+          <EmptyState
+            title="No Website Orders Yet"
+            description="Customer website enquiries and development requests will appear here. No orders received yet."
+          />
         ) : (
           <EmptyState
             title="No matching website orders"

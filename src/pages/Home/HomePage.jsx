@@ -58,10 +58,9 @@ export default function HomePage() {
   );
 
   const featuredProjects = portfolio
-    .filter((p) => p.published && p.featured)
+    .filter((p) => p.published && !p.isSample)
+    .sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)))
     .slice(0, 3);
-
-  const hasSampleFeatured = featuredProjects.some((p) => p.isSample);
 
   return (
     <>
@@ -217,9 +216,7 @@ export default function HomePage() {
                 Featured Websites &amp; Showcases
               </h2>
               <p className="mt-2 text-sm sm:text-base text-[#64756B] max-w-2xl">
-                {hasSampleFeatured
-                  ? 'Showing editable sample website showcases. Verified client websites added in Admin appear here automatically.'
-                  : 'Selected business, portfolio, e-commerce, and educational websites crafted by our team.'}
+                Selected business, portfolio, e-commerce, and educational websites crafted by our team.
               </p>
             </div>
             <Link
@@ -238,10 +235,20 @@ export default function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-[#E3EBE5] bg-[#F7FAF7] p-10 text-center">
-              <p className="text-sm text-[#64756B]">
-                No featured projects are currently published. Add or feature projects from the Admin Portfolio panel.
+            <div className="rounded-xl border border-dashed border-[#E3EBE5] bg-[#F7FAF7] p-10 text-center">
+              <h3 className="text-base font-semibold text-[#17231C]">
+                Our project portfolio is being updated.
+              </h3>
+              <p className="mt-1.5 text-sm text-[#64756B] max-w-md mx-auto">
+                We only showcase verified client websites and approved production builds. Request a quotation to discuss your website project.
               </p>
+              <Link
+                to="/request-quote"
+                className="mt-5 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors"
+              >
+                <span>Request a Quote</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
           )}
         </div>

@@ -1,11 +1,16 @@
 import { Link } from 'react-router-dom';
-import { Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin, Globe } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
 
 export default function Footer() {
   const { settings, services } = useApp();
   const currentYear = new Date().getFullYear();
+
+  const hasEmail = Boolean(settings.contactEmail && settings.contactEmail.trim());
+  const hasPhone = Boolean(settings.contactPhone && settings.contactPhone.trim());
+  const hasLocation = Boolean(settings.businessLocation && settings.businessLocation.trim());
+  const serviceArea = settings.serviceArea || 'Srinagar, Kashmir, Jammu & Kashmir, India';
 
   const socialEntries = Object.entries(settings.socialLinks || {}).filter(
     ([, url]) => typeof url === 'string' && url.trim().length > 0
@@ -32,7 +37,7 @@ export default function Footer() {
                 to="/admin"
                 className="px-3.5 py-2 text-xs font-medium rounded-lg border border-white/25 text-white hover:bg-white/10 transition-colors whitespace-nowrap"
               >
-                Admin Prototype
+                Admin Panel
               </Link>
             </div>
           </div>
@@ -75,7 +80,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link to="/track-order" className="text-[#D6EBDD] hover:text-white transition-colors">
-                  Track Order (Demo)
+                  Track Order
                 </Link>
               </li>
             </ul>
@@ -111,23 +116,31 @@ export default function Footer() {
           {/* Contact */}
           <div className="lg:col-span-4">
             <h3 className="text-sm font-semibold text-white">
-              Contact
+              Contact &amp; Region
             </h3>
             <ul className="mt-3 space-y-3 text-sm text-[#D6EBDD]">
               <li className="flex items-start gap-2.5">
-                <Mail className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
-                <span className="break-words min-w-0">{settings.contactEmail}</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <Phone className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
-                <span>{settings.contactPhone}</span>
+                <Globe className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
+                <span className="break-words min-w-0">dreamtechkashmirsolutions.studio</span>
               </li>
               <li className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
-                <span>{settings.businessLocation}</span>
+                <span>{hasLocation ? settings.businessLocation : serviceArea}</span>
               </li>
+              {hasEmail && (
+                <li className="flex items-start gap-2.5">
+                  <Mail className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
+                  <span className="break-words min-w-0">{settings.contactEmail}</span>
+                </li>
+              )}
+              {hasPhone && (
+                <li className="flex items-start gap-2.5">
+                  <Phone className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
+                  <span>{settings.contactPhone}</span>
+                </li>
+              )}
             </ul>
-            {socialEntries.length > 0 ? (
+            {socialEntries.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-3 text-xs">
                 {socialEntries.map(([platform, url]) => (
                   <a
@@ -141,10 +154,6 @@ export default function Footer() {
                   </a>
                 ))}
               </div>
-            ) : (
-              <p className="mt-4 text-xs text-[#C4DFCD]">
-                Social links can be configured in Admin Settings once verified.
-              </p>
             )}
           </div>
         </div>

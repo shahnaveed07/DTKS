@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, Phone, MapPin, Clock, CheckCircle2, Send, MessageSquare } from 'lucide-react';
+import {
+  Mail,
+  Phone,
+  MapPin,
+  Clock,
+  Globe,
+  CheckCircle2,
+  Send,
+  MessageSquare,
+  Info,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
 import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
@@ -16,7 +26,7 @@ const EMPTY_FORM = {
 };
 
 export default function ContactPage() {
-  const { settings, submitInquiry } = useApp();
+  const { settings, createInquiry } = useApp();
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [submittedRecord, setSubmittedRecord] = useState(null);
@@ -36,11 +46,19 @@ export default function ContactPage() {
       return;
     }
 
-    const saved = submitInquiry(formData);
+    const saved = createInquiry(formData);
     setSubmittedRecord(saved);
     setFormData(EMPTY_FORM);
     setErrors({});
   };
+
+  const hasEmail = Boolean(settings.contactEmail && settings.contactEmail.trim());
+  const hasPhone = Boolean(settings.contactPhone && settings.contactPhone.trim());
+  const hasWhatsapp = Boolean(settings.whatsappNumber && settings.whatsappNumber.trim());
+  const hasLocation = Boolean(settings.businessLocation && settings.businessLocation.trim());
+  const hasHours = Boolean(settings.workingHours && settings.workingHours.trim());
+  const serviceArea = settings.serviceArea || 'Srinagar, Kashmir, Jammu & Kashmir, India';
+  const officialDomain = settings.officialDomain || 'https://dreamtechkashmirsolutions.studio/';
 
   const socialEntries = Object.entries(settings.socialLinks || {}).filter(
     ([, url]) => typeof url === 'string' && url.trim().length > 0
@@ -86,48 +104,96 @@ export default function ContactPage() {
 
                 <div className="space-y-4 text-sm">
                   <div className="flex items-start gap-3">
-                    <Mail className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
+                    <Globe className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
                     <div className="min-w-0">
-                      <p className="text-xs text-[#64756B]">Email Address</p>
-                      <p className="font-medium text-[#17231C] break-words">
-                        {settings.contactEmail}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <Phone className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
-                    <div>
-                      <p className="text-xs text-[#64756B]">Phone / WhatsApp</p>
-                      <p className="font-medium text-[#17231C]">
-                        {settings.contactPhone}
-                      </p>
-                      <p className="text-xs text-[#64756B] mt-0.5">
-                        WhatsApp: {settings.whatsappNumber}
-                      </p>
+                      <p className="text-xs text-[#64756B]">Official Website</p>
+                      <a
+                        href={officialDomain}
+                        className="font-medium text-[#16834A] hover:underline break-words"
+                      >
+                        {officialDomain}
+                      </a>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3">
                     <MapPin className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
                     <div>
-                      <p className="text-xs text-[#64756B]">Business Location</p>
+                      <p className="text-xs text-[#64756B]">Service Area</p>
                       <p className="font-medium text-[#17231C]">
-                        {settings.businessLocation}
+                        {serviceArea}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3">
-                    <Clock className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
-                    <div>
-                      <p className="text-xs text-[#64756B]">Working Hours</p>
-                      <p className="font-medium text-[#17231C]">
-                        {settings.workingHours}
-                      </p>
+                  {hasLocation && (
+                    <div className="flex items-start gap-3">
+                      <MapPin className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
+                      <div>
+                        <p className="text-xs text-[#64756B]">Business Address</p>
+                        <p className="font-medium text-[#17231C]">
+                          {settings.businessLocation}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {hasEmail && (
+                    <div className="flex items-start gap-3">
+                      <Mail className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
+                      <div className="min-w-0">
+                        <p className="text-xs text-[#64756B]">Email Address</p>
+                        <a
+                          href={`mailto:${settings.contactEmail}`}
+                          className="font-medium text-[#17231C] hover:text-[#16834A] break-words"
+                        >
+                          {settings.contactEmail}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {(hasPhone || hasWhatsapp) && (
+                    <div className="flex items-start gap-3">
+                      <Phone className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
+                      <div>
+                        <p className="text-xs text-[#64756B]">Phone / WhatsApp</p>
+                        {hasPhone && (
+                          <p className="font-medium text-[#17231C]">
+                            {settings.contactPhone}
+                          </p>
+                        )}
+                        {hasWhatsapp && (
+                          <p className="text-xs text-[#64756B] mt-0.5">
+                            WhatsApp: {settings.whatsappNumber}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {hasHours && (
+                    <div className="flex items-start gap-3">
+                      <Clock className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
+                      <div>
+                        <p className="text-xs text-[#64756B]">Working Hours</p>
+                        <p className="font-medium text-[#17231C]">
+                          {settings.workingHours}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {!hasEmail && !hasPhone && !hasWhatsapp && (
+                  <div className="pt-3 border-t border-[#E3EBE5] text-xs text-[#64756B] leading-relaxed">
+                    Use the inquiry form on this page or our{' '}
+                    <Link to="/request-quote" className="text-[#16834A] font-medium hover:underline">
+                      Request a Quote
+                    </Link>{' '}
+                    workflow to submit your project requirements directly.
+                  </div>
+                )}
 
                 {socialEntries.length > 0 && (
                   <div className="pt-4 border-t border-[#E3EBE5]">
@@ -148,19 +214,6 @@ export default function ContactPage() {
                   </div>
                 )}
               </div>
-
-              {/* Google Maps Placeholder */}
-              <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6">
-                <h3 className="font-display text-sm font-semibold text-[#17231C]">
-                  Location Map (Configurable)
-                </h3>
-                <div className="mt-3 rounded-lg border border-dashed border-[#E3EBE5] bg-[#F7FAF7] p-6 text-center">
-                  <MapPin className="w-6 h-6 text-[#16834A] mx-auto mb-2" />
-                  <p className="text-xs text-[#64756B] leading-relaxed">
-                    {settings.mapEmbedNote}
-                  </p>
-                </div>
-              </div>
             </div>
 
             {/* Contact Form */}
@@ -175,7 +228,7 @@ export default function ContactPage() {
                       Inquiry Recorded Locally
                     </h2>
                     <p className="text-sm text-[#64756B] leading-relaxed">
-                      Thank you, <strong className="text-[#17231C]">{submittedRecord.name}</strong>. Because this application is currently in frontend-only mode, your message has been stored in browser LocalStorage rather than dispatched via a live email API.
+                      Thank you, <strong className="text-[#17231C]">{submittedRecord.name}</strong>. Your message has been saved in browser LocalStorage while the production backend API is being prepared.
                     </p>
                     <div className="rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] p-4 text-xs text-[#64756B]">
                       <p><strong className="text-[#17231C]">Subject:</strong> {submittedRecord.subject}</p>
@@ -204,6 +257,13 @@ export default function ContactPage() {
                       <h2 className="font-display text-xl font-bold text-[#17231C]">
                         Send a General Inquiry
                       </h2>
+                    </div>
+
+                    <div className="rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2.5 flex items-start gap-2.5 text-xs text-[#64756B]">
+                      <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
+                      <span>
+                        Frontend preview mode: inquiries submitted here are saved in your browser&apos;s LocalStorage until the production backend API is connected.
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

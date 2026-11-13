@@ -20,7 +20,7 @@ export default function ProjectCard({ project }) {
           <div className="flex items-center gap-2 text-xs text-[#64756B]">
             <span className="font-semibold text-[#16834A]">{project.category}</span>
             <span aria-hidden="true">·</span>
-            <span>{project.status || (project.isSample ? 'Sample Showcase' : 'Completed')}</span>
+            <span>{project.status || 'Completed'}</span>
           </div>
 
           <h3 className="mt-2 font-display text-lg font-semibold text-[#17231C]">

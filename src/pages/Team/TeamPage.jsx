@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { Github, Linkedin, Globe, Info, User } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Github, Linkedin, Globe, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
 import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
@@ -8,8 +8,8 @@ import EmptyState from '../../components/common/EmptyState.jsx';
 
 export default function TeamPage() {
   const { team, settings } = useApp();
-  const visibleMembers = team.filter((m) => m.visible);
-  const hasPlaceholders = visibleMembers.some((m) => m.isPlaceholder);
+  const navigate = useNavigate();
+  const visibleMembers = team.filter((m) => m.visible && !m.isPlaceholder);
 
   return (
     <>
@@ -23,7 +23,7 @@ export default function TeamPage() {
               Team &amp; Roles · DreamTech Kashmir Solutions (DTKS)
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-              Website Design &amp; Engineering Team
+              Meet the people behind DreamTech Kashmir Solutions.
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
               The DreamTech Kashmir Solutions (DTKS) web team covers website architecture, full-stack web development, UI/UX design, e-commerce storefronts, and technical SEO deployment. Learn more{' '}
@@ -40,15 +40,6 @@ export default function TeamPage() {
               </Link>.
             </p>
           </div>
-
-          {hasPlaceholders && (
-            <div className="mt-6 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 px-4 py-3 flex items-start gap-3">
-              <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
-              <p className="text-xs text-[#17231C]/80">
-                Role profiles marked as <strong className="text-[#116438]">Profile Pending</strong> are editable placeholders. Actual member names, portraits, bios, and social links can be configured in Admin Team Management.
-              </p>
-            </div>
-          )}
         </div>
       </section>
 
@@ -164,8 +155,10 @@ export default function TeamPage() {
             </div>
           ) : (
             <EmptyState
-              title="No public team profiles"
-              description="Team visibility is currently turned off. Enable or add team members in Admin Team Management."
+              title="Meet the people behind DreamTech Kashmir Solutions."
+              description="Verified team member profiles, roles, and technical specializations are being updated and will appear here once published."
+              actionLabel="Contact Our Team"
+              onAction={() => navigate('/contact')}
             />
           )}
         </div>

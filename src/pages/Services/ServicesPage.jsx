@@ -138,7 +138,7 @@ export default function ServicesPage() {
                     <div>
                       <p className="text-xs text-[#64756B]">Pricing Model</p>
                       <p className="mt-1 font-display text-xl font-bold text-[#116438] tabular-nums">
-                        {service.startingPrice ? `Starting from ${priceText}` : 'Custom Quotation'}
+                        {service.startingPrice ? `Starting from ${priceText}` : 'Request a Quote'}
                       </p>
                       <p className="mt-1 text-xs text-[#64756B]">
                         Final quote confirmed after reviewing pages, design needs, and integrations.

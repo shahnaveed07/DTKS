@@ -1,30 +1,43 @@
-import { storageAdapter } from '../storage/localStorageAdapter.js';
-import { INITIAL_SETTINGS, INITIAL_SERVICES } from '../../data/seedData.js';
-
-const SETTINGS_KEY = 'settings';
-const SERVICES_KEY = 'services';
-const THEME_KEY = 'theme';
+import { STORAGE_KEYS, readStorage, writeStorage } from '../storage/localStorageAdapter.js';
+import { INITIAL_SETTINGS } from '../../data/seedData.js';
+import { API_ENDPOINTS } from '../models/backendModels.js';
+import {
+  apiRequest,
+  createServiceResponse,
+  getDataAdapterMode,
+} from './apiClient.js';
 
 export const settingsService = {
-  getSettings() {
-    return storageAdapter.getItem(SETTINGS_KEY, INITIAL_SETTINGS);
+  get() {
+    return readStorage(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
   },
 
-  saveSettings(settings) {
-    storageAdapter.setItem(SETTINGS_KEY, settings);
-    return settings;
+  update(patch) {
+    const current = this.get();
+    const next = {
+      ...current,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    writeStorage(STORAGE_KEYS.SETTINGS, next);
+    return next;
   },
 
-  getServices() {
-    return storageAdapter.getItem(SERVICES_KEY, INITIAL_SERVICES);
+  /**
+   * Async Repository Interface (Backend-Ready Envelope: { success, data, message })
+   */
+  async getSettings() {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(API_ENDPOINTS.settings, { method: 'GET' });
+    }
+    return createServiceResponse(this.get(), 'Settings loaded from local storage.');
   },
 
-  saveServices(services) {
-    storageAdapter.setItem(SERVICES_KEY, services);
-    return services;
-  },
-
-  resetAllDemoData() {
-    storageAdapter.clearAll();
+  async saveSettings(patch) {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(API_ENDPOINTS.settings, { method: 'PUT', body: patch });
+    }
+    const updated = this.update(patch);
+    return createServiceResponse(updated, 'Settings saved in local browser storage.');
   },
 };

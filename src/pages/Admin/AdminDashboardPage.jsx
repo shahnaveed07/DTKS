@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, PlusCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
@@ -22,6 +22,7 @@ export default function AdminDashboardPage() {
 
   const recentOrders = orders.slice(0, 5);
   const recentInquiries = inquiries.slice(0, 5);
+  const showSetupBanner = portfolio.length === 0 || team.length === 0;
 
   return (
     <>
@@ -36,6 +37,42 @@ export default function AdminDashboardPage() {
             Manage incoming website development orders, quotations, project progress, hosting arrangements, maintenance plans, packages, portfolio, team, and inquiries.
           </p>
         </div>
+
+        {showSetupBanner && (
+          <div className="rounded-xl border border-[#16834A]/30 bg-[#E8F5EC]/60 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <PlusCircle className="w-5 h-5 text-[#16834A] shrink-0 mt-0.5" />
+              <div>
+                <h2 className="text-sm font-semibold text-[#17231C]">
+                  Add your first project, team member or package to get started.
+                </h2>
+                <p className="mt-0.5 text-xs text-[#64756B]">
+                  All sample records have been removed. Populate your verified portfolio, team profiles, and business contact details below.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Link
+                to="/admin/portfolio"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors"
+              >
+                Add Project
+              </Link>
+              <Link
+                to="/admin/team"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#F7FAF7] transition-colors"
+              >
+                Add Team Member
+              </Link>
+              <Link
+                to="/admin/packages"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7] transition-colors"
+              >
+                Configure Packages
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -69,47 +106,53 @@ export default function AdminDashboardPage() {
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-[#E3EBE5] bg-[#E8F5EC]/50 text-xs text-[#116438]">
-                  <th className="py-3 px-4 font-semibold">Reference</th>
-                  <th className="py-3 px-4 font-semibold">Website &amp; Category</th>
-                  <th className="py-3 px-4 font-semibold">Customer</th>
-                  <th className="py-3 px-4 font-semibold">Hosting</th>
-                  <th className="py-3 px-4 font-semibold">Quote</th>
-                  <th className="py-3 px-4 font-semibold">Progress</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E3EBE5]">
-                {recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-[#F7FAF7] transition-colors">
-                    <td className="py-3 px-4 font-mono-tabular text-xs font-semibold text-[#16834A] whitespace-nowrap">
-                      {order.referenceId}
-                    </td>
-                    <td className="py-3 px-4">
-                      <p className="font-medium text-[#17231C]">{order.projectName}</p>
-                      <p className="text-xs text-[#64756B]">{order.service}</p>
-                    </td>
-                    <td className="py-3 px-4 text-[#64756B]">
-                      {order.customerName}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-[#64756B] whitespace-nowrap">
-                      {order.hostingPreference}
-                    </td>
-                    <td className="py-3 px-4 font-mono-tabular text-[#17231C] whitespace-nowrap">
-                      {order.quotationAmount
-                        ? formatCurrency(order.quotationAmount, order.quotationCurrency || 'INR')
-                        : 'Pending'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <StatusBadge status={order.status} />
-                    </td>
+          {recentOrders.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-[#E3EBE5] bg-[#E8F5EC]/50 text-xs text-[#116438]">
+                    <th className="py-3 px-4 font-semibold">Reference</th>
+                    <th className="py-3 px-4 font-semibold">Website &amp; Category</th>
+                    <th className="py-3 px-4 font-semibold">Customer</th>
+                    <th className="py-3 px-4 font-semibold">Hosting</th>
+                    <th className="py-3 px-4 font-semibold">Quote</th>
+                    <th className="py-3 px-4 font-semibold">Progress</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#E3EBE5]">
+                  {recentOrders.map((order) => (
+                    <tr key={order.id} className="hover:bg-[#F7FAF7] transition-colors">
+                      <td className="py-3 px-4 font-mono-tabular text-xs font-semibold text-[#16834A] whitespace-nowrap">
+                        {order.referenceId}
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-medium text-[#17231C]">{order.projectName}</p>
+                        <p className="text-xs text-[#64756B]">{order.service}</p>
+                      </td>
+                      <td className="py-3 px-4 text-[#64756B]">
+                        {order.customerName}
+                      </td>
+                      <td className="py-3 px-4 text-xs text-[#64756B] whitespace-nowrap">
+                        {order.hostingPreference}
+                      </td>
+                      <td className="py-3 px-4 font-mono-tabular text-[#17231C] whitespace-nowrap">
+                        {order.quotationAmount
+                          ? formatCurrency(order.quotationAmount, order.quotationCurrency || 'INR')
+                          : 'Pending'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <StatusBadge status={order.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="px-6 py-6 text-sm text-[#64756B]">
+              No orders received yet.
+            </p>
+          )}
         </div>
 
         {/* Recent Inquiries */}
@@ -143,7 +186,7 @@ export default function AdminDashboardPage() {
               ))
             ) : (
               <p className="px-6 py-6 text-sm text-[#64756B]">
-                No inquiries recorded yet.
+                No customer inquiries yet.
               </p>
             )}
           </div>

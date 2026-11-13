@@ -1,53 +1,82 @@
-import { storageAdapter } from '../storage/localStorageAdapter.js';
+import { STORAGE_KEYS, readStorage, writeStorage } from '../storage/localStorageAdapter.js';
 import { INITIAL_TEAM } from '../../data/seedData.js';
-
-const TEAM_KEY = 'team';
+import { API_ENDPOINTS } from '../models/backendModels.js';
+import {
+  apiRequest,
+  createServiceResponse,
+  getDataAdapterMode,
+} from './apiClient.js';
 
 export const teamService = {
   getAll() {
-    const list = storageAdapter.getItem(TEAM_KEY, INITIAL_TEAM);
-    return [...list].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
-  },
-
-  saveAll(members) {
-    storageAdapter.setItem(TEAM_KEY, members);
-    return [...members].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+    const list = readStorage(STORAGE_KEYS.TEAM, INITIAL_TEAM);
+    return [...list].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
   },
 
   create(payload) {
-    const existing = this.getAll();
-    const maxOrder = existing.reduce((acc, m) => Math.max(acc, m.sortOrder || 0), 0);
-    const newMember = {
+    const list = this.getAll();
+    const maxOrder = list.reduce((max, m) => Math.max(max, m.order || 0), 0);
+    const created = {
+      id: `team-${Date.now()}`,
+      order: maxOrder + 1,
+      visible: true,
+      isPlaceholder: false,
+      skills: [],
+      technologies: [],
       ...payload,
-      id: `team-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      sortOrder: payload.sortOrder ?? maxOrder + 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-    return this.saveAll([...existing, newMember]);
+    const next = [...list, created];
+    writeStorage(STORAGE_KEYS.TEAM, next);
+    return created;
   },
 
-  update(id, updates) {
-    const existing = this.getAll();
-    const next = existing.map((m) => (m.id === id ? { ...m, ...updates } : m));
-    return this.saveAll(next);
-  },
-
-  remove(id) {
-    const existing = this.getAll();
-    const next = existing.filter((m) => m.id !== id);
-    return this.saveAll(next);
+  update(id, patch) {
+    const list = this.getAll();
+    let updated = null;
+    const next = list.map((item) => {
+      if (item.id !== id) return item;
+      updated = { ...item, ...patch, updatedAt: new Date().toISOString() };
+      return updated;
+    });
+    writeStorage(STORAGE_KEYS.TEAM, next);
+    return updated;
   },
 
   reorder(id, direction) {
-    const existing = this.getAll();
-    const idx = existing.findIndex((m) => m.id === id);
-    if (idx < 0) return existing;
-    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= existing.length) return existing;
+    const list = this.getAll();
+    const index = list.findIndex((m) => m.id === id);
+    if (index === -1) return list;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return list;
 
-    const copy = [...existing];
-    const [moved] = copy.splice(idx, 1);
-    copy.splice(targetIdx, 0, moved);
-    const reindexed = copy.map((m, index) => ({ ...m, sortOrder: index + 1 }));
-    return this.saveAll(reindexed);
+    const swapped = [...list];
+    const temp = swapped[index];
+    swapped[index] = swapped[targetIndex];
+    swapped[targetIndex] = temp;
+
+    const normalized = swapped.map((member, idx) => ({
+      ...member,
+      order: idx + 1,
+    }));
+    writeStorage(STORAGE_KEYS.TEAM, normalized);
+    return normalized;
+  },
+
+  remove(id) {
+    const next = this.getAll().filter((m) => m.id !== id);
+    writeStorage(STORAGE_KEYS.TEAM, next);
+    return next;
+  },
+
+  /**
+   * Async Repository Interface (Backend-Ready Envelope: { success, data, message })
+   */
+  async listTeam() {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(API_ENDPOINTS.team, { method: 'GET' });
+    }
+    return createServiceResponse(this.getAll(), 'Team members loaded from local storage.');
   },
 };

@@ -1,45 +1,78 @@
-import { storageAdapter } from '../storage/localStorageAdapter.js';
+import { STORAGE_KEYS, readStorage, writeStorage } from '../storage/localStorageAdapter.js';
 import { INITIAL_PORTFOLIO } from '../../data/seedData.js';
 import { slugify } from '../../utils/orderUtils.js';
-
-const PORTFOLIO_KEY = 'portfolio';
+import { API_ENDPOINTS } from '../models/backendModels.js';
+import {
+  apiRequest,
+  createServiceResponse,
+  getDataAdapterMode,
+} from './apiClient.js';
 
 export const portfolioService = {
   getAll() {
-    return storageAdapter.getItem(PORTFOLIO_KEY, INITIAL_PORTFOLIO);
+    return readStorage(STORAGE_KEYS.PORTFOLIO, INITIAL_PORTFOLIO);
   },
 
-  saveAll(items) {
-    storageAdapter.setItem(PORTFOLIO_KEY, items);
-    return items;
+  getBySlug(slug) {
+    return this.getAll().find((p) => p.slug === slug) || null;
   },
 
   create(payload) {
-    const existing = this.getAll();
-    const baseSlug = slugify(payload.slug || payload.title || 'project');
-    let uniqueSlug = baseSlug || `project-${Date.now()}`;
-    if (existing.some((p) => p.slug === uniqueSlug)) {
-      uniqueSlug = `${uniqueSlug}-${Math.random().toString(36).slice(2, 5)}`;
-    }
+    const list = this.getAll();
+    const baseSlug = slugify(payload.slug || payload.title || `project-${Date.now()}`);
+    const exists = list.some((p) => p.slug === baseSlug);
+    const slug = exists ? `${baseSlug}-${Date.now().toString().slice(-4)}` : baseSlug;
 
-    const newProject = {
+    const created = {
+      id: `proj-${Date.now()}`,
+      slug,
+      published: false,
+      visibility: 'private',
+      featured: false,
+      isSample: false,
+      keyFeatures: [],
+      technologies: [],
+      gallery: [],
       ...payload,
-      id: `proj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      slug: uniqueSlug,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-    const next = [newProject, ...existing];
-    return this.saveAll(next);
+
+    const next = [created, ...list];
+    writeStorage(STORAGE_KEYS.PORTFOLIO, next);
+    return created;
   },
 
-  update(id, updates) {
-    const existing = this.getAll();
-    const next = existing.map((item) => (item.id === id ? { ...item, ...updates } : item));
-    return this.saveAll(next);
+  update(id, patch) {
+    const list = this.getAll();
+    let updated = null;
+    const next = list.map((item) => {
+      if (item.id !== id) return item;
+      updated = {
+        ...item,
+        ...patch,
+        slug: patch.slug ? slugify(patch.slug) : item.slug,
+        updatedAt: new Date().toISOString(),
+      };
+      return updated;
+    });
+    writeStorage(STORAGE_KEYS.PORTFOLIO, next);
+    return updated;
   },
 
   remove(id) {
-    const existing = this.getAll();
-    const next = existing.filter((item) => item.id !== id);
-    return this.saveAll(next);
+    const next = this.getAll().filter((p) => p.id !== id);
+    writeStorage(STORAGE_KEYS.PORTFOLIO, next);
+    return next;
+  },
+
+  /**
+   * Async Repository Interface (Backend-Ready Envelope: { success, data, message })
+   */
+  async listPortfolio() {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(API_ENDPOINTS.portfolio, { method: 'GET' });
+    }
+    return createServiceResponse(this.getAll(), 'Portfolio items loaded from local storage.');
   },
 };

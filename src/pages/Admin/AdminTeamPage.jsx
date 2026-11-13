@@ -14,10 +14,11 @@ import {
 import { useApp } from '../../context/AppContext.jsx';
 import { TEAM_ROLES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
+import EmptyState from '../../components/common/EmptyState.jsx';
 
 const EMPTY_MEMBER = {
   fullName: '',
-  role: 'Full-Stack Web Developer',
+  role: '',
   title: '',
   bio: '',
   skillsText: '',
@@ -27,6 +28,7 @@ const EMPTY_MEMBER = {
   linkedinUrl: '',
   githubUrl: '',
   websiteUrl: '',
+  order: 1,
   visible: true,
   isPlaceholder: false,
 };
@@ -47,13 +49,17 @@ export default function AdminTeamPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm(EMPTY_MEMBER);
+    setForm({
+      ...EMPTY_MEMBER,
+      order: team.length + 1,
+    });
     setModalOpen(true);
   };
 
   const openEdit = (member) => {
     setEditing(member);
     setForm({
+      ...EMPTY_MEMBER,
       ...member,
       skillsText: (member.skills || []).join(', '),
       techText: (member.technologies || []).join(', '),
@@ -86,7 +92,7 @@ export default function AdminTeamPage() {
 
     const payload = {
       fullName: trimmedName,
-      role: form.role,
+      role: form.role.trim() || 'Full-Stack Web Developer',
       title: form.title.trim(),
       bio: form.bio.trim(),
       skills: form.skillsText
@@ -102,8 +108,9 @@ export default function AdminTeamPage() {
       linkedinUrl: form.linkedinUrl.trim(),
       githubUrl: form.githubUrl.trim(),
       websiteUrl: form.websiteUrl.trim(),
+      order: Number(form.order) || team.length + 1,
       visible: Boolean(form.visible),
-      isPlaceholder: Boolean(form.isPlaceholder),
+      isPlaceholder: false,
     };
 
     if (editing) {
@@ -135,7 +142,7 @@ export default function AdminTeamPage() {
               Team Management
             </h1>
             <p className="mt-1 text-sm text-[#64756B]">
-              Replace role placeholders with verified team member profiles, photos, skills, and display order.
+              Add verified team member profiles, roles, photographs, biographies, skills, and display order.
             </p>
           </div>
           <button
@@ -148,91 +155,100 @@ export default function AdminTeamPage() {
           </button>
         </div>
 
-        <div className="space-y-4">
-          {team.map((member, index) => (
-            <div
-              key={member.id}
-              className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
-            >
-              <div className="flex items-start gap-4">
-                {member.avatarUrl ? (
-                  <img
-                    src={member.avatarUrl}
-                    alt={member.fullName}
-                    referrerPolicy="no-referrer"
-                    className="w-14 h-14 rounded-xl object-cover border border-[#E3EBE5] shrink-0"
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-xl bg-[#E8F5EC] border border-[#E3EBE5] flex items-center justify-center shrink-0 text-[#16834A]">
-                    {member.initials ? (
-                      <span className="font-display font-bold">{member.initials}</span>
-                    ) : (
-                      <User className="w-5 h-5" />
-                    )}
-                  </div>
-                )}
+        {team.length > 0 ? (
+          <div className="space-y-4">
+            {team.map((member, index) => (
+              <div
+                key={member.id}
+                className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="flex items-start gap-4">
+                  {member.avatarUrl ? (
+                    <img
+                      src={member.avatarUrl}
+                      alt={member.fullName}
+                      referrerPolicy="no-referrer"
+                      className="w-14 h-14 rounded-xl object-cover border border-[#E3EBE5] shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-[#E8F5EC] border border-[#E3EBE5] flex items-center justify-center shrink-0 text-[#16834A]">
+                      {member.initials ? (
+                        <span className="font-display font-bold">{member.initials}</span>
+                      ) : (
+                        <User className="w-5 h-5" />
+                      )}
+                    </div>
+                  )}
 
-                <div>
-                  <p className="text-xs font-semibold text-[#16834A]">
-                    {member.role} · {member.visible ? 'Visible' : 'Hidden'}
-                  </p>
-                  <h2 className="font-display text-base font-bold text-[#17231C]">
-                    {member.fullName}
-                  </h2>
-                  <p className="mt-1 text-xs text-[#64756B] max-w-2xl">
-                    {member.bio}
-                  </p>
+                  <div>
+                    <p className="text-xs font-semibold text-[#16834A]">
+                      {member.role} · {member.visible ? 'Visible' : 'Hidden'}
+                    </p>
+                    <h2 className="font-display text-base font-bold text-[#17231C]">
+                      {member.fullName}
+                    </h2>
+                    <p className="mt-1 text-xs text-[#64756B] max-w-2xl">
+                      {member.bio}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={index === 0}
+                    onClick={() => reorderTeamMember(member.id, 'up')}
+                    aria-label={`Move ${member.fullName} up`}
+                    className="p-1.5 rounded-md border border-[#E3EBE5] text-[#64756B] hover:text-[#17231C] disabled:opacity-40"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={index === team.length - 1}
+                    onClick={() => reorderTeamMember(member.id, 'down')}
+                    aria-label={`Move ${member.fullName} down`}
+                    className="p-1.5 rounded-md border border-[#E3EBE5] text-[#64756B] hover:text-[#17231C] disabled:opacity-40"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateTeamMember(member.id, { visible: !member.visible })}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
+                  >
+                    {member.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span>{member.visible ? 'Hide' : 'Show'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(member)}
+                    aria-label={`Edit ${member.fullName}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A]"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(member)}
+                    aria-label={`Delete ${member.fullName}`}
+                    className="p-1.5 rounded-md border border-[#E3EBE5] text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  disabled={index === 0}
-                  onClick={() => reorderTeamMember(member.id, 'up')}
-                  aria-label={`Move ${member.fullName} up`}
-                  className="p-1.5 rounded-md border border-[#E3EBE5] text-[#64756B] hover:text-[#17231C] disabled:opacity-40"
-                >
-                  <ArrowUp className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  disabled={index === team.length - 1}
-                  onClick={() => reorderTeamMember(member.id, 'down')}
-                  aria-label={`Move ${member.fullName} down`}
-                  className="p-1.5 rounded-md border border-[#E3EBE5] text-[#64756B] hover:text-[#17231C] disabled:opacity-40"
-                >
-                  <ArrowDown className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateTeamMember(member.id, { visible: !member.visible })}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
-                >
-                  {member.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  <span>{member.visible ? 'Hide' : 'Show'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openEdit(member)}
-                  aria-label={`Edit ${member.fullName}`}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A]"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(member)}
-                  aria-label={`Delete ${member.fullName}`}
-                  className="p-1.5 rounded-md border border-[#E3EBE5] text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="Meet the people behind DreamTech Kashmir Solutions."
+            description="No team profiles have been added yet. Add verified team member profiles to display them on the public Team page."
+            actionLabel="Add First Team Member"
+            onAction={openCreate}
+          />
+        )}
       </div>
 
       {/* Team Modal */}
@@ -270,38 +286,59 @@ export default function AdminTeamPage() {
                     required
                     value={form.fullName}
                     onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                    placeholder="Enter actual team member name."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
                 <div>
                   <label htmlFor="tm-role" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Role
+                    Professional Role *
                   </label>
-                  <select
+                  <input
                     id="tm-role"
+                    type="text"
+                    required
+                    list="dtks-team-roles"
                     value={form.role}
                     onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+                    placeholder="Select or enter actual role."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                  >
+                  />
+                  <datalist id="dtks-team-roles">
                     {TEAM_ROLES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
+                      <option key={r} value={r} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="tm-title" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Specialty Title
-                </label>
-                <input
-                  id="tm-title"
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="e.g., Web Applications & API Architecture"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <label htmlFor="tm-title" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Job Title / Specialty
+                  </label>
+                  <input
+                    id="tm-title"
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    placeholder="e.g., Web Applications & API Architecture"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="tm-order" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Display Order
+                  </label>
+                  <input
+                    id="tm-order"
+                    type="number"
+                    min="1"
+                    value={form.order}
+                    onChange={(e) => setForm((f) => ({ ...f, order: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm font-mono-tabular rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                </div>
               </div>
 
               <div>
@@ -313,6 +350,7 @@ export default function AdminTeamPage() {
                   rows={3}
                   value={form.bio}
                   onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
+                  placeholder="Write a verified professional biography."
                   className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                 />
               </div>
@@ -327,6 +365,7 @@ export default function AdminTeamPage() {
                     type="text"
                     value={form.skillsText}
                     onChange={(e) => setForm((f) => ({ ...f, skillsText: e.target.value }))}
+                    placeholder="Responsive UI, Technical SEO, API Design"
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
@@ -339,6 +378,7 @@ export default function AdminTeamPage() {
                     type="text"
                     value={form.techText}
                     onChange={(e) => setForm((f) => ({ ...f, techText: e.target.value }))}
+                    placeholder="React, JavaScript, Vite, Tailwind CSS"
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
@@ -346,7 +386,7 @@ export default function AdminTeamPage() {
 
               <div>
                 <label htmlFor="tm-avatar" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Profile Photo (Upload or URL)
+                  Profile Photograph (Upload or URL)
                 </label>
                 <div className="flex items-center gap-3">
                   <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] cursor-pointer hover:bg-[#F7FAF7] shrink-0">
@@ -359,7 +399,7 @@ export default function AdminTeamPage() {
                     type="text"
                     value={form.avatarUrl}
                     onChange={(e) => setForm((f) => ({ ...f, avatarUrl: e.target.value }))}
-                    placeholder="Optional photo URL or leave blank for initials"
+                    placeholder="Upload actual photograph."
                     className="flex-1 px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
@@ -375,6 +415,7 @@ export default function AdminTeamPage() {
                     type="url"
                     value={form.linkedinUrl}
                     onChange={(e) => setForm((f) => ({ ...f, linkedinUrl: e.target.value }))}
+                    placeholder="Enter verified profile URL."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
@@ -387,18 +428,20 @@ export default function AdminTeamPage() {
                     type="url"
                     value={form.githubUrl}
                     onChange={(e) => setForm((f) => ({ ...f, githubUrl: e.target.value }))}
+                    placeholder="Enter verified profile URL."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
                 <div>
                   <label htmlFor="tm-web" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Website URL
+                    Personal Website URL
                   </label>
                   <input
                     id="tm-web"
                     type="url"
                     value={form.websiteUrl}
                     onChange={(e) => setForm((f) => ({ ...f, websiteUrl: e.target.value }))}
+                    placeholder="Enter verified profile URL."
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
@@ -413,15 +456,6 @@ export default function AdminTeamPage() {
                     className="accent-[#16834A]"
                   />
                   <span>Visible on Team Page</span>
-                </label>
-                <label className="inline-flex items-center gap-2 text-[#17231C]">
-                  <input
-                    type="checkbox"
-                    checked={form.isPlaceholder}
-                    onChange={(e) => setForm((f) => ({ ...f, isPlaceholder: e.target.checked }))}
-                    className="accent-[#16834A]"
-                  />
-                  <span>Mark as Placeholder Profile</span>
                 </label>
               </div>
 

@@ -16,8 +16,9 @@ const EMPTY_PACKAGE = {
   revisions: '2 Design Revision Rounds',
   deliveryEstimate: '2–3 Weeks',
   supportDuration: '30 Days Post-Launch Bug Support',
-  hostingOption: 'Customer-Managed or Quoted Separately',
-  maintenanceOption: 'Optional Maintenance Plan',
+  hostingOption: 'Customer-Managed or DreamTech-Managed Hosting',
+  maintenanceOption: 'Optional Monthly or Yearly Maintenance',
+  extraServices: '',
   active: true,
   featured: false,
 };
@@ -49,8 +50,10 @@ export default function AdminPackagesPage() {
   const openEdit = (pkg) => {
     setEditingPkg(pkg);
     setPkgForm({
+      ...EMPTY_PACKAGE,
       ...pkg,
       startingPrice: pkg.startingPrice ?? '',
+      extraServices: pkg.extraServices || '',
       featuresText: (pkg.features || []).join('\n'),
     });
     setModalOpen(true);
@@ -79,6 +82,7 @@ export default function AdminPackagesPage() {
       supportDuration: pkgForm.supportDuration.trim(),
       hostingOption: pkgForm.hostingOption.trim(),
       maintenanceOption: pkgForm.maintenanceOption.trim(),
+      extraServices: pkgForm.extraServices.trim(),
       active: Boolean(pkgForm.active),
       featured: Boolean(pkgForm.featured),
     };
@@ -126,7 +130,7 @@ export default function AdminPackagesPage() {
               Packages, Add-Ons &amp; Maintenance
             </h1>
             <p className="mt-1 text-sm text-[#64756B]">
-              Configure hybrid starting prices, included deliverables, and optional maintenance plans.
+              Configure confirmed starting prices (or leave blank to display &ldquo;Request a Quote&rdquo;), included deliverables, and optional maintenance plans.
             </p>
           </div>
 
@@ -260,7 +264,7 @@ export default function AdminPackagesPage() {
                     htmlFor={`maint-price-${plan.id}`}
                     className="block text-xs font-semibold text-[#17231C] mb-1"
                   >
-                    Configured Price (INR — leave empty for &ldquo;Request Pricing&rdquo;)
+                    Confirmed Price (INR — leave empty for &ldquo;Request a Quote&rdquo;)
                   </label>
                   <input
                     id={`maint-price-${plan.id}`}
@@ -268,7 +272,7 @@ export default function AdminPackagesPage() {
                     min="0"
                     value={plan.price ?? ''}
                     onChange={(e) => handleMaintenancePriceChange(plan.id, e.target.value)}
-                    placeholder="Request Pricing"
+                    placeholder="Request a Quote"
                     className="w-full px-3 py-2 text-sm font-mono-tabular rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
@@ -371,10 +375,10 @@ export default function AdminPackagesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="sm:col-span-2">
                   <label htmlFor="pkg-price" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Starting Price (Blank = Request Pricing)
+                    Starting Price (Blank = Request a Quote)
                   </label>
                   <input
                     id="pkg-price"
@@ -382,13 +386,29 @@ export default function AdminPackagesPage() {
                     min="0"
                     value={pkgForm.startingPrice}
                     onChange={(e) => setPkgForm((f) => ({ ...f, startingPrice: e.target.value }))}
-                    placeholder="Request Pricing"
+                    placeholder="Request a Quote"
                     className="w-full px-3 py-2 text-sm font-mono-tabular rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
                 <div>
+                  <label htmlFor="pkg-currency" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Currency
+                  </label>
+                  <select
+                    id="pkg-currency"
+                    value={pkgForm.currency || 'INR'}
+                    onChange={(e) => setPkgForm((f) => ({ ...f, currency: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  >
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
+                  </select>
+                </div>
+                <div>
                   <label htmlFor="pkg-pages" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Number of Pages / Scope
+                    Included Pages
                   </label>
                   <input
                     id="pkg-pages"
@@ -399,6 +419,9 @@ export default function AdminPackagesPage() {
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label htmlFor="pkg-delivery" className="block text-xs font-semibold text-[#17231C] mb-1">
                     Delivery Estimate
@@ -411,12 +434,9 @@ export default function AdminPackagesPage() {
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="pkg-revisions" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Revisions
+                    Number of Revisions
                   </label>
                   <input
                     id="pkg-revisions"
@@ -428,7 +448,7 @@ export default function AdminPackagesPage() {
                 </div>
                 <div>
                   <label htmlFor="pkg-support" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Support Duration
+                    Bug-Support Period
                   </label>
                   <input
                     id="pkg-support"
@@ -443,7 +463,7 @@ export default function AdminPackagesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="pkg-hosting" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Hosting Option
+                    Hosting Options
                   </label>
                   <input
                     id="pkg-hosting"
@@ -455,7 +475,7 @@ export default function AdminPackagesPage() {
                 </div>
                 <div>
                   <label htmlFor="pkg-maint" className="block text-xs font-semibold text-[#17231C] mb-1">
-                    Maintenance Option
+                    Maintenance Options
                   </label>
                   <input
                     id="pkg-maint"
@@ -465,6 +485,20 @@ export default function AdminPackagesPage() {
                     className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="pkg-extra" className="block text-xs font-semibold text-[#17231C] mb-1">
+                  Extra Services Note
+                </label>
+                <input
+                  id="pkg-extra"
+                  type="text"
+                  value={pkgForm.extraServices}
+                  onChange={(e) => setPkgForm((f) => ({ ...f, extraServices: e.target.value }))}
+                  placeholder="e.g., Additional pages, custom integrations, or SEO setup available on request"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                />
               </div>
 
               <div>

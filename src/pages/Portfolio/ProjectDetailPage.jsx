@@ -21,7 +21,7 @@ export default function ProjectDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { portfolio, settings } = useApp();
-  const project = portfolio.find((p) => p.slug === slug);
+  const project = portfolio.find((p) => p.slug === slug && p.published && !p.isSample);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   if (!project) {
@@ -92,7 +92,7 @@ export default function ProjectDetailPage() {
               {project.category}
             </span>
             <span aria-hidden="true">·</span>
-            <span>{project.status || (project.isSample ? 'Sample Showcase' : 'Completed')}</span>
+            <span>{project.status || 'Completed'}</span>
             {project.completionDate && (
               <>
                 <span aria-hidden="true">·</span>

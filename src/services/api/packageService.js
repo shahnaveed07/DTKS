@@ -1,65 +1,114 @@
-import { storageAdapter } from '../storage/localStorageAdapter.js';
+import { STORAGE_KEYS, readStorage, writeStorage } from '../storage/localStorageAdapter.js';
 import {
+  INITIAL_SERVICES,
   INITIAL_PACKAGES,
-  INITIAL_ADDONS,
   INITIAL_MAINTENANCE_PLANS,
+  INITIAL_ADDONS,
 } from '../../data/seedData.js';
-
-const PACKAGES_KEY = 'packages';
-const ADDONS_KEY = 'addons';
-const MAINTENANCE_KEY = 'maintenance_plans';
-
-function createUniqueId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
+import { slugify } from '../../utils/orderUtils.js';
+import { API_ENDPOINTS } from '../models/backendModels.js';
+import {
+  apiRequest,
+  createServiceResponse,
+  getDataAdapterMode,
+} from './apiClient.js';
 
 export const packageService = {
-  getAll() {
-    return storageAdapter.getItem(PACKAGES_KEY, INITIAL_PACKAGES);
+  getServices() {
+    return readStorage(STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
   },
 
-  saveAll(packages) {
-    storageAdapter.setItem(PACKAGES_KEY, packages);
-    return packages;
+  saveServices(services) {
+    writeStorage(STORAGE_KEYS.SERVICES, services);
+    return services;
   },
 
-  create(payload) {
-    const list = this.getAll();
-    const newItem = {
+  getPackages() {
+    return readStorage(STORAGE_KEYS.PACKAGES, INITIAL_PACKAGES);
+  },
+
+  createPackage(payload) {
+    const list = this.getPackages();
+    const hasNumericPrice =
+      payload.startingPrice !== null &&
+      payload.startingPrice !== undefined &&
+      payload.startingPrice !== '';
+    const created = {
+      id: `pkg-${Date.now()}`,
+      slug: slugify(payload.title || `package-${Date.now()}`),
+      currency: 'INR',
+      active: true,
+      featured: false,
+      extraServices: '',
       ...payload,
-      id: createUniqueId('pkg'),
+      startingPrice: hasNumericPrice ? Number(payload.startingPrice) : null,
+      priceConfirmed: hasNumericPrice,
     };
-    const next = [...list, newItem];
-    return this.saveAll(next);
+    const next = [...list, created];
+    writeStorage(STORAGE_KEYS.PACKAGES, next);
+    return created;
   },
 
-  update(id, updates) {
-    const list = this.getAll();
-    const next = list.map((item) => (item.id === id ? { ...item, ...updates } : item));
-    return this.saveAll(next);
+  updatePackage(id, patch) {
+    const list = this.getPackages();
+    let updated = null;
+    const next = list.map((item) => {
+      if (item.id !== id) return item;
+      const merged = { ...item, ...patch };
+      if ('startingPrice' in patch) {
+        const hasNumericPrice =
+          patch.startingPrice !== null &&
+          patch.startingPrice !== undefined &&
+          patch.startingPrice !== '';
+        merged.startingPrice = hasNumericPrice ? Number(patch.startingPrice) : null;
+        merged.priceConfirmed = hasNumericPrice;
+      }
+      updated = merged;
+      return updated;
+    });
+    writeStorage(STORAGE_KEYS.PACKAGES, next);
+    return updated;
   },
 
-  remove(id) {
-    const list = this.getAll();
-    const next = list.filter((item) => item.id !== id);
-    return this.saveAll(next);
-  },
-
-  getAddons() {
-    return storageAdapter.getItem(ADDONS_KEY, INITIAL_ADDONS);
-  },
-
-  saveAddons(addons) {
-    storageAdapter.setItem(ADDONS_KEY, addons);
-    return addons;
+  deletePackage(id) {
+    const next = this.getPackages().filter((p) => p.id !== id);
+    writeStorage(STORAGE_KEYS.PACKAGES, next);
+    return next;
   },
 
   getMaintenancePlans() {
-    return storageAdapter.getItem(MAINTENANCE_KEY, INITIAL_MAINTENANCE_PLANS);
+    return readStorage(STORAGE_KEYS.MAINTENANCE, INITIAL_MAINTENANCE_PLANS);
   },
 
   saveMaintenancePlans(plans) {
-    storageAdapter.setItem(MAINTENANCE_KEY, plans);
+    writeStorage(STORAGE_KEYS.MAINTENANCE, plans);
     return plans;
+  },
+
+  getAddons() {
+    return readStorage(STORAGE_KEYS.ADDONS, INITIAL_ADDONS);
+  },
+
+  saveAddons(addons) {
+    writeStorage(STORAGE_KEYS.ADDONS, addons);
+    return addons;
+  },
+
+  /**
+   * Async Repository Interface (Backend-Ready Envelope: { success, data, message })
+   */
+  async fetchCatalog() {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(API_ENDPOINTS.packages, { method: 'GET' });
+    }
+    return createServiceResponse(
+      {
+        services: this.getServices(),
+        packages: this.getPackages(),
+        maintenancePlans: this.getMaintenancePlans(),
+        addons: this.getAddons(),
+      },
+      'Packages and service catalog loaded.'
+    );
   },
 };

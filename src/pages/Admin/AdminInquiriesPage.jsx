@@ -121,7 +121,7 @@ export default function AdminInquiriesPage() {
           </div>
         ) : (
           <EmptyState
-            title="No matching inquiries"
+            title="No customer inquiries yet."
             description="Customer messages submitted on the Contact page will appear here."
           />
         )}
