@@ -117,7 +117,7 @@ export default function HomePage() {
             <div className="lg:col-span-6 flex">
               <div className="w-full rounded-xl overflow-hidden border border-[#E3EBE5] bg-[#F7FAF7] shadow-sm aspect-16/9 lg:aspect-auto lg:min-h-[380px]">
                 <ImageWithFallback
-                  src="/src/assets/images/hero_emerald_studio_1794579090899.jpg"
+                  src="/assets/images/hero_emerald_studio_1794579090899.jpg"
                   alt="DreamTech Kashmir Solutions website design and development studio"
                   fallbackTitle="DreamTech Website Studio"
                   loading="eager"

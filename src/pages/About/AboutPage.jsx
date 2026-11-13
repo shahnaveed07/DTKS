@@ -69,7 +69,7 @@ export default function AboutPage() {
             <div className="lg:col-span-5 flex">
               <div className="w-full rounded-xl overflow-hidden border border-[#E3EBE5] bg-[#F7FAF7] shadow-sm aspect-4/3 lg:aspect-auto">
                 <ImageWithFallback
-                  src="/src/assets/images/hero_emerald_studio_1794579090899.jpg"
+                  src="/assets/images/hero_emerald_studio_1794579090899.jpg"
                   alt="DreamTech Kashmir Solutions development studio environment"
                   fallbackTitle="DreamTech Studio"
                   className="w-full h-full object-cover"

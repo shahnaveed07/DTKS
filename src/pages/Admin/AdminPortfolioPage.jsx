@@ -19,7 +19,7 @@ const EMPTY_PROJECT = {
   published: true,
   featured: false,
   completionDate: '',
-  coverImage: '/src/assets/images/portfolio_webapp_showcase_1794577652813.jpg',
+  coverImage: '/assets/images/portfolio_webapp_showcase_1794577652813.jpg',
   galleryText: '',
   liveUrl: '',
   githubUrl: '',
@@ -27,10 +27,10 @@ const EMPTY_PROJECT = {
 };
 
 const BUNDLED_IMAGES = [
-  { label: 'Corporate Website', path: '/src/assets/images/portfolio_webapp_showcase_1794577652813.jpg' },
-  { label: 'E-Commerce Storefront', path: '/src/assets/images/portfolio_ecommerce_showcase_1794577653883.jpg' },
-  { label: 'Emerald Web Studio', path: '/src/assets/images/hero_emerald_studio_1794579090899.jpg' },
-  { label: 'Editorial Web Studio', path: '/src/assets/images/hero_software_studio_1794577652777.jpg' },
+  { label: 'Corporate Website', path: '/assets/images/portfolio_webapp_showcase_1794577652813.jpg' },
+  { label: 'E-Commerce Storefront', path: '/assets/images/portfolio_ecommerce_showcase_1794577653883.jpg' },
+  { label: 'Emerald Web Studio', path: '/assets/images/hero_emerald_studio_1794579090899.jpg' },
+  { label: 'Editorial Web Studio', path: '/assets/images/hero_software_studio_1794577652777.jpg' },
 ];
 
 export default function AdminPortfolioPage() {
