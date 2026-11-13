@@ -1,12 +1,16 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { SITE_CONFIG } from '../../seo/seoConfig.js';
+import { SITE_CONFIG, getVerificationMeta } from '../../seo/seoConfig.js';
 import { resolveSeoProps } from '../../seo/resolveSeo.js';
 
 export { resolveSeoProps };
 
 function setMetaTag(selector, attrName, attrValue, content) {
   let el = document.head.querySelector(selector);
+  if (!content) {
+    if (el) el.remove();
+    return;
+  }
   if (!el) {
     el = document.createElement('meta');
     el.setAttribute(attrName, attrValue);
@@ -15,8 +19,12 @@ function setMetaTag(selector, attrName, attrValue, content) {
   el.setAttribute('content', content);
 }
 
-function setCanonicalLink(href) {
+function setCanonicalLink(href, noindex) {
   let link = document.head.querySelector('link[rel="canonical"]');
+  if (noindex) {
+    if (link) link.remove();
+    return;
+  }
   if (!link) {
     link = document.createElement('link');
     link.setAttribute('rel', 'canonical');
@@ -51,9 +59,13 @@ export default function SEO(props) {
     canonicalUrl,
     resolvedOgImage,
     resolvedOgImageAlt,
+    resolvedOgImageWidth,
+    resolvedOgImageHeight,
     resolvedOgType,
     jsonLd,
   } = resolveSeoProps({ ...props, pathname });
+
+  const isNoindex = resolvedRobots.includes('noindex');
 
   useEffect(() => {
     document.documentElement.lang = SITE_CONFIG.language;
@@ -61,7 +73,16 @@ export default function SEO(props) {
 
     setMetaTag('meta[name="description"]', 'name', 'description', resolvedDescription);
     setMetaTag('meta[name="robots"]', 'name', 'robots', resolvedRobots);
-    setCanonicalLink(canonicalUrl);
+    setCanonicalLink(canonicalUrl, isNoindex);
+
+    const verification = getVerificationMeta();
+    setMetaTag(
+      'meta[name="google-site-verification"]',
+      'name',
+      'google-site-verification',
+      verification.google
+    );
+    setMetaTag('meta[name="msvalidate.01"]', 'name', 'msvalidate.01', verification.bing);
 
     setMetaTag('meta[property="og:type"]', 'property', 'og:type', resolvedOgType);
     setMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', SITE_CONFIG.siteName);
@@ -71,8 +92,8 @@ export default function SEO(props) {
     setMetaTag('meta[property="og:url"]', 'property', 'og:url', canonicalUrl);
     setMetaTag('meta[property="og:image"]', 'property', 'og:image', resolvedOgImage);
     setMetaTag('meta[property="og:image:alt"]', 'property', 'og:image:alt', resolvedOgImageAlt);
-    setMetaTag('meta[property="og:image:width"]', 'property', 'og:image:width', String(SITE_CONFIG.ogImageWidth));
-    setMetaTag('meta[property="og:image:height"]', 'property', 'og:image:height', String(SITE_CONFIG.ogImageHeight));
+    setMetaTag('meta[property="og:image:width"]', 'property', 'og:image:width', String(resolvedOgImageWidth));
+    setMetaTag('meta[property="og:image:height"]', 'property', 'og:image:height', String(resolvedOgImageHeight));
 
     setMetaTag('meta[name="twitter:card"]', 'name', 'twitter:card', 'summary_large_image');
     setMetaTag('meta[name="twitter:title"]', 'name', 'twitter:title', resolvedTitle);
@@ -85,9 +106,12 @@ export default function SEO(props) {
     resolvedTitle,
     resolvedDescription,
     resolvedRobots,
+    isNoindex,
     canonicalUrl,
     resolvedOgImage,
     resolvedOgImageAlt,
+    resolvedOgImageWidth,
+    resolvedOgImageHeight,
     resolvedOgType,
     jsonLd,
   ]);

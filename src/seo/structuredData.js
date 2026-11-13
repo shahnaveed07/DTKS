@@ -19,6 +19,12 @@ function getVerifiedSocialUrls(socialLinks = {}) {
     .map((url) => url.trim());
 }
 
+export function hasVerifiedLocalBusinessDetails(settings = {}) {
+  const hasPhone = !isPlaceholderValue(settings.contactPhone);
+  const hasVerifiedLocation = !isPlaceholderValue(settings.businessLocation);
+  return hasPhone || hasVerifiedLocation;
+}
+
 export function buildOrganizationSchema(settings = {}) {
   const siteUrl = getSiteUrl();
   const orgId = `${siteUrl}/#organization`;
@@ -34,8 +40,8 @@ export function buildOrganizationSchema(settings = {}) {
     logo: {
       '@type': 'ImageObject',
       url: logoUrl,
-      width: 1254,
-      height: 1254,
+      width: SITE_CONFIG.logoWidth,
+      height: SITE_CONFIG.logoHeight,
     },
     description: SITE_CONFIG.description,
     areaServed: SITE_CONFIG.areaServed.map((name) => ({
@@ -57,7 +63,7 @@ export function buildOrganizationSchema(settings = {}) {
   return schema;
 }
 
-export function buildWebsiteSchema(settings = {}) {
+export function buildWebsiteSchema() {
   const siteUrl = getSiteUrl();
   return {
     '@type': 'WebSite',
@@ -74,12 +80,16 @@ export function buildWebsiteSchema(settings = {}) {
 }
 
 export function buildProfessionalServiceSchema(settings = {}) {
+  if (!hasVerifiedLocalBusinessDetails(settings)) {
+    return null;
+  }
+
   const siteUrl = getSiteUrl();
   const schema = {
     '@type': 'ProfessionalService',
     '@id': `${siteUrl}/#professional-service`,
     name: settings.companyName || SITE_CONFIG.officialName,
-    alternateName: ['DTKS', 'DreamTech Kashmir'],
+    alternateName: ['DTKS', 'DreamTech Kashmir', 'DTKS Kashmir'],
     url: `${siteUrl}/`,
     image: `${siteUrl}${SITE_CONFIG.ogImagePath}`,
     description: SITE_CONFIG.description,
@@ -90,19 +100,26 @@ export function buildProfessionalServiceSchema(settings = {}) {
       { '@type': 'State', name: 'Jammu & Kashmir' },
       { '@type': 'Country', name: 'India' },
     ],
-    address: {
+  };
+
+  if (!isPlaceholderValue(settings.businessLocation)) {
+    schema.address = {
       '@type': 'PostalAddress',
+      streetAddress: settings.businessLocation.trim(),
       addressLocality: SITE_CONFIG.defaultLocation.locality,
       addressRegion: SITE_CONFIG.defaultLocation.region,
       addressCountry: SITE_CONFIG.defaultLocation.country,
-    },
-  };
+    };
+  }
 
   if (!isPlaceholderValue(settings.contactEmail)) {
     schema.email = settings.contactEmail.trim();
   }
   if (!isPlaceholderValue(settings.contactPhone)) {
     schema.telephone = settings.contactPhone.trim();
+  }
+  if (!isPlaceholderValue(settings.workingHours)) {
+    schema.openingHours = settings.workingHours.trim();
   }
 
   return schema;
@@ -184,6 +201,23 @@ export function buildPackagesOfferCatalogSchema(packages = []) {
   };
 }
 
+export function buildFaqSchema(faqs = []) {
+  if (!Array.isArray(faqs) || faqs.length === 0) return null;
+  const siteUrl = getSiteUrl();
+  return {
+    '@type': 'FAQPage',
+    '@id': `${siteUrl}/packages#faq`,
+    mainEntity: faqs.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.answer,
+      },
+    })),
+  };
+}
+
 export function buildPortfolioSchema(projects = []) {
   const siteUrl = getSiteUrl();
   const published = Array.isArray(projects) ? projects.filter((p) => p.published) : [];
@@ -252,10 +286,14 @@ export function buildPageJsonLd({
 
   const graph = [
     buildOrganizationSchema(settings),
-    buildWebsiteSchema(settings),
-    buildProfessionalServiceSchema(settings),
+    buildWebsiteSchema(),
     webPage,
   ];
+
+  const professionalService = buildProfessionalServiceSchema(settings);
+  if (professionalService) {
+    graph.push(professionalService);
+  }
 
   const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbs);
   if (breadcrumbSchema) {

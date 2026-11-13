@@ -23,6 +23,8 @@ import {
 import { useApp } from '../../context/AppContext.jsx';
 import { SUPPORTING_SERVICES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
+import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
+import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import { buildServiceCatalogSchema } from '../../seo/structuredData.js';
 import { formatCurrency } from '../../utils/orderUtils.js';
 
@@ -58,6 +60,7 @@ export default function ServicesPage() {
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Breadcrumbs items={ROUTE_SEO['/services'].breadcrumbs} />
           <div className="max-w-3xl">
             <p className="text-xs font-semibold text-[#16834A]">
               Website Design &amp; Development · DTKS Kashmir
@@ -66,11 +69,19 @@ export default function ServicesPage() {
               Website Design &amp; Development Services
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              DreamTech Kashmir Solutions (DTKS) focuses exclusively on designing, developing, redesigning, and maintaining modern websites across Srinagar and Jammu &amp; Kashmir. Select any category below or{' '}
+              DreamTech Kashmir Solutions (DTKS) focuses exclusively on designing, developing, redesigning, and maintaining responsive websites across Srinagar, Kashmir, and Jammu &amp; Kashmir. Browse our website categories below,{' '}
               <Link to="/packages" className="text-[#16834A] font-medium hover:underline">
-                compare website packages
+                view website packages &amp; pricing
+              </Link>
+              , explore{' '}
+              <Link to="/portfolio" className="text-[#16834A] font-medium hover:underline">
+                our website portfolio
+              </Link>
+              , or{' '}
+              <Link to="/contact" className="text-[#16834A] font-medium hover:underline">
+                contact DTKS
               </Link>{' '}
-              to start a tailored quotation.
+              for a consultation.
             </p>
           </div>
         </div>

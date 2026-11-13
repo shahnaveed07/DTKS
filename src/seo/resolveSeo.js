@@ -2,6 +2,7 @@ import {
   ROUTE_SEO,
   SITE_CONFIG,
   buildCanonicalUrl,
+  getImageDimensions,
   getSiteUrl,
   normalizeCanonicalPath,
 } from './seoConfig.js';
@@ -50,6 +51,8 @@ export function resolveSeoProps({
   const rawImage = ogImage || SITE_CONFIG.ogImagePath;
   const resolvedOgImage = rawImage.startsWith('http') ? rawImage : `${siteUrl}${rawImage}`;
   const resolvedOgImageAlt = ogImageAlt || SITE_CONFIG.ogImageAlt;
+  const { width: resolvedOgImageWidth, height: resolvedOgImageHeight } =
+    getImageDimensions(rawImage);
   const resolvedOgType = ogType || routeMeta.ogType || 'website';
   const resolvedBreadcrumbs = breadcrumbs || routeMeta.breadcrumbs || null;
 
@@ -72,6 +75,8 @@ export function resolveSeoProps({
     canonicalUrl,
     resolvedOgImage,
     resolvedOgImageAlt,
+    resolvedOgImageWidth,
+    resolvedOgImageHeight,
     resolvedOgType,
     jsonLd,
   };

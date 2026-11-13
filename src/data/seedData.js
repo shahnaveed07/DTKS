@@ -807,10 +807,38 @@ export const INITIAL_INQUIRIES = [
   },
 ];
 
+export const PACKAGES_FAQS = [
+  {
+    question: 'How is final website development pricing calculated at DreamTech Kashmir Solutions (DTKS)?',
+    answer:
+      'Starting estimates apply to our Starter, Business, and Professional packages based on page count and standard features. For E-Commerce storefronts, custom portals, or additional integrations, DTKS provides an itemized custom quotation before any development work begins.',
+  },
+  {
+    question: 'Who owns the website domain name and hosting account?',
+    answer:
+      'You retain full ownership of your domain name and website assets. You can choose Customer-Managed Hosting—where you purchase hosting directly under your own account—or DreamTech-Managed Hosting, where hosting charges and renewals are billed and tracked transparently.',
+  },
+  {
+    question: 'Do you provide website redesign services for existing outdated websites?',
+    answer:
+      'Yes. Through our Website Redesign service, DTKS upgrades outdated business websites with responsive mobile-first layouts, cleaner navigation, improved page speed, and modern technical SEO structure while preserving your core brand identity.',
+  },
+  {
+    question: 'Are website maintenance plans mandatory after launch?',
+    answer:
+      'No. Website maintenance is strictly optional and never bundled silently into a build fee. Every package includes post-launch bug support, and clients who want scheduled backups, security checks, and monthly content updates can opt into our Basic, Standard, Premium, or Custom maintenance plans.',
+  },
+  {
+    question: 'Does DTKS serve businesses in Srinagar and across Jammu & Kashmir?',
+    answer:
+      'Yes. DreamTech Kashmir Solutions (DTKS) works with businesses, educational institutions, hospitality brands, and independent professionals across Srinagar, Kashmir, Jammu & Kashmir, and wider regions through structured remote and local consultation.',
+  },
+];
+
 export const INITIAL_SETTINGS = {
   companyName: 'DreamTech Kashmir Solutions',
-  tagline: 'Modern Websites Built for Growth and Trust.',
-  heroSupportText: 'DreamTech Kashmir Solutions (DTKS) designs and develops fast, responsive business websites, personal portfolios, e-commerce storefronts, and custom web experiences for organizations in Kashmir and beyond.',
+  tagline: 'Website Design & Development Built for Growth and Trust.',
+  heroSupportText: 'DreamTech Kashmir Solutions (DTKS), also known as DreamTech Kashmir, designs and develops fast, responsive business websites, personal portfolios, e-commerce storefronts, website redesigns, and ongoing maintenance for organizations in Srinagar, Kashmir, and beyond.',
   contactEmail: 'contact@dreamtechkashmir.example',
   contactPhone: '+91 (000) 000-0000 (Placeholder)',
   whatsappNumber: '+91 (000) 000-0000 (Placeholder)',

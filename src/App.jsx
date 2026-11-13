@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AppProvider } from './context/AppContext.jsx';
 import PublicLayout from './components/layout/PublicLayout.jsx';
 import AdminLayout from './components/layout/AdminLayout.jsx';
@@ -17,6 +17,7 @@ import ContactPage from './pages/Contact/ContactPage.jsx';
 import RequestQuotePage from './pages/Order/RequestQuotePage.jsx';
 import TrackOrderPage from './pages/Order/TrackOrderPage.jsx';
 import LegalPage from './pages/Legal/LegalPage.jsx';
+import NotFoundPage from './pages/NotFound/NotFoundPage.jsx';
 
 const AdminDashboardPage = lazy(() => import('./pages/Admin/AdminDashboardPage.jsx'));
 const AdminOrdersPage = lazy(() => import('./pages/Admin/AdminOrdersPage.jsx'));
@@ -85,8 +86,8 @@ export function AppRoutes() {
         <Route path="/admin/inquiries" element={renderAdmin('Inquiries', <AdminInquiriesPage />)} />
         <Route path="/admin/settings" element={renderAdmin('Website Settings', <AdminSettingsPage />)} />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* 404 Not Found */}
+        <Route path="*" element={<PublicLayout><NotFoundPage /></PublicLayout>} />
       </Routes>
       <ToastContainer />
       <ConfirmDialog />

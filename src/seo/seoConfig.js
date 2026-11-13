@@ -1,13 +1,25 @@
 const DEFAULT_PRODUCTION_URL = 'https://dtks.pages.dev';
 
-export function getSiteUrl() {
-  let raw = '';
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SITE_URL) {
-    raw = import.meta.env.VITE_SITE_URL;
-  } else if (typeof process !== 'undefined' && process.env && process.env.VITE_SITE_URL) {
-    raw = process.env.VITE_SITE_URL;
+function readEnv(key) {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+    return String(import.meta.env[key]).trim();
   }
-  return (raw || DEFAULT_PRODUCTION_URL).trim().replace(/\/+$/, '');
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return String(process.env[key]).trim();
+  }
+  return '';
+}
+
+export function getSiteUrl() {
+  const raw = readEnv('VITE_SITE_URL');
+  return (raw || DEFAULT_PRODUCTION_URL).replace(/\/+$/, '');
+}
+
+export function getVerificationMeta() {
+  return {
+    google: readEnv('VITE_GOOGLE_SITE_VERIFICATION'),
+    bing: readEnv('VITE_BING_SITE_VERIFICATION'),
+  };
 }
 
 export function normalizeCanonicalPath(pathname = '/') {
@@ -22,6 +34,22 @@ export function buildCanonicalUrl(pathname = '/') {
   return path === '/' ? `${origin}/` : `${origin}${path}`;
 }
 
+export const IMAGE_DIMENSIONS = {
+  '/assets/images/dreamtech-kashmir-website-studio.jpg': { width: 1376, height: 768 },
+  '/assets/images/dtks-corporate-website-showcase.jpg': { width: 1200, height: 896 },
+  '/assets/images/dtks-ecommerce-website-showcase.jpg': { width: 1200, height: 896 },
+  '/assets/images/dtks-educational-website-showcase.jpg': { width: 1376, height: 768 },
+  '/assets/images/dreamtech-kashmir-solutions-dtks-logo.png': { width: 512, height: 512 },
+  '/assets/images/dreamtech-kashmir-solutions-dtks-logo.webp': { width: 512, height: 512 },
+};
+
+export function getImageDimensions(imagePath) {
+  if (!imagePath || typeof imagePath !== 'string') {
+    return { width: 1376, height: 768 };
+  }
+  return IMAGE_DIMENSIONS[imagePath] || { width: 1376, height: 768 };
+}
+
 export const SITE_CONFIG = {
   officialName: 'DreamTech Kashmir Solutions',
   shortName: 'DTKS',
@@ -32,12 +60,16 @@ export const SITE_CONFIG = {
     'DreamTech Kashmir',
     'Dream Tech Kashmir',
     'DreamTechKashmir',
+    'DreamTech Kashmir Solutions DTKS',
   ],
   siteName: 'DreamTech Kashmir Solutions (DTKS)',
   businessCategory: 'Website Design & Development Company',
   description:
-    'DreamTech Kashmir Solutions (DTKS) delivers professional website design, website development, e-commerce websites, redesign and maintenance services for businesses in Kashmir and beyond.',
-  logoPath: '/assets/aistudio/file_000000001b088208817ae4b752e73385__1__6d1528fc.png',
+    'DreamTech Kashmir Solutions (DTKS) delivers professional website design, website development, e-commerce websites, website redesign and maintenance services for businesses in Kashmir and beyond.',
+  logoPath: '/assets/images/dreamtech-kashmir-solutions-dtks-logo.png',
+  logoWebpPath: '/assets/images/dreamtech-kashmir-solutions-dtks-logo.webp',
+  logoWidth: 512,
+  logoHeight: 512,
   logoAlt: 'DreamTech Kashmir Solutions (DTKS) brand logo',
   ogImagePath: '/assets/images/dreamtech-kashmir-website-studio.jpg',
   ogImageAlt: 'DreamTech Kashmir Solutions (DTKS) — Website Design & Development Studio',
@@ -68,7 +100,7 @@ export const ROUTE_SEO = {
   '/services': {
     title: 'Website Design & Development Services | DTKS Kashmir',
     description:
-      'Explore business websites, e-commerce development, website redesign, UI/UX design, hosting setup, SEO and website maintenance services by DTKS Kashmir.',
+      'Explore responsive business websites, e-commerce website development, website redesign, UI/UX design, hosting setup, SEO and website maintenance services by DTKS Kashmir.',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: true,
@@ -82,7 +114,7 @@ export const ROUTE_SEO = {
   '/packages': {
     title: 'Website Development Packages & Pricing | DTKS',
     description:
-      'Compare website development packages, business website pricing, e-commerce plans, maintenance options and custom website quotations from DTKS.',
+      'Compare transparent website development packages, business website cost, e-commerce website plans, optional maintenance plans and custom website quotations from DTKS.',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: true,
@@ -96,7 +128,7 @@ export const ROUTE_SEO = {
   '/portfolio': {
     title: 'Our Website Development Portfolio | DreamTech Kashmir Solutions',
     description:
-      'Explore responsive business websites, e-commerce storefronts, portfolio websites and custom web showcases crafted by DreamTech Kashmir Solutions (DTKS).',
+      'Explore responsive business websites, e-commerce storefronts, portfolio websites and institutional web showcases built by DreamTech Kashmir Solutions (DTKS).',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: true,
@@ -110,7 +142,7 @@ export const ROUTE_SEO = {
   '/team': {
     title: 'Meet Our Team | DreamTech Kashmir Solutions',
     description:
-      'Meet the DreamTech Kashmir Solutions (DTKS) web architects, full-stack web developers, UI/UX designers, e-commerce and SEO specialists.',
+      'Meet the DreamTech Kashmir Solutions (DTKS) website architecture, full-stack web development, UI/UX design, e-commerce and technical SEO specialists.',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: true,
@@ -124,7 +156,7 @@ export const ROUTE_SEO = {
   '/about': {
     title: 'About DreamTech Kashmir Solutions (DTKS)',
     description:
-      'Learn about DreamTech Kashmir Solutions (DTKS), our website design and development expertise in Kashmir, engineering standards and asset ownership model.',
+      'Learn about DreamTech Kashmir Solutions (DTKS), our website design and development expertise in Kashmir, engineering standards, and transparent asset ownership.',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: true,
@@ -138,7 +170,7 @@ export const ROUTE_SEO = {
   '/contact': {
     title: 'Contact DreamTech Kashmir Solutions | DTKS',
     description:
-      'Contact DreamTech Kashmir Solutions (DTKS) in Srinagar, Kashmir for business website enquiries, website redesign consultations and custom quotes.',
+      'Contact DreamTech Kashmir Solutions (DTKS) for business website enquiries, website redesign consultations, maintenance questions and custom website quotations.',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: true,
@@ -152,7 +184,7 @@ export const ROUTE_SEO = {
   '/request-quote': {
     title: 'Request a Website Quote | DreamTech Kashmir Solutions (DTKS)',
     description:
-      'Submit your website category, required pages, design preferences, domain/hosting choice and expected delivery date for a tailored quote from DTKS.',
+      'Submit your website category, required pages, design preferences, domain and hosting choice, and target launch date for a tailored quotation from DTKS.',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: false,
@@ -182,7 +214,7 @@ export const ROUTE_SEO = {
   '/terms': {
     title: 'Terms & Conditions | DreamTech Kashmir Solutions (DTKS)',
     description:
-      'Terms & Conditions covering hybrid website quotations, hosting & domain ownership and maintenance boundaries at DreamTech Kashmir Solutions (DTKS).',
+      'Terms & Conditions covering hybrid website quotations, hosting and domain ownership, and maintenance scope at DreamTech Kashmir Solutions (DTKS).',
     robots: 'index, follow',
     ogType: 'website',
     inSitemap: false,

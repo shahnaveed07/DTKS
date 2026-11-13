@@ -1,6 +1,9 @@
+import { Link } from 'react-router-dom';
 import { Github, Linkedin, Globe, Info, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
+import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
+import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
 export default function TeamPage() {
@@ -14,15 +17,27 @@ export default function TeamPage() {
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Breadcrumbs items={ROUTE_SEO['/team'].breadcrumbs} />
           <div className="max-w-3xl">
             <p className="text-xs font-semibold text-[#16834A]">
-              Team &amp; Roles
+              Team &amp; Roles · DreamTech Kashmir Solutions (DTKS)
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
               Website Design &amp; Engineering Team
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              The DreamTech Kashmir Solutions (DTKS) multidisciplinary web team covers website architecture, full-stack web engineering, UI/UX systems, e-commerce storefronts, and technical SEO deployment.
+              The DreamTech Kashmir Solutions (DTKS) web team covers website architecture, full-stack web development, UI/UX design, e-commerce storefronts, and technical SEO deployment. Learn more{' '}
+              <Link to="/about" className="text-[#16834A] font-medium hover:underline">
+                about our company
+              </Link>
+              , explore our{' '}
+              <Link to="/services" className="text-[#16834A] font-medium hover:underline">
+                website services
+              </Link>
+              , or{' '}
+              <Link to="/contact" className="text-[#16834A] font-medium hover:underline">
+                contact DTKS
+              </Link>.
             </p>
           </div>
 

@@ -6,6 +6,7 @@ import { AppRoutes } from './App.jsx';
 import { resolveSeoProps } from './components/common/SEO.jsx';
 import { ROUTE_SEO } from './seo/seoConfig.js';
 import {
+  buildFaqSchema,
   buildPackagesOfferCatalogSchema,
   buildPortfolioSchema,
   buildProjectSchema,
@@ -16,6 +17,7 @@ import {
   INITIAL_PORTFOLIO,
   INITIAL_SERVICES,
   INITIAL_SETTINGS,
+  PACKAGES_FAQS,
 } from './data/seedData.js';
 
 export function getPrerenderRoutes() {
@@ -36,18 +38,41 @@ export function getPrerenderRoutes() {
   }));
 
   const adminShellRoutes = [
-    {
-      path: '/admin',
-      inSitemap: false,
-      noindex: true,
-    },
-  ];
+    '/admin',
+    '/admin/orders',
+    '/admin/packages',
+    '/admin/portfolio',
+    '/admin/team',
+    '/admin/inquiries',
+    '/admin/settings',
+  ].map((path) => ({
+    path,
+    inSitemap: false,
+    noindex: true,
+  }));
 
-  return [...staticPublicRoutes, ...portfolioDetailRoutes, ...adminShellRoutes];
+  const notFoundRoute = {
+    path: '/404',
+    inSitemap: false,
+    noindex: true,
+    isNotFound: true,
+  };
+
+  return [...staticPublicRoutes, ...portfolioDetailRoutes, ...adminShellRoutes, notFoundRoute];
 }
 
 function resolveRouteSeo(url) {
   const settings = INITIAL_SETTINGS;
+
+  if (url === '/404') {
+    return resolveSeoProps({
+      pathname: url,
+      noindex: true,
+      fullTitle: 'Page Not Found | DreamTech Kashmir Solutions (DTKS)',
+      description: 'The requested page could not be found on DreamTech Kashmir Solutions (DTKS).',
+      settings,
+    });
+  }
 
   if (url === '/services') {
     return resolveSeoProps({
@@ -60,7 +85,10 @@ function resolveRouteSeo(url) {
   if (url === '/packages') {
     return resolveSeoProps({
       pathname: url,
-      extraSchemas: [buildPackagesOfferCatalogSchema(INITIAL_PACKAGES)],
+      extraSchemas: [
+        buildPackagesOfferCatalogSchema(INITIAL_PACKAGES),
+        buildFaqSchema(PACKAGES_FAQS),
+      ],
       settings,
     });
   }
@@ -105,7 +133,7 @@ function resolveRouteSeo(url) {
     return resolveSeoProps({
       pathname: url,
       noindex: true,
-      fullTitle: 'Overview | Admin | DTKS',
+      fullTitle: 'Admin | DTKS',
       description: 'Administrative prototype interface for DreamTech Kashmir Solutions (DTKS).',
       settings,
     });
@@ -118,10 +146,11 @@ function resolveRouteSeo(url) {
 }
 
 export function renderRoute(url) {
+  const routerLocation = url === '/404' ? '/404-not-found' : url;
   const appHtml = renderToString(
     <StrictMode>
       <AppProvider>
-        <StaticRouter location={url}>
+        <StaticRouter location={routerLocation}>
           <AppRoutes />
         </StaticRouter>
       </AppProvider>

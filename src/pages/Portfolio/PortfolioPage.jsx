@@ -1,8 +1,11 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Search, Info } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { PORTFOLIO_CATEGORIES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
+import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
+import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import { buildPortfolioSchema } from '../../seo/structuredData.js';
 import ProjectCard from '../../components/cards/ProjectCard.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
@@ -47,15 +50,23 @@ export default function PortfolioPage() {
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Breadcrumbs items={ROUTE_SEO['/portfolio'].breadcrumbs} />
           <div className="max-w-3xl">
             <p className="text-xs font-semibold text-[#16834A]">
-              DTKS Website Portfolio
+              DTKS Website Portfolio · DreamTech Kashmir Solutions
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
               Our Website Development Portfolio
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Browse websites designed and developed by DreamTech Kashmir Solutions (DTKS) across Business, E-Commerce, Portfolio, Landing Pages, Educational, and Other website categories.
+              Browse business websites, e-commerce storefronts, portfolio websites, and institutional web showcases built by DreamTech Kashmir Solutions (DTKS). Looking to build a similar website?{' '}
+              <Link to="/packages" className="text-[#16834A] font-medium hover:underline">
+                View packages
+              </Link>{' '}
+              or{' '}
+              <Link to="/request-quote" className="text-[#16834A] font-medium hover:underline">
+                request a website quote
+              </Link>.
             </p>
           </div>
 

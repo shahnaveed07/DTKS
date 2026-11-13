@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Check, ArrowRight, Server, ShieldCheck, Info } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
+import { PACKAGES_FAQS } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
-import { buildPackagesOfferCatalogSchema } from '../../seo/structuredData.js';
+import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
+import { ROUTE_SEO } from '../../seo/seoConfig.js';
+import { buildFaqSchema, buildPackagesOfferCatalogSchema } from '../../seo/structuredData.js';
 import { formatCurrency } from '../../utils/orderUtils.js';
 
 export default function PackagesPage() {
@@ -13,12 +16,16 @@ export default function PackagesPage() {
     <>
       <SEO
         settings={settings}
-        extraSchemas={[buildPackagesOfferCatalogSchema(packages)]}
+        extraSchemas={[
+          buildPackagesOfferCatalogSchema(packages),
+          buildFaqSchema(PACKAGES_FAQS),
+        ]}
       />
 
       {/* Header */}
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Breadcrumbs items={ROUTE_SEO['/packages'].breadcrumbs} />
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold text-[#16834A]">
@@ -28,14 +35,22 @@ export default function PackagesPage() {
                 Website Development Packages &amp; Pricing
               </h1>
               <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-                Explore transparent starting pricing across Starter, Business, Professional, E-Commerce, and Custom website packages from DreamTech Kashmir Solutions (DTKS). Final project pricing is confirmed after reviewing your required pages, functionality, and hosting setup.
+                Explore transparent starting pricing across Starter, Business, Professional, E-Commerce, and Custom website packages from DreamTech Kashmir Solutions (DTKS). Review{' '}
+                <Link to="/services" className="text-[#16834A] font-medium hover:underline">
+                  website design &amp; development services
+                </Link>{' '}
+                or{' '}
+                <Link to="/portfolio" className="text-[#16834A] font-medium hover:underline">
+                  explore our work
+                </Link>{' '}
+                before requesting your custom quotation.
               </p>
             </div>
             <Link
               to="/request-quote?package=custom"
               className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap shrink-0"
             >
-              <span>Request Custom Website Quote</span>
+              <span>Request a Website Quote</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -365,6 +380,42 @@ export default function PackagesPage() {
                 <strong className="text-[#116438]">Maintenance Scope Policy:</strong>{' '}
                 Ongoing maintenance covers backups, security checks, minor content updates, and bug resolution within the agreed plan. Major new features, complete redesigns, third-party SaaS/API subscriptions, and new development modules require separate quotations and customer approval.
               </p>
+            </div>
+          </div>
+
+          {/* Frequently Asked Questions Before Ordering */}
+          <div className="mt-16">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+              <div>
+                <h2 className="font-display text-2xl font-bold text-[#17231C]">
+                  Frequently Asked Questions Before Ordering
+                </h2>
+                <p className="mt-1 text-sm text-[#64756B]">
+                  Key answers on website pricing, domain ownership, redesigns, and optional maintenance with DTKS.
+                </p>
+              </div>
+              <Link
+                to="/contact"
+                className="text-sm font-semibold text-[#16834A] hover:text-[#116438] hover:underline whitespace-nowrap shrink-0"
+              >
+                Contact DTKS &rarr;
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {PACKAGES_FAQS.map((faq) => (
+                <div
+                  key={faq.question}
+                  className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6"
+                >
+                  <h3 className="font-display text-base font-semibold text-[#17231C]">
+                    {faq.question}
+                  </h3>
+                  <p className="mt-2 text-sm text-[#64756B] leading-relaxed">
+                    {faq.answer}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

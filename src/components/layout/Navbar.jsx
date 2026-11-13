@@ -26,7 +26,7 @@ export default function Navbar() {
         {/* Zone 1: Brand Logo */}
         <Link
           to="/"
-          aria-label="DreamTech Kashmir Solutions — Home"
+          aria-label="DreamTech Kashmir Solutions (DTKS) — Home"
           className="inline-flex items-center shrink-0 focus-visible:outline-2 focus-visible:outline-[#16834A] rounded-lg"
         >
           <BrandLogo variant="navbar" />

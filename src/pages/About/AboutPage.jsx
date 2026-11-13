@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Code2, ShieldCheck, Layers } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
+import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
+import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 
 const PRINCIPLES = [
@@ -31,6 +33,7 @@ export default function AboutPage() {
 
       <section className="border-b border-[#E3EBE5] bg-white py-14 lg:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Breadcrumbs items={ROUTE_SEO['/about'].breadcrumbs} />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
             <div className="lg:col-span-7 flex flex-col justify-center">
               <p className="text-xs font-semibold text-[#16834A]">
@@ -40,16 +43,24 @@ export default function AboutPage() {
                 Practical Website Engineering Rooted in Clarity and Trust
               </h1>
               <p className="mt-5 text-base text-[#64756B] leading-relaxed">
-                {settings.companyName} (DTKS) is a website design and development company based in Kashmir, helping local businesses, institutions, hospitality brands, and independent professionals establish a credible online presence.
+                {settings.companyName} (DTKS)—often searched as DreamTech Kashmir, DreamTechKashmir, or DTKS Kashmir—is a dedicated website design and development company serving businesses, institutions, hospitality brands, and professionals in Srinagar, Kashmir, Jammu &amp; Kashmir, and beyond.
               </p>
               <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-                Whether a client needs an authoritative corporate website, a personal portfolio, a focused campaign landing page, an online storefront, or a booking portal, we deliver each project with responsive UI/UX, transparent pricing, and reliable hosting and maintenance options. Explore our{' '}
+                Whether an organization needs a corporate website, personal portfolio, campaign landing page, e-commerce storefront, website redesign, or ongoing maintenance, we build each site with responsive UI/UX, transparent pricing, and clear asset ownership. Explore our{' '}
                 <Link to="/services" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
                   website development services
-                </Link>{' '}
-                or{' '}
+                </Link>
+                ,{' '}
+                <Link to="/packages" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
+                  packages &amp; pricing
+                </Link>
+                ,{' '}
                 <Link to="/portfolio" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
                   website portfolio
+                </Link>
+                , or{' '}
+                <Link to="/team" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
+                  meet our team
                 </Link>.
               </p>
 
@@ -58,14 +69,14 @@ export default function AboutPage() {
                   to="/request-quote"
                   className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap"
                 >
-                  <span>Start a Project</span>
+                  <span>Start Your Project</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   to="/contact"
                   className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors whitespace-nowrap"
                 >
-                  <span>Contact Our Team</span>
+                  <span>Contact DTKS</span>
                 </Link>
               </div>
             </div>

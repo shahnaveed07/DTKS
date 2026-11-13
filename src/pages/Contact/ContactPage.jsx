@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin, Clock, CheckCircle2, Send, MessageSquare } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
+import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
+import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import { validateContactForm } from '../../utils/orderUtils.js';
 
 const EMPTY_FORM = {
@@ -50,19 +52,23 @@ export default function ContactPage() {
 
       <section className="border-b border-[#E3EBE5] bg-white py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Breadcrumbs items={ROUTE_SEO['/contact'].breadcrumbs} />
           <div className="max-w-3xl">
             <p className="text-xs font-semibold text-[#16834A]">
-              Contact &amp; Inquiries
+              Contact DTKS · DreamTech Kashmir Solutions
             </p>
             <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#17231C]">
-              Speak With DreamTech Kashmir Solutions (DTKS)
+              Contact DreamTech Kashmir Solutions (DTKS)
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Have a website project question, redesign requirement, or business inquiry in Kashmir or beyond? Send us a message below or{' '}
+              Have a business website enquiry, website redesign question, maintenance request, or custom quotation requirement in Srinagar, Kashmir, or beyond? Send us a message below,{' '}
               <Link to="/packages" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
-                compare website packages
-              </Link>{' '}
-              first.
+                view website packages
+              </Link>
+              , or{' '}
+              <Link to="/request-quote" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
+                request a website quote
+              </Link>.
             </p>
           </div>
         </div>

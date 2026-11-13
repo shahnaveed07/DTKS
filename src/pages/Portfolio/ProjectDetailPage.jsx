@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,12 +12,14 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
+import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
 import { buildProjectSchema } from '../../seo/structuredData.js';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
 export default function ProjectDetailPage() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const { portfolio, settings } = useApp();
   const project = portfolio.find((p) => p.slug === slug);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -30,7 +32,7 @@ export default function ProjectDetailPage() {
           title="Project not found"
           description="The requested portfolio entry could not be found or may have been unpublished."
           actionLabel="Back to Portfolio"
-          onAction={() => window.history.back()}
+          onAction={() => navigate('/portfolio')}
         />
       </div>
     );
@@ -70,6 +72,13 @@ export default function ProjectDetailPage() {
 
       <div className="bg-[#F7FAF7] py-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Breadcrumbs
+            items={[
+              { name: 'Home', path: '/' },
+              { name: 'Portfolio', path: '/portfolio' },
+              { name: project.title, path: `/portfolio/${project.slug}` },
+            ]}
+          />
           <Link
             to="/portfolio"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-[#64756B] hover:text-[#16834A] mb-6"
@@ -104,10 +113,8 @@ export default function ProjectDetailPage() {
             <div className="relative rounded-xl overflow-hidden border border-[#E3EBE5] bg-white shadow-xs aspect-16/9">
               <ImageWithFallback
                 src={currentImage}
-                alt={`${project.title} screenshot ${activeImageIndex + 1} by DreamTech Kashmir Solutions`}
+                alt={`${project.title} screenshot ${activeImageIndex + 1} by DreamTech Kashmir Solutions (DTKS)`}
                 fallbackTitle={project.title}
-                width={1200}
-                height={896}
                 loading="eager"
                 fetchPriority="high"
                 className="w-full h-full object-cover"
@@ -151,6 +158,8 @@ export default function ProjectDetailPage() {
                     <ImageWithFallback
                       src={imgUrl}
                       alt={`${project.title} thumbnail ${idx + 1}`}
+                      width={96}
+                      height={72}
                       className="w-full h-full object-cover"
                     />
                   </button>

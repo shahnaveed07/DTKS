@@ -19,10 +19,10 @@ export default function Footer() {
           <div className="lg:col-span-3">
             <Link
               to="/"
-              aria-label={settings.companyName}
+              aria-label={`${settings.companyName} (DTKS)`}
               className="inline-flex items-center rounded-xl focus-visible:outline-2 focus-visible:outline-white"
             >
-              <BrandLogo variant="footer" alt={settings.companyName} />
+              <BrandLogo variant="footer" alt={`${settings.companyName} (DTKS) logo`} />
             </Link>
             <p className="mt-3 text-sm text-[#D6EBDD] leading-relaxed">
               DreamTech Kashmir Solutions (DTKS) builds fast, responsive business websites, portfolios, landing pages, e-commerce storefronts, and custom websites for clients in Kashmir and beyond.
@@ -97,6 +97,14 @@ export default function Footer() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link
+                  to="/services"
+                  className="text-white font-medium hover:underline transition-colors"
+                >
+                  All Website Services &rarr;
+                </Link>
+              </li>
             </ul>
           </div>
 

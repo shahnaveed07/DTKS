@@ -1,5 +1,14 @@
 import { useState } from 'react';
 import { Code2 } from 'lucide-react';
+import { getImageDimensions } from '../../seo/seoConfig.js';
+
+function deriveWebpSrc(src) {
+  if (!src || typeof src !== 'string') return null;
+  if (src.startsWith('/assets/images/') && /\.(jpg|jpeg|png)$/i.test(src)) {
+    return src.replace(/\.(jpg|jpeg|png)$/i, '.webp');
+  }
+  return null;
+}
 
 export default function ImageWithFallback({
   src,
@@ -29,12 +38,17 @@ export default function ImageWithFallback({
     );
   }
 
-  return (
+  const dims = getImageDimensions(src);
+  const resolvedWidth = width || dims.width;
+  const resolvedHeight = height || dims.height;
+  const webpSrc = deriveWebpSrc(src);
+
+  const imgElement = (
     <img
       src={src}
       alt={alt}
-      width={width}
-      height={height}
+      width={resolvedWidth}
+      height={resolvedHeight}
       loading={loading}
       decoding={decoding}
       fetchPriority={fetchPriority}
@@ -43,4 +57,15 @@ export default function ImageWithFallback({
       className={className}
     />
   );
+
+  if (webpSrc) {
+    return (
+      <picture className="contents">
+        <source srcSet={webpSrc} type="image/webp" />
+        {imgElement}
+      </picture>
+    );
+  }
+
+  return imgElement;
 }

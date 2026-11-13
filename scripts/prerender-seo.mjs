@@ -15,14 +15,17 @@ function escapeHtml(value = '') {
 }
 
 function replaceMetaContent(html, attrName, attrValue, content) {
-  const escaped = escapeHtml(content);
   const pattern = new RegExp(
-    `<meta\\s+[^>]*${attrName}=["']${attrValue}["'][^>]*>`,
+    `<meta\\s+[^>]*${attrName}=["']${attrValue}["'][^>]*>\\s*`,
     'i'
   );
+  if (!content) {
+    return html.replace(pattern, '');
+  }
+  const escaped = escapeHtml(content);
   const replacement = `<meta ${attrName}="${attrValue}" content="${escaped}" />`;
   if (pattern.test(html)) {
-    return html.replace(pattern, replacement);
+    return html.replace(pattern, `${replacement}\n    `);
   }
   return html.replace('</head>', `    ${replacement}\n  </head>`);
 }
@@ -35,18 +38,21 @@ function replaceTitle(html, title) {
   return html.replace('</head>', `    <title>${escaped}</title>\n  </head>`);
 }
 
-function replaceCanonical(html, href) {
+function replaceCanonical(html, href, isNoindex) {
+  const pattern = /<link\s+[^>]*rel=["']canonical["'][^>]*>\s*/i;
+  if (isNoindex) {
+    return html.replace(pattern, '');
+  }
   const escaped = escapeHtml(href);
-  const pattern = /<link\s+[^>]*rel=["']canonical["'][^>]*>/i;
   const replacement = `<link rel="canonical" href="${escaped}" />`;
   if (pattern.test(html)) {
-    return html.replace(pattern, replacement);
+    return html.replace(pattern, `${replacement}\n    `);
   }
   return html.replace('</head>', `    ${replacement}\n  </head>`);
 }
 
 function injectJsonLd(html, jsonLd) {
-  let cleaned = html.replace(/<script\s+[^>]*id=["']dtks-jsonld["'][^>]*>[\s\S]*?<\/script>\s*/i, '');
+  const cleaned = html.replace(/<script\s+[^>]*id=["']dtks-jsonld["'][^>]*>[\s\S]*?<\/script>\s*/i, '');
   if (!jsonLd) return cleaned;
   const serialized = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
   const scriptTag = `<script id="dtks-jsonld" type="application/ld+json">${serialized}</script>`;
@@ -56,6 +62,9 @@ function injectJsonLd(html, jsonLd) {
 function routePathToOutputFile(routePath) {
   if (routePath === '/') {
     return path.join(DIST_DIR, 'index.html');
+  }
+  if (routePath === '/404') {
+    return path.join(DIST_DIR, '404.html');
   }
   const clean = routePath.replace(/^\/+|\/+$/g, '');
   return path.join(DIST_DIR, `${clean}.html`);
@@ -120,15 +129,15 @@ async function main() {
     const entry = await vite.ssrLoadModule('/src/entry-prerender.jsx');
     const seoConfig = await vite.ssrLoadModule('/src/seo/seoConfig.js');
     siteUrl = seoConfig.getSiteUrl();
+    const verification = seoConfig.getVerificationMeta();
     const siteName = seoConfig.SITE_CONFIG.siteName;
     const locale = seoConfig.SITE_CONFIG.locale;
-    const ogWidth = String(seoConfig.SITE_CONFIG.ogImageWidth);
-    const ogHeight = String(seoConfig.SITE_CONFIG.ogImageHeight);
 
     routes = entry.getPrerenderRoutes();
 
     for (const route of routes) {
       const { appHtml, seo } = entry.renderRoute(route.path);
+      const isNoindex = seo.resolvedRobots.includes('noindex');
 
       let pageHtml = templateHtml.replace(
         '<div id="root"></div>',
@@ -138,7 +147,14 @@ async function main() {
       pageHtml = replaceTitle(pageHtml, seo.resolvedTitle);
       pageHtml = replaceMetaContent(pageHtml, 'name', 'description', seo.resolvedDescription);
       pageHtml = replaceMetaContent(pageHtml, 'name', 'robots', seo.resolvedRobots);
-      pageHtml = replaceCanonical(pageHtml, seo.canonicalUrl);
+      pageHtml = replaceCanonical(pageHtml, seo.canonicalUrl, isNoindex);
+
+      if (verification.google) {
+        pageHtml = replaceMetaContent(pageHtml, 'name', 'google-site-verification', verification.google);
+      }
+      if (verification.bing) {
+        pageHtml = replaceMetaContent(pageHtml, 'name', 'msvalidate.01', verification.bing);
+      }
 
       pageHtml = replaceMetaContent(pageHtml, 'property', 'og:type', seo.resolvedOgType);
       pageHtml = replaceMetaContent(pageHtml, 'property', 'og:site_name', siteName);
@@ -148,8 +164,8 @@ async function main() {
       pageHtml = replaceMetaContent(pageHtml, 'property', 'og:url', seo.canonicalUrl);
       pageHtml = replaceMetaContent(pageHtml, 'property', 'og:image', seo.resolvedOgImage);
       pageHtml = replaceMetaContent(pageHtml, 'property', 'og:image:alt', seo.resolvedOgImageAlt);
-      pageHtml = replaceMetaContent(pageHtml, 'property', 'og:image:width', ogWidth);
-      pageHtml = replaceMetaContent(pageHtml, 'property', 'og:image:height', ogHeight);
+      pageHtml = replaceMetaContent(pageHtml, 'property', 'og:image:width', String(seo.resolvedOgImageWidth));
+      pageHtml = replaceMetaContent(pageHtml, 'property', 'og:image:height', String(seo.resolvedOgImageHeight));
 
       pageHtml = replaceMetaContent(pageHtml, 'name', 'twitter:card', 'summary_large_image');
       pageHtml = replaceMetaContent(pageHtml, 'name', 'twitter:title', seo.resolvedTitle);

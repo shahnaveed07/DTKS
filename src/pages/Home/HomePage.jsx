@@ -77,13 +77,13 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-stretch">
             <div className="lg:col-span-6 flex flex-col justify-center">
               <p className="text-xs font-semibold tracking-wide text-[#16834A] mb-3">
-                DreamTech Kashmir Solutions (DTKS) · Website Development in Kashmir
+                DreamTech Kashmir Solutions (DTKS) · Website Development Company in Kashmir
               </p>
               <h1
                 className="font-display font-bold tracking-tight text-[#17231C] leading-[1.12] max-w-2xl"
                 style={{ fontSize: 'clamp(2.25rem, 4vw, 3.5rem)', textWrap: 'balance' }}
               >
-                {settings.tagline || 'Modern Websites Built for Growth and Trust.'}
+                {settings.tagline || 'Website Design & Development Built for Growth and Trust.'}
               </h1>
               <p className="mt-5 text-base sm:text-lg text-[#64756B] leading-relaxed max-w-xl">
                 {settings.heroSupportText}
@@ -94,21 +94,25 @@ export default function HomePage() {
                   to="/request-quote"
                   className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap"
                 >
-                  <span>Order a Website</span>
+                  <span>Request a Website Quote</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   to="/portfolio"
                   className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors whitespace-nowrap"
                 >
-                  <span>Explore Website Work</span>
+                  <span>Explore Our Work</span>
                 </Link>
               </div>
 
               <div className="mt-8 pt-6 border-t border-[#E3EBE5] flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[#64756B]">
-                <span>Business &amp; Portfolio Websites</span>
+                <Link to="/packages" className="text-[#16834A] hover:text-[#116438] hover:underline font-medium whitespace-nowrap">
+                  View Website Packages
+                </Link>
                 <span aria-hidden="true">·</span>
-                <span>E-Commerce &amp; Booking Websites</span>
+                <Link to="/services#supporting-services" className="hover:text-[#16834A] hover:underline whitespace-nowrap">
+                  Redesign &amp; Maintenance
+                </Link>
                 <span aria-hidden="true">·</span>
                 <Link to="/track-order" className="text-[#16834A] hover:text-[#116438] hover:underline font-medium whitespace-nowrap">
                   Track an Existing Request
@@ -290,7 +294,14 @@ export default function HomePage() {
               Why Choose DreamTech Kashmir Solutions (DTKS)
             </h2>
             <p className="mt-2 text-sm sm:text-base text-[#64756B]">
-              Practical website engineering standards focused on speed, clear pricing, and long-term maintainability across Srinagar and Jammu &amp; Kashmir.
+              Practical website engineering standards focused on speed, clear pricing, and long-term maintainability across Srinagar, Kashmir, and Jammu &amp; Kashmir. Learn more{' '}
+              <Link to="/about" className="text-[#16834A] font-medium hover:underline">
+                about DreamTech Kashmir
+              </Link>{' '}
+              or{' '}
+              <Link to="/team" className="text-[#16834A] font-medium hover:underline">
+                meet our web development team
+              </Link>.
             </p>
           </div>
 
@@ -335,7 +346,7 @@ export default function HomePage() {
               to="/request-quote"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white shadow-xs transition-colors whitespace-nowrap"
             >
-              <span>Request a Website Quote</span>
+              <span>Start Your Project</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
@@ -343,6 +354,12 @@ export default function HomePage() {
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#F7FAF7] transition-colors whitespace-nowrap"
             >
               <span>View Packages</span>
+            </Link>
+            <Link
+              to="/contact"
+              className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-[#116438] hover:underline whitespace-nowrap"
+            >
+              <span>Contact DTKS</span>
             </Link>
           </div>
         </div>
