@@ -1,0 +1,74 @@
+name = "dtks-backend-api"
+main = "src/index.js"
+compatibility_date = "2025-02-01"
+workers_dev = true
+
+# ==============================================================================
+# Custom Domain & Route Configuration for DTKS Production Backend API (`dtks-backend-api`)
+# IMPORTANT: Routes are strictly scoped to `/api/v1/*` on the verified production domain
+# so they NEVER override the frontend Pages application hosted at
+# `https://dreamtechkashmirsolutions.studio/`.
+# ==============================================================================
+routes = [
+  { pattern = "dreamtechkashmirsolutions.studio/api/v1/*", zone_name = "dreamtechkashmirsolutions.studio" },
+  { pattern = "www.dreamtechkashmirsolutions.studio/api/v1/*", zone_name = "dreamtechkashmirsolutions.studio" }
+]
+
+[vars]
+ENVIRONMENT = "production"
+CORS_ALLOWED_ORIGINS = "https://dreamtechkashmirsolutions.studio,https://www.dreamtechkashmirsolutions.studio"
+JWT_ACCESS_EXPIRES_IN = "900"
+JWT_REFRESH_EXPIRES_IN = "604800"
+EMAIL_FROM_ADDRESS = "notifications@dreamtechkashmirsolutions.studio"
+ADMIN_NOTIFICATION_EMAIL = "support@dreamtechkashmirsolutions.studio"
+INITIAL_ADMIN_NAME = "DTKS Principal Administrator"
+
+# ==============================================================================
+# Required Production Secrets (Set via `npx wrangler secret put <SECRET_NAME>`):
+#   - JWT_SECRET              (Required: >= 32-char cryptographically random HMAC secret)
+#   - INITIAL_ADMIN_EMAIL     (Required on first bootstrap: administrator email)
+#   - INITIAL_ADMIN_PASSWORD  (Required on first bootstrap: strong password >= 12 chars)
+#   - RESEND_API_KEY          (Optional: Resend transactional email API key)
+# ==============================================================================
+
+# Cloudflare D1 Relational Database Binding (`dtks-production-db`)
+[[d1_databases]]
+binding = "DB"
+database_name = "dtks-production-db"
+database_id = "be0ce24a-0151-412f-b308-1271bb62abba"
+migrations_dir = "migrations"
+
+# Cloudflare R2 Object Storage Binding for Portfolio & Uploaded Assets
+[[r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "dtks-portfolio-assets"
+
+# Explicit `[env.production]` target matching the top-level `dtks-backend-api` Worker
+# so both `npx wrangler deploy` and `npx wrangler deploy --env production`
+# target the exact same `dtks-backend-api` Worker, D1 database, and R2 bucket.
+[env.production]
+name = "dtks-backend-api"
+workers_dev = true
+routes = [
+  { pattern = "dreamtechkashmirsolutions.studio/api/v1/*", zone_name = "dreamtechkashmirsolutions.studio" },
+  { pattern = "www.dreamtechkashmirsolutions.studio/api/v1/*", zone_name = "dreamtechkashmirsolutions.studio" }
+]
+
+[env.production.vars]
+ENVIRONMENT = "production"
+CORS_ALLOWED_ORIGINS = "https://dreamtechkashmirsolutions.studio,https://www.dreamtechkashmirsolutions.studio"
+JWT_ACCESS_EXPIRES_IN = "900"
+JWT_REFRESH_EXPIRES_IN = "604800"
+EMAIL_FROM_ADDRESS = "notifications@dreamtechkashmirsolutions.studio"
+ADMIN_NOTIFICATION_EMAIL = "support@dreamtechkashmirsolutions.studio"
+INITIAL_ADMIN_NAME = "DTKS Principal Administrator"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "dtks-production-db"
+database_id = "be0ce24a-0151-412f-b308-1271bb62abba"
+migrations_dir = "migrations"
+
+[[env.production.r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "dtks-portfolio-assets"

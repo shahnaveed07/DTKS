@@ -1,0 +1,333 @@
+{
+  "info": {
+    "name": "DTKS – DreamTech Kashmir Solutions Backend API",
+    "_postman_id": "2a793036-53a0-4c00-bef9-9f0a0bb2fefd",
+    "description": "Complete Postman Collection for the DTKS Cloudflare Workers + D1 + R2 REST API (/api/v1).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8787/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "replace-with-your-admin-password",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@dreamtechkashmirsolutions.studio\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Current Admin (/auth/me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Rotate Refresh Token (/auth/refresh)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Change Admin Password (/auth/change-password)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/auth/change-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{adminPassword}}\",\n  \"newPassword\": \"NewSecureAdmin@2026!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin Logout (/auth/logout)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Services",
+      "item": [
+        {
+          "name": "List Active Services",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/services"
+          }
+        },
+        {
+          "name": "Get Service by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/services/business-corporate-websites"
+          }
+        },
+        {
+          "name": "Create Service (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/services",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Custom Web Portals & Dashboards\",\n  \"slug\": \"custom-web-portals-dashboards\",\n  \"description\": \"End-to-end architecture and responsive development for custom web portals.\",\n  \"features\": [\"Role-based access\", \"Fast search & reporting\"],\n  \"price\": 38000,\n  \"is_active\": true,\n  \"display_order\": 11\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Service (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/services/svc-business-websites",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 16000,\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Service (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/services/custom-web-portals-dashboards"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Packages",
+      "item": [
+        {
+          "name": "List Packages",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/packages?service_id=svc-business-websites"
+          }
+        },
+        {
+          "name": "Get Package by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/packages/pkg-business-website"
+          }
+        },
+        {
+          "name": "Create Package (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/packages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Enterprise Corporate Website Package\",\n  \"service_id\": \"svc-business-websites\",\n  \"description\": \"Comprehensive multi-department corporate website package.\",\n  \"price\": 45000,\n  \"features\": [\"Custom design system\", \"Technical SEO\"],\n  \"is_active\": true,\n  \"display_order\": 10\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Portfolio & R2 Storage",
+      "item": [
+        {
+          "name": "List Published Portfolio Items",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/portfolio?page=1&limit=10"
+          }
+        },
+        {
+          "name": "Get Portfolio Project by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/portfolio/zabarwan-royal-retreat-hotel-website"
+          }
+        },
+        {
+          "name": "Create Portfolio Project (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/portfolio",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_title\": \"Gulmarg Alpine Resort Booking Website\",\n  \"slug\": \"gulmarg-alpine-resort-website\",\n  \"category\": \"Restaurant & Hotel Websites\",\n  \"description\": \"Designed and developed a fast hospitality website for a Gulmarg resort.\",\n  \"thumbnail\": \"/assets/images/dtks-corporate-website-showcase.jpg\",\n  \"images\": [\"/assets/images/dtks-corporate-website-showcase.jpg\"],\n  \"project_url\": \"https://dreamtechkashmirsolutions.studio\",\n  \"is_published\": true,\n  \"display_order\": 1\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Orders",
+      "item": [
+        {
+          "name": "Submit Customer Website Order (Public)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_id\": \"svc-ecommerce-websites\",\n  \"package_id\": \"pkg-ecommerce-store\",\n  \"customer_name\": \"Tariq Ahmad\",\n  \"customer_email\": \"tariq.ahmad@example.com\",\n  \"customer_phone\": \"+91 97971 23456\",\n  \"project_name\": \"Kashmir Pashmina Online Storefront\",\n  \"project_description\": \"Direct-to-consumer storefront for authentic Kashmiri Pashmina shawls with catalog filters.\",\n  \"budget\": \"₹30,000 – ₹60,000\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Track Order Status (Public)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/orders/track?ref=DKS-2026-0001&email=imran.qadri@zabarwanretreat.example.com"
+          }
+        },
+        {
+          "name": "List Orders (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/orders"
+          }
+        },
+        {
+          "name": "Update Order Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/orders/DKS-2026-0001/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"InProgress\",\n  \"admin_notes\": \"Sprint 1 underway.\",\n  \"customer_update\": \"Design and frontend implementation in progress.\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Contact & Inquiries",
+      "item": [
+        {
+          "name": "Submit Contact Message (Public)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/contact",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nadia Shah\",\n  \"email\": \"nadia.shah@example.com\",\n  \"phone\": \"+91 99061 11223\",\n  \"subject\": \"Corporate Website Redesign Inquiry\",\n  \"message\": \"We want to redesign our existing 10-page hospitality website with faster mobile performance.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List & Search Contact Messages (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/contact?search=Nadia"
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Admin Dashboard & Settings",
+      "item": [
+        {
+          "name": "Get Dashboard Stats (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/dashboard/stats"
+          }
+        },
+        {
+          "name": "Get Recent Orders (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/dashboard/recent-orders"
+          }
+        },
+        {
+          "name": "Get Recent Messages (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/dashboard/recent-messages"
+          }
+        },
+        {
+          "name": "Get Order Analytics (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/dashboard/order-analytics"
+          }
+        },
+        {
+          "name": "Get Public Site Settings",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/settings"
+          }
+        }
+      ]
+    }
+  ]
+}

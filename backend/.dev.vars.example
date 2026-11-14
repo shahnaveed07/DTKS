@@ -1,0 +1,31 @@
+# ==============================================================================
+# DTKS Cloudflare Worker Local Development Secrets (.dev.vars.example)
+# Copy this file to `backend/.dev.vars` for local Wrangler development (`wrangler dev`).
+# NEVER commit `.dev.vars` or real production credentials to version control.
+# For production, set secrets via `npx wrangler secret put <SECRET_NAME>`.
+# ==============================================================================
+
+ENVIRONMENT="development"
+
+# Required: 256-bit random HMAC secret used to sign and verify JWT access tokens (min 32 chars in production)
+JWT_SECRET="replace-with-secure-256-bit-random-hex-secret-at-least-32-chars"
+
+# Access token lifetime in seconds (default: 900 = 15 minutes)
+JWT_ACCESS_EXPIRES_IN="900"
+
+# Refresh token lifetime in seconds (default: 604800 = 7 days)
+JWT_REFRESH_EXPIRES_IN="604800"
+
+# Initial deployment-controlled administrator bootstrap credentials
+# Used ONLY when the `admins` table is empty. Never uses a hardcoded fallback password.
+INITIAL_ADMIN_NAME="DTKS Principal Administrator"
+INITIAL_ADMIN_EMAIL="admin@dreamtechkashmirsolutions.studio"
+INITIAL_ADMIN_PASSWORD="replace-with-strong-initial-admin-password-min-12-chars"
+
+# Comma-separated CORS origin allowlist
+CORS_ALLOWED_ORIGINS="https://dreamtechkashmirsolutions.studio,https://www.dreamtechkashmirsolutions.studio,http://localhost:3000,http://localhost:5173"
+
+# Optional Transactional Email Configuration (Resend HTTP API)
+RESEND_API_KEY="re_replace_with_optional_resend_api_key"
+EMAIL_FROM_ADDRESS="notifications@dreamtechkashmirsolutions.studio"
+ADMIN_NOTIFICATION_EMAIL="support@dreamtechkashmirsolutions.studio"

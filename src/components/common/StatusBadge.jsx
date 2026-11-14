@@ -1,15 +1,19 @@
 import { Clock, CheckCircle2, AlertCircle, FileSearch, Send, Hammer, XCircle } from 'lucide-react';
 
 const STATUS_STYLE_MAP = {
+  'Pending': { color: 'text-[#16834A]', Icon: Clock },
   'New Request': { color: 'text-[#16834A]', Icon: Clock },
+  'Reviewed': { color: 'text-amber-700', Icon: FileSearch },
   'Under Review': { color: 'text-amber-700', Icon: FileSearch },
   'Requirements Clarification': { color: 'text-amber-700', Icon: AlertCircle },
   'Quotation Sent': { color: 'text-[#116438]', Icon: Send },
   'Awaiting Customer Approval': { color: 'text-[#116438]', Icon: Clock },
   'Approved': { color: 'text-[#16A34A]', Icon: CheckCircle2 },
+  'InProgress': { color: 'text-[#16834A]', Icon: Hammer },
   'In Progress': { color: 'text-[#16834A]', Icon: Hammer },
   'Under Testing': { color: 'text-[#22A06B]', Icon: FileSearch },
   'Completed': { color: 'text-[#16A34A]', Icon: CheckCircle2 },
+  'Rejected': { color: 'text-red-600', Icon: XCircle },
   'Cancelled': { color: 'text-red-600', Icon: XCircle },
   'New': { color: 'text-[#16834A]', Icon: Clock },
   'In Review': { color: 'text-amber-700', Icon: FileSearch },

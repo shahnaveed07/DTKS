@@ -1,17 +1,22 @@
 /**
  * DreamTech Kashmir Solutions (DTKS)
- * Configurable Data Adapter & API Client Abstraction
+ * Configurable Data Adapter, Auth Session Manager & REST API Client
  *
  * Supports two modes via VITE_DATA_ADAPTER:
- * - 'local' (default): Uses browser LocalStorage with safe migration and clean initial state.
- * - 'api' (future backend): Sends HTTP requests to VITE_API_BASE_URL (e.g., Cloudflare Workers + D1).
+ * - 'local' (local development default when VITE_API_BASE_URL is not set): Uses browser LocalStorage.
+ * - 'api' (DTKS_BE backend): Sends HTTP requests to VITE_API_BASE_URL (/api/v1) with JWT Bearer / cookie auth.
  *
- * CRITICAL RULE: When VITE_DATA_ADAPTER='api', failed API requests NEVER silently fall back to LocalStorage.
+ * CRITICAL RULE: When VITE_DATA_ADAPTER='api' or in production, failed API requests NEVER silently fall back to LocalStorage.
  */
 
+import { API_ENDPOINTS, API_PREFIX } from '../models/backendModels.js';
+
 export const DEFAULT_API_TIMEOUT_MS = 15000;
+const SESSION_STORAGE_AUTH_KEY = 'dtks_admin_auth_session_v1';
 
 let runtimeEnvOverrides = null;
+let memoryAuthSession = null;
+const authListeners = new Set();
 
 export function setRuntimeEnvOverrides(overrides = null) {
   runtimeEnvOverrides = overrides;
@@ -44,24 +49,84 @@ function readEnvVar(name) {
 
 export function getDataAdapterMode() {
   const mode = readEnvVar('VITE_DATA_ADAPTER');
-  if (mode && String(mode).trim().toLowerCase() === 'api') {
+  if (mode) {
+    const normalized = String(mode).trim().toLowerCase();
+    if (normalized === 'api') return 'api';
+    if (normalized === 'local') return 'local';
+  }
+  const configuredBaseUrl = readEnvVar('VITE_API_BASE_URL');
+  if (configuredBaseUrl && String(configuredBaseUrl).trim()) {
     return 'api';
   }
   return 'local';
 }
 
-export function getApiBaseUrl() {
-  const base = readEnvVar('VITE_API_BASE_URL');
-  if (base && String(base).trim()) {
-    return String(base).trim().replace(/\/+$/, '');
+export function getApiOrigin() {
+  const rawBase = readEnvVar('VITE_API_BASE_URL');
+  if (!rawBase || !String(rawBase).trim()) {
+    return '';
   }
-  return '/api';
+  const trimmed = String(rawBase).trim().replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.origin;
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+export function getApiBaseUrl() {
+  const rawBase = readEnvVar('VITE_API_BASE_URL');
+  if (!rawBase || !String(rawBase).trim()) {
+    return API_PREFIX;
+  }
+  const trimmed = String(rawBase).trim().replace(/\/+$/, '');
+  if (trimmed.endsWith('/api/v1')) {
+    return trimmed;
+  }
+  if (trimmed.endsWith('/api')) {
+    return `${trimmed}/v1`;
+  }
+  return `${trimmed}${API_PREFIX}`;
+}
+
+export function buildApiUrl(endpoint = '') {
+  const rawEndpoint = String(endpoint || '').trim();
+  if (/^https?:\/\//i.test(rawEndpoint)) {
+    return rawEndpoint;
+  }
+  const baseUrl = getApiBaseUrl();
+  const normalizedEndpoint = rawEndpoint.startsWith('/') ? rawEndpoint : `/${rawEndpoint}`;
+
+  if (normalizedEndpoint === API_PREFIX || normalizedEndpoint.startsWith(`${API_PREFIX}/`) || normalizedEndpoint.startsWith(`${API_PREFIX}?`)) {
+    const suffix = normalizedEndpoint.slice(API_PREFIX.length);
+    return `${baseUrl}${suffix}`;
+  }
+  if (normalizedEndpoint.startsWith('/api/')) {
+    const suffix = normalizedEndpoint.slice('/api'.length);
+    return `${baseUrl}${suffix}`;
+  }
+  return `${baseUrl}${normalizedEndpoint}`;
+}
+
+export function resolveBackendAssetUrl(urlOrPath = '') {
+  const str = String(urlOrPath || '').trim();
+  if (!str) return '';
+  if (/^(https?:\/\/|blob:|data:|idb:\/\/)/i.test(str)) {
+    return str;
+  }
+  if (str.startsWith('/api/v1/uploads/')) {
+    const origin = getApiOrigin();
+    return origin ? `${origin}${str}` : str;
+  }
+  return str;
 }
 
 /**
  * Determines whether the application is running in the public production environment.
- * Treatsdreamtechkashmirsolutions.studio or explicit PROD build (when not on localhost/preview test runner)
- * as production.
  */
 export function isProductionEnvironment() {
   if (runtimeEnvOverrides && typeof runtimeEnvOverrides.isProd === 'boolean') {
@@ -110,8 +175,8 @@ export function isProductionEnvironment() {
 }
 
 /**
- * Determines customer order & inquiry submission mode (Phase 5):
- * - 'api': Backend API is active (`VITE_DATA_ADAPTER=api`)
+ * Determines customer order & inquiry submission mode:
+ * - 'api': Backend API is active (`VITE_DATA_ADAPTER=api` or `VITE_API_BASE_URL` configured)
  * - 'production_unconfigured': Production build without backend (`local` adapter in production) — online submission disabled
  * - 'local_demo': Development/test browser mode — local demo submission allowed with explicit notice
  */
@@ -127,8 +192,8 @@ export function getSubmissionMode() {
 }
 
 /**
- * Determines Admin route access policy (Phase 4):
- * - 'session_required': When `VITE_DATA_ADAPTER=api`, requires server-verified session
+ * Determines Admin route access policy:
+ * - 'session_required': When `VITE_DATA_ADAPTER=api`, requires server-verified session (`GET /api/v1/auth/me`)
  * - 'blocked_production_local': When running in production with `local` adapter, blocks public access to demo Admin
  * - 'allowed_dev': In local development (`localhost` / `DEV`), allows access to Admin for development & testing
  */
@@ -144,32 +209,150 @@ export function getAdminAccessPolicy() {
   return 'allowed_dev';
 }
 
+// ============================================================================
+// ADMIN AUTHENTICATION SESSION STORAGE (Memory + sessionStorage, NEVER localStorage)
+// ============================================================================
+
+function notifyAuthListeners() {
+  const snapshot = getAdminAuthSession();
+  for (const listener of authListeners) {
+    try {
+      listener(snapshot);
+    } catch {
+      // Ignore listener errors
+    }
+  }
+}
+
+export function subscribeAdminAuth(listener) {
+  if (typeof listener !== 'function') return () => {};
+  authListeners.add(listener);
+  return () => {
+    authListeners.delete(listener);
+  };
+}
+
+export function getAdminAuthSession() {
+  if (memoryAuthSession) {
+    return memoryAuthSession;
+  }
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const raw = window.sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          memoryAuthSession = parsed;
+          return memoryAuthSession;
+        }
+      }
+    }
+  } catch {
+    // Ignore sessionStorage errors in restricted/SSR contexts
+  }
+  return null;
+}
+
+export function setAdminAuthSession(sessionData) {
+  if (!sessionData || typeof sessionData !== 'object') {
+    clearAdminAuthSession();
+    return null;
+  }
+  const current = getAdminAuthSession() || {};
+  const accessToken =
+    sessionData.accessToken ?? sessionData.access_token ?? current.accessToken ?? '';
+  const refreshToken =
+    sessionData.refreshToken ?? sessionData.refresh_token ?? current.refreshToken ?? '';
+  const expiresIn = Number(
+    sessionData.expiresIn ?? sessionData.expires_in ?? current.expiresIn ?? 900
+  );
+  const admin = sessionData.admin ?? current.admin ?? null;
+
+  memoryAuthSession = {
+    accessToken: String(accessToken || ''),
+    refreshToken: String(refreshToken || ''),
+    expiresIn,
+    expiresAt: sessionData.expiresAt || new Date(Date.now() + expiresIn * 1000).toISOString(),
+    admin,
+  };
+
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(memoryAuthSession));
+    }
+  } catch {
+    // Ignore sessionStorage write errors
+  }
+
+  notifyAuthListeners();
+  return memoryAuthSession;
+}
+
+export function clearAdminAuthSession() {
+  memoryAuthSession = null;
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem(SESSION_STORAGE_AUTH_KEY);
+    }
+  } catch {
+    // Ignore
+  }
+  notifyAuthListeners();
+}
+
+export function getAccessToken() {
+  return getAdminAuthSession()?.accessToken || '';
+}
+
+export function getRefreshToken() {
+  return getAdminAuthSession()?.refreshToken || '';
+}
+
 /**
  * Standardized Service Response Envelope
- * {
- *   success: true | false,
- *   data: ...,
- *   message: "...",
- *   adapter: "local" | "api",
- *   timestamp: "..."
- * }
  */
-export function createServiceResponse(data, message = 'Operation completed successfully.', success = true) {
+export function createServiceResponse(
+  data,
+  message = 'Operation completed successfully.',
+  success = true,
+  extra = {}
+) {
   return {
     success: Boolean(success),
     data,
     message,
     adapter: getDataAdapterMode(),
     timestamp: new Date().toISOString(),
+    ...extra,
   };
 }
 
-export function createServiceError(message = 'An unexpected error occurred.', data = null, meta = {}) {
+export function createServiceError(
+  message = 'An unexpected error occurred.',
+  data = null,
+  meta = {}
+) {
+  const errorCode =
+    meta.errorCode ||
+    meta.code ||
+    (data && typeof data === 'object' ? data.errorCode || data.code : null) ||
+    null;
+  const errorType =
+    meta.errorType ||
+    errorCode ||
+    (data && typeof data === 'object' ? data.errorType : null) ||
+    'ServiceError';
+  const details =
+    meta.details ??
+    (data && typeof data === 'object' && 'details' in data ? data.details : null);
+
   return {
     success: false,
     data,
     message,
-    errorType: meta.errorType || (data && typeof data === 'object' ? data.errorType : null) || 'ServiceError',
+    errorType,
+    errorCode: errorCode || errorType,
+    details,
     statusCode: meta.statusCode ?? null,
     adapter: getDataAdapterMode(),
     timestamp: new Date().toISOString(),
@@ -177,14 +360,120 @@ export function createServiceError(message = 'An unexpected error occurred.', da
 }
 
 /**
- * Standardized REST API Request Helper for backend integration.
- * Supports HTTP methods, JSON serialization, AbortController timeout, credentials: 'include',
- * and structured error reporting without falling back to LocalStorage.
+ * Extracts structured error details from DTKS_BE or generic HTTP error payloads.
+ * DTKS_BE format: { success: false, error: { code, message, details }, timestamp }
+ */
+export function parseApiErrorPayload(payload, status = 500) {
+  const errorObj =
+    payload && typeof payload === 'object' && payload.error && typeof payload.error === 'object'
+      ? payload.error
+      : null;
+
+  const code =
+    errorObj?.code ||
+    (payload && typeof payload === 'object' ? payload.errorCode || payload.code : null) ||
+    (status === 401
+      ? 'UNAUTHORIZED'
+      : status === 403
+      ? 'FORBIDDEN'
+      : status === 404
+      ? 'NOT_FOUND'
+      : status === 429
+      ? 'RATE_LIMITED'
+      : 'HTTP_ERROR');
+
+  const details =
+    errorObj?.details ??
+    (payload && typeof payload === 'object' ? payload.details || payload.errors || null : null);
+
+  let baseMessage =
+    errorObj?.message ||
+    (payload && typeof payload?.error === 'string' ? payload.error : null) ||
+    (payload && typeof payload?.message === 'string' ? payload.message : null) ||
+    `API request failed with HTTP status ${status}.`;
+
+  if (details && typeof details === 'object' && !Array.isArray(details)) {
+    const fieldMessages = Object.entries(details)
+      .filter(([key, val]) => key !== 'requestId' && typeof val === 'string' && val.trim())
+      .map(([, val]) => val.trim());
+    if (fieldMessages.length > 0 && !baseMessage.includes(fieldMessages[0])) {
+      baseMessage = `${baseMessage} ${fieldMessages.join(' ')}`.trim();
+    }
+  }
+
+  return {
+    code,
+    message: baseMessage,
+    details,
+    statusCode: status,
+  };
+}
+
+let activeRefreshPromise = null;
+
+async function attemptTokenRefresh() {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  if (activeRefreshPromise) {
+    return activeRefreshPromise;
+  }
+
+  activeRefreshPromise = (async () => {
+    try {
+      const url = buildApiUrl(API_ENDPOINTS.authRefresh);
+      const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      const contentType = response.headers?.get?.('content-type') || '';
+      const payload = contentType.includes('application/json') ? await response.json() : null;
+
+      if (!response.ok || !payload?.success) {
+        clearAdminAuthSession();
+        return null;
+      }
+
+      const tokenData = payload.data || payload;
+      const newAccess = tokenData.accessToken || tokenData.access_token;
+      const newRefresh = tokenData.refreshToken || tokenData.refresh_token || refreshToken;
+      if (!newAccess) {
+        clearAdminAuthSession();
+        return null;
+      }
+
+      return setAdminAuthSession({
+        accessToken: newAccess,
+        refreshToken: newRefresh,
+        expiresIn: tokenData.expiresIn ?? tokenData.expires_in ?? 900,
+        admin: tokenData.admin || getAdminAuthSession()?.admin || null,
+      });
+    } catch {
+      return null;
+    } finally {
+      activeRefreshPromise = null;
+    }
+  })();
+
+  return activeRefreshPromise;
+}
+
+/**
+ * Standardized REST API Request Helper for DTKS_BE integration.
+ * Supports HTTP methods, JSON & FormData serialization, AbortController timeout,
+ * Bearer token injection, automatic refresh-token rotation on 401, and structured error parsing.
  */
 export async function apiRequest(endpoint, options = {}) {
-  const baseUrl = getApiBaseUrl();
-  const normalizedEndpoint = String(endpoint || '').startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${baseUrl}${normalizedEndpoint}`;
+  const normalizedEndpoint = String(endpoint || '').startsWith('/')
+    ? String(endpoint)
+    : `/${endpoint}`;
+  const url = buildApiUrl(normalizedEndpoint);
   const timeoutMs = options.timeoutMs ?? DEFAULT_API_TIMEOUT_MS;
 
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -197,19 +486,37 @@ export async function apiRequest(endpoint, options = {}) {
   }
 
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const isBinaryBody =
+    isFormData ||
+    (typeof Blob !== 'undefined' && options.body instanceof Blob) ||
+    (typeof ArrayBuffer !== 'undefined' && options.body instanceof ArrayBuffer) ||
+    ArrayBuffer.isView(options.body);
+
+  const accessToken = options.token ?? getAccessToken();
   const headers = {
-    ...(isFormData ? {} : { 'Content-Type': 'application/json', Accept: 'application/json' }),
+    ...(isBinaryBody
+      ? { Accept: 'application/json' }
+      : { 'Content-Type': 'application/json', Accept: 'application/json' }),
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     ...(options.headers || {}),
   };
+
+  const {
+    timeoutMs: _ignoredTimeout,
+    token: _ignoredToken,
+    _isRetry,
+    skipAuthRefresh,
+    ...restFetchOptions
+  } = options;
 
   const fetchOptions = {
     method: options.method || 'GET',
     credentials: options.credentials || 'include',
-    ...options,
+    ...restFetchOptions,
     headers,
     signal: options.signal || controller?.signal,
     body:
-      options.body && typeof options.body === 'object' && !isFormData
+      options.body && typeof options.body === 'object' && !isBinaryBody
         ? JSON.stringify(options.body)
         : options.body,
   };
@@ -226,31 +533,73 @@ export async function apiRequest(endpoint, options = {}) {
       } catch {
         payload = null;
       }
+    } else {
+      try {
+        const text = await response.text();
+        if (text && text.trim().startsWith('{')) {
+          payload = JSON.parse(text);
+        }
+      } catch {
+        payload = null;
+      }
     }
 
-    if (!response.ok) {
-      return createServiceError(
-        payload?.message || `API request failed with HTTP status ${response.status}.`,
-        payload?.data ?? null,
-        {
-          errorType: 'HttpError',
-          statusCode: response.status,
-        }
-      );
+    // Attempt automatic token refresh once on 401 when refreshToken is present
+    const isAuthEndpoint =
+      normalizedEndpoint.includes('/auth/login') ||
+      normalizedEndpoint.includes('/auth/refresh') ||
+      normalizedEndpoint.includes('/auth/logout');
+
+    if (
+      response.status === 401 &&
+      !_isRetry &&
+      !skipAuthRefresh &&
+      !isAuthEndpoint &&
+      getRefreshToken()
+    ) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed?.accessToken) {
+        return apiRequest(endpoint, {
+          ...options,
+          token: refreshed.accessToken,
+          _isRetry: true,
+        });
+      }
+    }
+
+    if (!response.ok || (payload && typeof payload === 'object' && payload.success === false)) {
+      const parsedErr = parseApiErrorPayload(payload, response.status);
+      const isNotFound =
+        response.status === 404 ||
+        parsedErr.code === 'NOT_FOUND' ||
+        parsedErr.code === 'ORDER_NOT_FOUND' ||
+        parsedErr.code === 'ENDPOINT_NOT_FOUND';
+
+      return createServiceError(parsedErr.message, payload?.data ?? null, {
+        errorType: isNotFound ? 'NotFoundError' : parsedErr.code || 'HttpError',
+        errorCode: parsedErr.code,
+        details: parsedErr.details,
+        statusCode: response.status,
+      });
     }
 
     if (payload && typeof payload === 'object' && 'success' in payload) {
       return {
         ...payload,
         adapter: 'api',
+        statusCode: response.status,
         timestamp: payload.timestamp || new Date().toISOString(),
       };
     }
 
-    return createServiceResponse(payload, 'Success', true);
+    return createServiceResponse(payload, 'Success', true, {
+      statusCode: response.status,
+    });
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
-    const isAbort = err?.name === 'AbortError' || String(err?.message || '').toLowerCase().includes('timed out');
+    const isAbort =
+      err?.name === 'AbortError' ||
+      String(err?.message || '').toLowerCase().includes('timed out');
     return createServiceError(
       isAbort
         ? `API request to ${normalizedEndpoint} timed out.`
@@ -258,6 +607,7 @@ export async function apiRequest(endpoint, options = {}) {
       null,
       {
         errorType: isAbort ? 'TimeoutError' : 'NetworkError',
+        errorCode: isAbort ? 'TIMEOUT_ERROR' : 'NETWORK_ERROR',
       }
     );
   }
@@ -265,12 +615,19 @@ export async function apiRequest(endpoint, options = {}) {
 
 /**
  * Verifies whether the current environment/session permits Admin access.
+ * In API mode, verifies the session against GET /api/v1/auth/me.
  */
 export async function verifyAdminSession() {
   const policy = getAdminAccessPolicy();
   if (policy === 'allowed_dev') {
     return {
       authenticated: true,
+      admin: {
+        id: 'dev-local-admin',
+        name: 'Local Development Admin',
+        email: 'support@dreamtechkashmirsolutions.studio',
+        role: 'super_admin',
+      },
       policy,
       message: 'Local development Admin access enabled.',
     };
@@ -278,20 +635,122 @@ export async function verifyAdminSession() {
   if (policy === 'blocked_production_local') {
     return {
       authenticated: false,
+      admin: null,
       policy,
       message: 'Secure Admin access will be enabled after backend authentication is configured.',
     };
   }
-  // policy === 'session_required'
-  const res = await apiRequest('/admin/session', { method: 'GET' });
-  const authenticated = Boolean(res.success && res.data?.authenticated);
+
+  // policy === 'session_required' -> GET /api/v1/auth/me
+  const res = await apiRequest(API_ENDPOINTS.authMe, { method: 'GET' });
+  const rawAdmin =
+    res.data?.admin ||
+    (res.data && typeof res.data === 'object' && res.data.email ? res.data : null);
+  const authenticated = Boolean(
+    res.success && (rawAdmin || res.data?.authenticated === true)
+  );
+
+  if (authenticated && rawAdmin) {
+    const existing = getAdminAuthSession();
+    if (existing) {
+      setAdminAuthSession({ ...existing, admin: rawAdmin });
+    }
+  }
+
   return {
     authenticated,
+    admin: rawAdmin || null,
     policy,
+    statusCode: res.statusCode ?? null,
+    errorCode: res.errorCode ?? null,
     message: authenticated
-      ? 'Authenticated admin session.'
-      : res.message || 'Secure Admin access will be enabled after backend authentication is configured.',
+      ? 'Authenticated administrator profile.'
+      : res.message || 'Authentication required. Please sign in as an administrator.',
   };
 }
 
+/**
+ * Authenticates an administrator against POST /api/v1/auth/login.
+ */
+export async function loginAdmin({ email, password } = {}) {
+  const cleanEmail = String(email || '').trim();
+  const rawPassword = String(password || '');
 
+  if (!cleanEmail || !rawPassword) {
+    return createServiceError('Please enter both your administrator email and password.', null, {
+      errorType: 'VALIDATION_ERROR',
+      errorCode: 'VALIDATION_ERROR',
+      statusCode: 400,
+    });
+  }
+
+  const res = await apiRequest(API_ENDPOINTS.authLogin, {
+    method: 'POST',
+    body: { email: cleanEmail, password: rawPassword },
+    skipAuthRefresh: true,
+  });
+
+  if (!res.success) {
+    return res;
+  }
+
+  const payloadData = res.data || {};
+  const accessToken = payloadData.accessToken || payloadData.access_token || '';
+  const refreshToken = payloadData.refreshToken || payloadData.refresh_token || '';
+  const expiresIn = Number(payloadData.expiresIn ?? payloadData.expires_in ?? 900);
+  const admin = payloadData.admin || null;
+
+  const session = setAdminAuthSession({
+    accessToken,
+    refreshToken,
+    expiresIn,
+    admin,
+  });
+
+  return createServiceResponse(
+    {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      expiresIn: session.expiresIn,
+      admin: session.admin,
+    },
+    res.message || 'Authenticated successfully.'
+  );
+}
+
+/**
+ * Logs out the current administrator via POST /api/v1/auth/logout and clears session storage.
+ */
+export async function logoutAdmin() {
+  const refreshToken = getRefreshToken();
+  const accessToken = getAccessToken();
+
+  try {
+    if (getDataAdapterMode() === 'api' && (accessToken || refreshToken)) {
+      await apiRequest(API_ENDPOINTS.authLogout, {
+        method: 'POST',
+        body: refreshToken ? { refreshToken } : {},
+        skipAuthRefresh: true,
+      });
+    }
+  } finally {
+    clearAdminAuthSession();
+  }
+
+  return createServiceResponse({ loggedOut: true }, 'Logged out successfully.');
+}
+
+/**
+ * Explicitly refreshes the administrator session via POST /api/v1/auth/refresh.
+ */
+export async function refreshAdminSession() {
+  const refreshed = await attemptTokenRefresh();
+  if (!refreshed) {
+    return createServiceError('Session expired. Please sign in again.', null, {
+      errorType: 'UNAUTHORIZED',
+      errorCode: 'REFRESH_TOKEN_EXPIRED',
+      statusCode: 401,
+    });
+  }
+  return createServiceResponse(refreshed, 'Session token refreshed.');
+}

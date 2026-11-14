@@ -1,0 +1,662 @@
+openapi: 3.0.3
+info:
+  title: DreamTech Kashmir Solutions (DTKS) Backend API
+  version: 1.0.0
+  description: >
+    Standalone production REST API for DreamTech Kashmir Solutions (https://dreamtechkashmirsolutions.studio/),
+    powered by Cloudflare Workers, Cloudflare D1 (SQLite), and Cloudflare R2 object storage.
+    Consumed by the separate DTKS frontend repository (https://github.com/shahnaveed07/DTKS.git) via VITE_API_BASE_URL.
+    Features WebCrypto PBKDF2-HMAC-SHA512 ($pbkdf2-sha512$) password hashing with transparent legacy hash migration,
+    distributed D1 sliding-window rate limiting, and granular Role-Based Access Control (super_admin, admin, editor).
+  contact:
+    name: DreamTech Kashmir Solutions Engineering
+    email: dreamtechkashmirsolutions@gmail.com
+    url: https://dreamtechkashmirsolutions.studio
+servers:
+  - url: https://api.dreamtechkashmirsolutions.studio/api/v1
+    description: Production Cloudflare Workers API Subdomain
+  - url: https://dreamtechkashmirsolutions.studio/api/v1
+    description: Production Same-Origin Cloudflare Workers Route
+  - url: http://localhost:8787/api/v1
+    description: Local Wrangler Development Server
+  - url: http://localhost:3000/api/v1
+    description: Local Node Development Server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived (15m) HMAC-SHA256 JWT access token issued by POST /auth/login or POST /auth/refresh. Enforces role-based access control (super_admin, admin, editor).
+  schemas:
+    StandardSuccessResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+    StandardErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+            details:
+              type: object
+              nullable: true
+    Service:
+      type: object
+      properties:
+        id: { type: string, example: svc-business-websites }
+        title: { type: string, example: Business & Corporate Websites }
+        slug: { type: string, example: business-corporate-websites }
+        description: { type: string }
+        features:
+          type: array
+          items: { type: string }
+        image: { type: string }
+        price: { type: number, nullable: true, example: 15000 }
+        is_active: { type: boolean, example: true }
+        display_order: { type: integer, example: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Package:
+      type: object
+      properties:
+        id: { type: string, example: pkg-business-website }
+        name: { type: string, example: Business Website Package }
+        description: { type: string }
+        price: { type: number, nullable: true, example: 16500 }
+        features:
+          type: array
+          items: { type: string }
+        service_id: { type: string, nullable: true, example: svc-business-websites }
+        is_active: { type: boolean, example: true }
+        display_order: { type: integer, example: 2 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PortfolioItem:
+      type: object
+      properties:
+        id: { type: string, example: port-1 }
+        project_title: { type: string, example: Zabarwan Royal Retreat — Boutique Hotel Website }
+        slug: { type: string, example: zabarwan-royal-retreat-hotel-website }
+        description: { type: string }
+        category: { type: string, example: Restaurant & Hotel Websites }
+        thumbnail: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        project_url: { type: string }
+        is_published: { type: boolean, example: true }
+        display_order: { type: integer, example: 1 }
+        created_at: { type: string, format: date-time }
+    Order:
+      type: object
+      properties:
+        id: { type: string, example: ord-seed-1 }
+        order_number: { type: string, example: DKS-2026-0001 }
+        customer_id: { type: string, nullable: true }
+        service_id: { type: string, nullable: true }
+        package_id: { type: string, nullable: true }
+        customer_name: { type: string }
+        customer_email: { type: string, format: email }
+        customer_phone: { type: string }
+        project_description: { type: string }
+        budget: { type: string }
+        status:
+          type: string
+          enum: [Pending, Reviewed, Approved, InProgress, Completed, Rejected, Cancelled]
+        admin_notes: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ContactMessage:
+      type: object
+      properties:
+        id: { type: string, example: inq-1 }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        subject: { type: string }
+        message: { type: string }
+        status:
+          type: string
+          enum: [New, In Review, Replied, Archived]
+        created_at: { type: string, format: date-time }
+
+paths:
+  /health:
+    get:
+      summary: Worker Liveness Check (Independent of D1/R2)
+      tags: [System]
+      responses:
+        '200':
+          description: Worker is running and operational
+  /ready:
+    get:
+      summary: Infrastructure Readiness Check (Verifies D1 Connection, 13 Schema Tables & R2 Storage)
+      tags: [System]
+      responses:
+        '200':
+          description: D1 database, schema tables, and R2 storage are ready
+        '503':
+          description: One or more required dependencies (D1, schema tables, or R2) are not ready
+  /auth/login:
+    post:
+      summary: Admin Login
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Authenticated successfully
+        '401':
+          description: Invalid credentials
+  /auth/refresh:
+    post:
+      summary: Rotate Refresh Token
+      tags: [Authentication]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New access & refresh tokens issued
+        '401':
+          description: Invalid or expired refresh token
+  /auth/logout:
+    post:
+      summary: Admin Logout & Session Revocation
+      tags: [Authentication]
+      responses:
+        '200':
+          description: Logged out and session revoked
+  /auth/me:
+    get:
+      summary: Get Current Authenticated Admin
+      tags: [Authentication]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current admin profile
+        '401':
+          description: Unauthorized
+  /auth/change-password:
+    post:
+      summary: Change Admin Password
+      tags: [Authentication]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 8 }
+      responses:
+        '200':
+          description: Password updated and refresh sessions rotated
+  /services:
+    get:
+      summary: List Active Services (Public) or All Services (Admin)
+      tags: [Services]
+      responses:
+        '200':
+          description: Services list
+    post:
+      summary: Create Website Service (Admin)
+      tags: [Services]
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Service created
+  /services/{slugOrId}:
+    get:
+      summary: Get Service by Slug or ID
+      tags: [Services]
+      parameters:
+        - name: slugOrId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Service details
+        '404':
+          description: Not found
+    put:
+      summary: Update Service (Admin)
+      tags: [Services]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slugOrId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Service updated
+    delete:
+      summary: Delete Service (Admin)
+      tags: [Services]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slugOrId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Service deleted
+  /packages:
+    get:
+      summary: List Website Packages
+      tags: [Packages]
+      parameters:
+        - name: service_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Packages list
+    post:
+      summary: Create Package (Admin)
+      tags: [Packages]
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Package created
+  /packages/{id}:
+    get:
+      summary: Get Package by ID
+      tags: [Packages]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Package details
+    put:
+      summary: Update Package (Admin)
+      tags: [Packages]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Package updated
+    delete:
+      summary: Delete Package (Admin)
+      tags: [Packages]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Package deleted
+  /portfolio:
+    get:
+      summary: List Published Portfolio Projects (Supports Category Filtering & Pagination)
+      tags: [Portfolio]
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Portfolio projects
+    post:
+      summary: Create Portfolio Project (Admin)
+      tags: [Portfolio]
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Portfolio item created
+  /portfolio/{slugOrId}:
+    get:
+      summary: Get Portfolio Project by Slug or ID
+      tags: [Portfolio]
+      parameters:
+        - name: slugOrId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Portfolio item details
+    put:
+      summary: Update Portfolio Project (Admin)
+      tags: [Portfolio]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slugOrId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Portfolio item updated
+    delete:
+      summary: Delete Portfolio Project & Associated R2 Assets (Admin)
+      tags: [Portfolio]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slugOrId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Portfolio item deleted
+  /portfolio/upload:
+    post:
+      summary: Upload Portfolio Image to Cloudflare R2 (Admin)
+      tags: [Portfolio]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                folder:
+                  type: string
+                  example: portfolio
+                replaceKey:
+                  type: string
+      responses:
+        '201':
+          description: Image uploaded to R2
+    delete:
+      summary: Delete Portfolio Image from Cloudflare R2 (Admin)
+      tags: [Portfolio]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Image deleted from R2
+  /orders:
+    post:
+      summary: Submit Website Order Request (Public)
+      tags: [Orders]
+      responses:
+        '201':
+          description: Order created with unique reference number
+    get:
+      summary: List & Filter Orders (Admin)
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Orders list
+  /orders/track:
+    get:
+      summary: Track Order Status by Reference Number & Email (Public)
+      tags: [Orders]
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          schema: { type: string }
+        - name: email
+          in: query
+          required: true
+          schema: { type: string, format: email }
+      responses:
+        '200':
+          description: Order tracking record
+  /orders/{id}:
+    get:
+      summary: Get Order Details & History (Admin)
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order details
+    patch:
+      summary: Update Order Status, Notes & Quotation (Admin)
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order updated
+    delete:
+      summary: Delete Order (Admin)
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order deleted
+  /orders/{id}/status:
+    patch:
+      summary: Update Order Status & Record Status History (Admin)
+      tags: [Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order status updated
+  /contact:
+    post:
+      summary: Submit Contact / Consultation Message (Public)
+      tags: [Contact]
+      responses:
+        '201':
+          description: Contact message stored
+    get:
+      summary: List & Search Contact Messages (Admin)
+      tags: [Contact]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Contact messages list
+  /contact/{id}:
+    get:
+      summary: Get Contact Message by ID (Admin)
+      tags: [Contact]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Contact message details
+    patch:
+      summary: Update Contact Message Status & Admin Notes (Admin)
+      tags: [Contact]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Contact message updated
+    delete:
+      summary: Delete Contact Message (Admin)
+      tags: [Contact]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Contact message deleted
+  /admin/dashboard/stats:
+    get:
+      summary: Get Real-Time Admin Dashboard Statistics (Admin)
+      tags: [Dashboard]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard statistics computed from D1
+  /admin/dashboard/recent-orders:
+    get:
+      summary: Get Latest Orders for Admin Dashboard (Admin)
+      tags: [Dashboard]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Recent orders
+  /admin/dashboard/recent-messages:
+    get:
+      summary: Get Latest Contact Messages for Admin Dashboard (Admin)
+      tags: [Dashboard]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Recent messages
+  /admin/dashboard/order-analytics:
+    get:
+      summary: Get Order Breakdown & Monthly Trends (Admin)
+      tags: [Dashboard]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Order analytics
+  /settings:
+    get:
+      summary: Get Public Site Settings
+      tags: [Settings]
+      responses:
+        '200':
+          description: Public site settings (sensitive keys stripped)
+    put:
+      summary: Update Site Settings (super_admin / admin only)
+      tags: [Settings]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Site settings updated
+        '403':
+          description: Forbidden for editor role
+  /bootstrap:
+    get:
+      summary: Get Combined Public Website Bootstrap Payload (Services, Packages, Portfolio, Settings)
+      tags: [System]
+      responses:
+        '200':
+          description: Combined public catalog and settings payload for the DTKS frontend
+  /admin/activity-logs:
+    get:
+      summary: List Admin Activity & Email Delivery Audit Logs (super_admin / admin only)
+      tags: [Dashboard]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Activity log entries
+        '403':
+          description: Forbidden for editor role
+

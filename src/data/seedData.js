@@ -65,21 +65,25 @@ export const SUPPORTING_SERVICES = [
 ];
 
 export const ORDER_STATUSES = [
+  'Pending',
   'New Request',
+  'Reviewed',
   'Under Review',
+  'Requirements Clarification',
   'Quotation Sent',
-  'Awaiting Confirmation',
-  'Confirmed',
+  'Awaiting Customer Approval',
+  'Approved',
+  'InProgress',
   'In Progress',
-  'Ready for Review',
+  'Under Testing',
   'Completed',
-  'On Hold',
+  'Rejected',
   'Cancelled',
 ];
 
 export const INQUIRY_STATUSES = [
   'New',
-  'Reviewed',
+  'In Review',
   'Replied',
   'Archived',
 ];
