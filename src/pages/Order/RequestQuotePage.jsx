@@ -56,7 +56,15 @@ const INITIAL_FORM = {
 
 export default function RequestQuotePage() {
   const [searchParams] = useSearchParams();
-  const { packages, settings, submitOrder, addToast } = useApp();
+  const {
+    packages,
+    settings,
+    submitOrder,
+    addToast,
+    submissionMode,
+    adminAccessPolicy,
+    isMutating,
+  } = useApp();
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(() => {
@@ -72,8 +80,14 @@ export default function RequestQuotePage() {
     };
   });
   const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
   const [submittedOrder, setSubmittedOrder] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  const isProductionUnconfigured = submissionMode === 'production_unconfigured';
+  const hasVerifiedEmail = Boolean(settings.contactEmail && settings.contactEmail.trim());
+  const hasVerifiedPhone = Boolean(settings.contactPhone && settings.contactPhone.trim());
+  const hasVerifiedWhatsapp = Boolean(settings.whatsappNumber && settings.whatsappNumber.trim());
 
   const activePackages = useMemo(
     () => packages.filter((p) => p.active),
@@ -111,6 +125,9 @@ export default function RequestQuotePage() {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
+    if (submitError) {
+      setSubmitError('');
+    }
   };
 
   const handleNext = () => {
@@ -120,17 +137,28 @@ export default function RequestQuotePage() {
       return;
     }
     setErrors({});
+    setSubmitError('');
     setStep((prev) => Math.min(7, prev + 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleBack = () => {
     setErrors({});
+    setSubmitError('');
     setStep((prev) => Math.max(1, prev - 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
+    setSubmitError('');
+    if (isProductionUnconfigured) {
+      const msg =
+        'Online website order submission is currently being configured. Please contact DreamTech Kashmir Solutions through a verified contact channel.';
+      setSubmitError(msg);
+      addToast(msg, 'error');
+      return;
+    }
+
     for (const s of [1, 2, 3, 4, 5, 6]) {
       const check = validateOrderStep(s, formData);
       if (!check.isValid) {
@@ -139,12 +167,20 @@ export default function RequestQuotePage() {
         return;
       }
     }
-    const created = submitOrder({
+    const res = await submitOrder({
       ...formData,
       hostingNotes: '',
-      maintenancePlanSelected: formData.maintenanceInterest === 'Interested' ? 'Pending Consultation' : 'None',
+      maintenancePlanSelected:
+        formData.maintenanceInterest === 'Interested' ? 'Pending Consultation' : 'None',
     });
-    setSubmittedOrder(created);
+
+    if (!res || res.success === false) {
+      setSubmitError(res?.message || 'Failed saving website order. Please try again.');
+      return;
+    }
+
+    const orderRecord = res.data || res;
+    setSubmittedOrder(orderRecord);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -172,10 +208,14 @@ export default function RequestQuotePage() {
               </div>
 
               <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#17231C]">
-                Website Order Saved Locally
+                {submissionMode === 'api'
+                  ? 'Website Order Received'
+                  : 'Website Order Saved Locally (Demo Mode)'}
               </h1>
               <p className="mt-2 text-sm text-[#64756B] leading-relaxed">
-                Your website development request has been stored in your browser&apos;s LocalStorage for this frontend prototype. Use the reference ID below to inspect or update it in Order Tracking and Admin Orders.
+                {submissionMode === 'api'
+                  ? 'Your website development request has been received by DreamTech Kashmir Solutions. Save your Reference ID below to track project status.'
+                  : 'Local development mode: this website request is stored only inside your current browser’s LocalStorage and has not been transmitted to a remote server.'}
               </p>
 
               <div className="mt-6 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -213,12 +253,14 @@ export default function RequestQuotePage() {
                 >
                   Track This Request
                 </Link>
-                <Link
-                  to="/admin/orders"
-                  className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors whitespace-nowrap"
-                >
-                  Manage in Admin Prototype
-                </Link>
+                {adminAccessPolicy !== 'blocked_production_local' && (
+                  <Link
+                    to="/admin/orders"
+                    className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors whitespace-nowrap"
+                  >
+                    Manage in Admin Prototype
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -253,6 +295,35 @@ export default function RequestQuotePage() {
           <p className="mt-2 text-sm text-[#64756B]">
             Complete the seven steps below to share your website requirements and generate your order reference.
           </p>
+
+          {isProductionUnconfigured ? (
+            <div
+              role="status"
+              className="mt-4 rounded-xl border border-amber-300 bg-amber-50/90 px-4 py-3.5 text-xs sm:text-sm text-[#17231C] space-y-1.5"
+            >
+              <p className="font-semibold text-amber-900">
+                Online website order submission is currently being configured. Please contact DreamTech Kashmir Solutions through a verified contact channel.
+              </p>
+              {(hasVerifiedEmail || hasVerifiedPhone || hasVerifiedWhatsapp) && (
+                <p className="text-xs text-amber-900/90">
+                  Verified channels:{' '}
+                  {[
+                    hasVerifiedEmail ? `Email: ${settings.contactEmail}` : null,
+                    hasVerifiedPhone ? `Phone: ${settings.contactPhone}` : null,
+                    hasVerifiedWhatsapp ? `WhatsApp: ${settings.whatsappNumber}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
+            </div>
+          ) : (
+            submissionMode === 'local_demo' && (
+              <div className="mt-4 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 px-4 py-2.5 text-xs text-[#17231C]/80">
+                Development preview mode: website orders submitted here are stored only in your current browser&apos;s LocalStorage until the production backend API is connected.
+              </div>
+            )
+          )}
 
           {/* Stepper */}
           <nav aria-label="Order progress" className="mt-7 overflow-x-auto pb-1">
@@ -917,6 +988,12 @@ export default function RequestQuotePage() {
                     </button>
                   </div>
                 </div>
+
+                {submitError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50/90 p-3.5 text-xs text-red-900">
+                    {submitError}
+                  </div>
+                )}
               </div>
             )}
 
@@ -947,11 +1024,12 @@ export default function RequestQuotePage() {
               ) : (
                 <button
                   type="button"
+                  disabled={isProductionUnconfigured || isMutating}
                   onClick={handleSubmitOrder}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors whitespace-nowrap"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Submit Website Order</span>
+                  <span>{isMutating ? 'Submitting Order...' : 'Submit Website Order'}</span>
                 </button>
               )}
             </div>

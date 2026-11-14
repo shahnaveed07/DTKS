@@ -2,7 +2,9 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import {
   ensureSeededStorage,
   exportLocalDataSnapshot,
+  getStorageDiagnostics,
   resetAllDemoData,
+  restoreFromBackupSnapshot,
 } from '../services/storage/localStorageAdapter.js';
 import { orderService } from '../services/api/orderService.js';
 import { inquiryService } from '../services/api/inquiryService.js';
@@ -10,7 +12,11 @@ import { packageService } from '../services/api/packageService.js';
 import { portfolioService } from '../services/api/portfolioService.js';
 import { teamService } from '../services/api/teamService.js';
 import { settingsService } from '../services/api/settingsService.js';
-import { getDataAdapterMode } from '../services/api/apiClient.js';
+import {
+  getAdminAccessPolicy,
+  getDataAdapterMode,
+  getSubmissionMode,
+} from '../services/api/apiClient.js';
 
 const AppContext = createContext(null);
 
@@ -28,33 +34,18 @@ export function AppProvider({ children }) {
   const [orders, setOrders] = useState(() => orderService.getAll());
   const [inquiries, setInquiries] = useState(() => inquiryService.getAll());
   const [settings, setSettings] = useState(() => settingsService.get());
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingOperations, setPendingOperations] = useState(0);
+  const [error, setError] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [confirmDialog, setConfirmDialog] = useState(null);
-
-  const refreshAll = useCallback(() => {
-    setServices(packageService.getServices());
-    setPackages(packageService.getPackages());
-    setMaintenancePlans(packageService.getMaintenancePlans());
-    setAddons(packageService.getAddons());
-    setPortfolio(portfolioService.getAll());
-    setTeam(teamService.getAll());
-    setOrders(orderService.getAll());
-    setInquiries(inquiryService.getAll());
-    setSettings(settingsService.get());
-  }, []);
-
-  useEffect(() => {
-    const handleStorage = () => refreshAll();
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, [refreshAll]);
 
   const addToast = useCallback((message, type = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4200);
+    }, 4500);
   }, []);
 
   const dismissToast = useCallback((id) => {
@@ -69,204 +60,470 @@ export function AppProvider({ children }) {
     setConfirmDialog(null);
   }, []);
 
-  // Orders
-  const createOrder = useCallback(
-    (payload) => {
-      const created = orderService.create(payload);
-      setOrders(orderService.getAll());
-      addToast(`Website order ${created.referenceId} submitted.`);
-      return created;
+  const refreshLocalState = useCallback(() => {
+    setServices(packageService.getServices());
+    setPackages(packageService.getPackages());
+    setMaintenancePlans(packageService.getMaintenancePlans());
+    setAddons(packageService.getAddons());
+    setPortfolio(portfolioService.getAll());
+    setTeam(teamService.getAll());
+    setOrders(orderService.getAll());
+    setInquiries(inquiryService.getAll());
+    setSettings(settingsService.get());
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    if (getDataAdapterMode() !== 'api') {
+      refreshLocalState();
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [
+        catalogRes,
+        portfolioRes,
+        teamRes,
+        ordersRes,
+        inquiriesRes,
+        settingsRes,
+      ] = await Promise.all([
+        packageService.fetchCatalog(),
+        portfolioService.listPortfolio(),
+        teamService.listTeam(),
+        orderService.listOrders(),
+        inquiryService.listInquiries(),
+        settingsService.getSettings(),
+      ]);
+
+      if (catalogRes.success && catalogRes.data) {
+        if (Array.isArray(catalogRes.data.services)) setServices(catalogRes.data.services);
+        if (Array.isArray(catalogRes.data.packages)) setPackages(catalogRes.data.packages);
+        if (Array.isArray(catalogRes.data.maintenancePlans)) {
+          setMaintenancePlans(catalogRes.data.maintenancePlans);
+        }
+        if (Array.isArray(catalogRes.data.addons)) setAddons(catalogRes.data.addons);
+      } else if (!catalogRes.success) {
+        setError(catalogRes.message);
+      }
+
+      if (portfolioRes.success && Array.isArray(portfolioRes.data)) {
+        setPortfolio(portfolioRes.data);
+      }
+      if (teamRes.success && Array.isArray(teamRes.data)) {
+        setTeam(teamRes.data);
+      }
+      if (ordersRes.success && Array.isArray(ordersRes.data)) {
+        setOrders(ordersRes.data);
+      }
+      if (inquiriesRes.success && Array.isArray(inquiriesRes.data)) {
+        setInquiries(inquiriesRes.data);
+      }
+      if (settingsRes.success && settingsRes.data) {
+        setSettings(settingsRes.data);
+      }
+    } catch (err) {
+      const msg = err?.message || 'Failed loading data from API.';
+      setError(msg);
+      addToast(msg, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [refreshLocalState, addToast]);
+
+  useEffect(() => {
+    if (getDataAdapterMode() === 'api') {
+      refreshAll();
+    }
+    const handleStorage = () => {
+      if (getDataAdapterMode() === 'local') {
+        refreshLocalState();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [refreshAll, refreshLocalState]);
+
+  const runAsyncMutation = useCallback(
+    async (operationFn, { successToast, toastType = 'success', onSuccess } = {}) => {
+      setPendingOperations((c) => c + 1);
+      setError(null);
+      try {
+        const res = await operationFn();
+        if (!res || res.success === false) {
+          const errMsg = res?.message || 'Operation failed. Changes were not saved.';
+          setError(errMsg);
+          addToast(errMsg, 'error');
+          return res || { success: false, data: null, message: errMsg };
+        }
+
+        if (onSuccess) {
+          onSuccess(res.data, res);
+        }
+        const msg =
+          typeof successToast === 'function'
+            ? successToast(res.data, res)
+            : successToast || res.message;
+        if (msg) {
+          addToast(msg, toastType);
+        }
+
+        if (res.data && typeof res.data === 'object' && !Array.isArray(res.data)) {
+          return {
+            ...res.data,
+            success: true,
+            data: res.data,
+            message: res.message,
+          };
+        }
+        return res;
+      } catch (err) {
+        const errMsg = err?.message || 'Unexpected error during operation.';
+        setError(errMsg);
+        addToast(errMsg, 'error');
+        return { success: false, data: null, message: errMsg };
+      } finally {
+        setPendingOperations((c) => Math.max(0, c - 1));
+      }
     },
     [addToast]
+  );
+
+  // Orders
+  const createOrder = useCallback(
+    async (payload) =>
+      runAsyncMutation(() => orderService.submitOrder(payload), {
+        successToast: (created) => `Website order ${created.referenceId} submitted.`,
+        onSuccess: (created) => {
+          if (getDataAdapterMode() === 'local') {
+            setOrders(orderService.getAll());
+          } else if (created) {
+            setOrders((prev) => [created, ...prev]);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const updateOrder = useCallback(
-    (id, patch) => {
-      const updated = orderService.update(id, patch);
-      setOrders(orderService.getAll());
-      addToast('Order record updated.');
-      return updated;
-    },
-    [addToast]
+    async (id, patch) =>
+      runAsyncMutation(() => orderService.updateOrder(id, patch), {
+        successToast: 'Order record updated.',
+        onSuccess: (updated) => {
+          if (getDataAdapterMode() === 'local') {
+            setOrders(orderService.getAll());
+          } else if (updated) {
+            setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const deleteOrder = useCallback(
-    (id) => {
-      orderService.remove(id);
-      setOrders(orderService.getAll());
-      addToast('Order deleted.', 'info');
-    },
-    [addToast]
+    async (id) =>
+      runAsyncMutation(() => orderService.deleteOrder(id), {
+        successToast: 'Order deleted.',
+        toastType: 'info',
+        onSuccess: () => {
+          if (getDataAdapterMode() === 'local') {
+            setOrders(orderService.getAll());
+          } else {
+            setOrders((prev) => prev.filter((o) => o.id !== id));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
+
+  const trackOrder = useCallback(async (referenceId, email) => {
+    return orderService.trackOrder(referenceId, email);
+  }, []);
 
   // Inquiries
   const createInquiry = useCallback(
-    (payload) => {
-      const created = inquiryService.create(payload);
-      setInquiries(inquiryService.getAll());
-      addToast('Your inquiry has been recorded.');
-      return created;
-    },
-    [addToast]
+    async (payload) =>
+      runAsyncMutation(() => inquiryService.submitInquiry(payload), {
+        successToast: 'Your inquiry has been recorded.',
+        onSuccess: (created) => {
+          if (getDataAdapterMode() === 'local') {
+            setInquiries(inquiryService.getAll());
+          } else if (created) {
+            setInquiries((prev) => [created, ...prev]);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const updateInquiry = useCallback(
-    (id, patch) => {
-      const updated = inquiryService.update(id, patch);
-      setInquiries(inquiryService.getAll());
-      addToast('Inquiry updated.');
-      return updated;
-    },
-    [addToast]
+    async (id, patch) =>
+      runAsyncMutation(() => inquiryService.updateInquiry(id, patch), {
+        successToast: 'Inquiry updated.',
+        onSuccess: (updated) => {
+          if (getDataAdapterMode() === 'local') {
+            setInquiries(inquiryService.getAll());
+          } else if (updated) {
+            setInquiries((prev) => prev.map((i) => (i.id === id ? updated : i)));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const deleteInquiry = useCallback(
-    (id) => {
-      inquiryService.remove(id);
-      setInquiries(inquiryService.getAll());
-      addToast('Inquiry removed.', 'info');
-    },
-    [addToast]
+    async (id) =>
+      runAsyncMutation(() => inquiryService.deleteInquiry(id), {
+        successToast: 'Inquiry removed.',
+        toastType: 'info',
+        onSuccess: () => {
+          if (getDataAdapterMode() === 'local') {
+            setInquiries(inquiryService.getAll());
+          } else {
+            setInquiries((prev) => prev.filter((i) => i.id !== id));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   // Packages & Services
   const saveServices = useCallback(
-    (nextServices) => {
-      packageService.saveServices(nextServices);
-      setServices(packageService.getServices());
-      addToast('Services catalog updated.');
-    },
-    [addToast]
+    async (nextServices) =>
+      runAsyncMutation(() => packageService.saveServicesAsync(nextServices), {
+        successToast: 'Services catalog updated.',
+        onSuccess: (saved) => {
+          if (getDataAdapterMode() === 'local') {
+            setServices(packageService.getServices());
+          } else if (Array.isArray(saved)) {
+            setServices(saved);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const createPackage = useCallback(
-    (payload) => {
-      const created = packageService.createPackage(payload);
-      setPackages(packageService.getPackages());
-      addToast(`Package "${created.title}" created.`);
-      return created;
-    },
-    [addToast]
+    async (payload) =>
+      runAsyncMutation(() => packageService.createPackageAsync(payload), {
+        successToast: (created) => `Package "${created.title}" created.`,
+        onSuccess: (created) => {
+          if (getDataAdapterMode() === 'local') {
+            setPackages(packageService.getPackages());
+          } else if (created) {
+            setPackages((prev) => [...prev, created]);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const updatePackage = useCallback(
-    (id, patch) => {
-      const updated = packageService.updatePackage(id, patch);
-      setPackages(packageService.getPackages());
-      addToast('Package updated.');
-      return updated;
-    },
-    [addToast]
+    async (id, patch) =>
+      runAsyncMutation(() => packageService.updatePackageAsync(id, patch), {
+        successToast: 'Package updated.',
+        onSuccess: (updated) => {
+          if (getDataAdapterMode() === 'local') {
+            setPackages(packageService.getPackages());
+          } else if (updated) {
+            setPackages((prev) => prev.map((p) => (p.id === id ? updated : p)));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const deletePackage = useCallback(
-    (id) => {
-      packageService.deletePackage(id);
-      setPackages(packageService.getPackages());
-      addToast('Package deleted.', 'info');
-    },
-    [addToast]
+    async (id) =>
+      runAsyncMutation(() => packageService.deletePackageAsync(id), {
+        successToast: 'Package deleted.',
+        toastType: 'info',
+        onSuccess: () => {
+          if (getDataAdapterMode() === 'local') {
+            setPackages(packageService.getPackages());
+          } else {
+            setPackages((prev) => prev.filter((p) => p.id !== id));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const saveMaintenancePlans = useCallback(
-    (plans) => {
-      packageService.saveMaintenancePlans(plans);
-      setMaintenancePlans(packageService.getMaintenancePlans());
-      addToast('Maintenance plans updated.');
-    },
-    [addToast]
+    async (plans) =>
+      runAsyncMutation(() => packageService.saveMaintenancePlansAsync(plans), {
+        successToast: 'Maintenance plans updated.',
+        onSuccess: (saved) => {
+          if (getDataAdapterMode() === 'local') {
+            setMaintenancePlans(packageService.getMaintenancePlans());
+          } else if (Array.isArray(saved)) {
+            setMaintenancePlans(saved);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const saveAddons = useCallback(
-    (nextAddons) => {
-      packageService.saveAddons(nextAddons);
-      setAddons(packageService.getAddons());
-      addToast('Optional add-ons updated.');
-    },
-    [addToast]
+    async (nextAddons) =>
+      runAsyncMutation(() => packageService.saveAddonsAsync(nextAddons), {
+        successToast: 'Optional add-ons updated.',
+        onSuccess: (saved) => {
+          if (getDataAdapterMode() === 'local') {
+            setAddons(packageService.getAddons());
+          } else if (Array.isArray(saved)) {
+            setAddons(saved);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   // Portfolio
   const createProject = useCallback(
-    (payload) => {
-      const created = portfolioService.create(payload);
-      setPortfolio(portfolioService.getAll());
-      addToast(`Project "${created.title}" added.`);
-      return created;
-    },
-    [addToast]
+    async (payload) =>
+      runAsyncMutation(() => portfolioService.createProject(payload), {
+        successToast: (created) => `Project "${created.title}" added.`,
+        onSuccess: (created) => {
+          if (getDataAdapterMode() === 'local') {
+            setPortfolio(portfolioService.getAll());
+          } else if (created) {
+            setPortfolio((prev) => [created, ...prev]);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const updateProject = useCallback(
-    (id, patch) => {
-      const updated = portfolioService.update(id, patch);
-      setPortfolio(portfolioService.getAll());
-      addToast('Portfolio project updated.');
-      return updated;
-    },
-    [addToast]
+    async (id, patch) =>
+      runAsyncMutation(() => portfolioService.updateProject(id, patch), {
+        successToast: 'Portfolio project updated.',
+        onSuccess: (updated) => {
+          if (getDataAdapterMode() === 'local') {
+            setPortfolio(portfolioService.getAll());
+          } else if (updated) {
+            setPortfolio((prev) => prev.map((p) => (p.id === id ? updated : p)));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const deleteProject = useCallback(
-    (id) => {
-      portfolioService.remove(id);
-      setPortfolio(portfolioService.getAll());
-      addToast('Portfolio project removed.', 'info');
-    },
-    [addToast]
+    async (id) =>
+      runAsyncMutation(() => portfolioService.deleteProject(id), {
+        successToast: 'Portfolio project removed.',
+        toastType: 'info',
+        onSuccess: () => {
+          if (getDataAdapterMode() === 'local') {
+            setPortfolio(portfolioService.getAll());
+          } else {
+            setPortfolio((prev) => prev.filter((p) => p.id !== id));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   // Team
   const createTeamMember = useCallback(
-    (payload) => {
-      const created = teamService.create(payload);
-      setTeam(teamService.getAll());
-      addToast(`Team member "${created.fullName}" added.`);
-      return created;
-    },
-    [addToast]
+    async (payload) =>
+      runAsyncMutation(() => teamService.createTeamMember(payload), {
+        successToast: (created) => `Team member "${created.fullName}" added.`,
+        onSuccess: (created) => {
+          if (getDataAdapterMode() === 'local') {
+            setTeam(teamService.getAll());
+          } else if (created) {
+            setTeam((prev) => [...prev, created]);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const updateTeamMember = useCallback(
-    (id, patch) => {
-      const updated = teamService.update(id, patch);
-      setTeam(teamService.getAll());
-      addToast('Team member updated.');
-      return updated;
-    },
-    [addToast]
+    async (id, patch) =>
+      runAsyncMutation(() => teamService.updateTeamMember(id, patch), {
+        successToast: 'Team member updated.',
+        onSuccess: (updated) => {
+          if (getDataAdapterMode() === 'local') {
+            setTeam(teamService.getAll());
+          } else if (updated) {
+            setTeam((prev) => prev.map((m) => (m.id === id ? updated : m)));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
-  const reorderTeamMember = useCallback((id, direction) => {
-    teamService.reorder(id, direction);
-    setTeam(teamService.getAll());
-  }, []);
+  const reorderTeamMember = useCallback(
+    async (id, direction) =>
+      runAsyncMutation(() => teamService.reorderTeamMember(id, direction), {
+        successToast: null,
+        onSuccess: (reordered) => {
+          if (getDataAdapterMode() === 'local') {
+            setTeam(teamService.getAll());
+          } else if (Array.isArray(reordered)) {
+            setTeam(reordered);
+          }
+        },
+      }),
+    [runAsyncMutation]
+  );
 
   const deleteTeamMember = useCallback(
-    (id) => {
-      teamService.remove(id);
-      setTeam(teamService.getAll());
-      addToast('Team member removed.', 'info');
-    },
-    [addToast]
+    async (id) =>
+      runAsyncMutation(() => teamService.deleteTeamMember(id), {
+        successToast: 'Team member removed.',
+        toastType: 'info',
+        onSuccess: () => {
+          if (getDataAdapterMode() === 'local') {
+            setTeam(teamService.getAll());
+          } else {
+            setTeam((prev) => prev.filter((m) => m.id !== id));
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   // Settings
   const updateSettings = useCallback(
-    (patch) => {
-      const updated = settingsService.update(patch);
-      setSettings(updated);
-      addToast('Website settings saved.');
-      return updated;
-    },
-    [addToast]
+    async (patch) =>
+      runAsyncMutation(() => settingsService.saveSettings(patch), {
+        successToast: 'Website settings saved.',
+        onSuccess: (updated) => {
+          if (updated) {
+            setSettings(updated);
+          }
+        },
+      }),
+    [runAsyncMutation]
   );
 
   const resetDemoData = useCallback(() => {
-    resetAllDemoData();
-    refreshAll();
+    const res = resetAllDemoData();
+    if (!res.ok) {
+      addToast(res.message || 'Failed resetting catalog defaults.', 'error');
+      return res;
+    }
+    refreshLocalState();
     addToast('Catalog defaults restored and backup snapshot saved.', 'info');
-  }, [refreshAll, addToast]);
+    return res;
+  }, [refreshLocalState, addToast]);
+
+  const restoreFromBackup = useCallback(() => {
+    const res = restoreFromBackupSnapshot();
+    if (!res.ok) {
+      addToast(res.message || 'No valid backup snapshot found.', 'error');
+      return res;
+    }
+    refreshLocalState();
+    addToast('LocalStorage data restored from pre-cleanup backup snapshot.', 'success');
+    return res;
+  }, [refreshLocalState, addToast]);
 
   const exportLocalData = useCallback(() => {
     const snapshot = exportLocalDataSnapshot();
@@ -293,6 +550,13 @@ export function AppProvider({ children }) {
 
   const value = {
     dataAdapterMode: getDataAdapterMode(),
+    submissionMode: getSubmissionMode(),
+    adminAccessPolicy: getAdminAccessPolicy(),
+    storageDiagnostics: getStorageDiagnostics(),
+    isLoading,
+    isMutating: pendingOperations > 0,
+    pendingOperations,
+    error,
     services,
     packages,
     maintenancePlans,
@@ -308,10 +572,12 @@ export function AppProvider({ children }) {
     dismissToast,
     requestConfirm,
     closeConfirm,
+    refreshAll,
     createOrder,
     submitOrder: createOrder,
     updateOrder,
     deleteOrder,
+    trackOrder,
     createInquiry,
     submitInquiry: createInquiry,
     updateInquiry,
@@ -331,6 +597,7 @@ export function AppProvider({ children }) {
     deleteTeamMember,
     updateSettings,
     resetDemoData,
+    restoreFromBackup,
     exportLocalData,
   };
 
@@ -344,3 +611,4 @@ export function useApp() {
   }
   return ctx;
 }
+

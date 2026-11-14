@@ -9,6 +9,7 @@ import {
   INITIAL_INQUIRIES,
   INITIAL_SETTINGS,
   KNOWN_DEMO_MARKERS,
+  LEGACY_SEED_PRICE_BY_ID,
 } from '../../data/seedData.js';
 
 export const STORAGE_KEYS = {
@@ -23,41 +24,286 @@ export const STORAGE_KEYS = {
   SETTINGS: 'dks_v2_settings',
   SEEDED: 'dks_v2_seeded_flag',
   MIGRATION_VERSION: 'dks_v2_migration_version',
+  MIGRATION_IN_PROGRESS: 'dks_v2_migration_in_progress',
   BACKUP_SNAPSHOT: 'dks_v2_backup_pre_cleanup',
 };
 
-export const CURRENT_MIGRATION_VERSION = '2026-11-real-data-v1';
+export const DATA_STORAGE_SPECS = [
+  { field: 'services', key: STORAGE_KEYS.SERVICES, fallback: INITIAL_SERVICES, expectedType: 'array' },
+  { field: 'packages', key: STORAGE_KEYS.PACKAGES, fallback: INITIAL_PACKAGES, expectedType: 'array' },
+  { field: 'maintenancePlans', key: STORAGE_KEYS.MAINTENANCE, fallback: INITIAL_MAINTENANCE_PLANS, expectedType: 'array' },
+  { field: 'addons', key: STORAGE_KEYS.ADDONS, fallback: INITIAL_ADDONS, expectedType: 'array' },
+  { field: 'portfolio', key: STORAGE_KEYS.PORTFOLIO, fallback: INITIAL_PORTFOLIO, expectedType: 'array' },
+  { field: 'team', key: STORAGE_KEYS.TEAM, fallback: INITIAL_TEAM, expectedType: 'array' },
+  { field: 'orders', key: STORAGE_KEYS.ORDERS, fallback: INITIAL_ORDERS, expectedType: 'array' },
+  { field: 'inquiries', key: STORAGE_KEYS.INQUIRIES, fallback: INITIAL_INQUIRIES, expectedType: 'array' },
+  { field: 'settings', key: STORAGE_KEYS.SETTINGS, fallback: INITIAL_SETTINGS, expectedType: 'object' },
+];
 
-function isBrowser() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+export const CURRENT_MIGRATION_VERSION = '2026-11-real-data-v2';
+
+const storageDiagnostics = {
+  lastReadError: null,
+  lastWriteError: null,
+  corruptedKeys: [],
+  lastMigrationResult: null,
+};
+
+export function getStorageDiagnostics() {
+  return {
+    ...storageDiagnostics,
+    corruptedKeys: [...storageDiagnostics.corruptedKeys],
+  };
 }
 
-export function readStorage(key, fallback) {
-  if (!isBrowser()) return fallback;
+export function clearStorageDiagnostics() {
+  storageDiagnostics.lastReadError = null;
+  storageDiagnostics.lastWriteError = null;
+  storageDiagnostics.corruptedKeys = [];
+  storageDiagnostics.lastMigrationResult = null;
+}
+
+function getStorageTarget(customStorage) {
+  if (customStorage) return customStorage;
   try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage;
+    }
   } catch (err) {
-    console.error(`Failed reading storage key ${key}:`, err);
-    return fallback;
+    storageDiagnostics.lastReadError = {
+      errorType: classifyStorageError(err),
+      message: err?.message || 'Browser LocalStorage is blocked or unavailable.',
+    };
   }
+  return null;
+}
+
+export function classifyStorageError(err) {
+  if (!err) return 'UnknownStorageError';
+  const name = String(err.name || '');
+  const message = String(err.message || '').toLowerCase();
+  const code = err.code;
+
+  if (
+    name === 'QuotaExceededError' ||
+    name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    code === 22 ||
+    code === 1014 ||
+    message.includes('quota')
+  ) {
+    return 'QuotaExceededError';
+  }
+  if (name === 'SecurityError' || message.includes('security') || message.includes('access is denied')) {
+    return 'SecurityError';
+  }
+  if (err instanceof SyntaxError || name === 'SyntaxError') {
+    return 'CorruptedJsonError';
+  }
+  return name || 'StorageError';
+}
+
+function isExpectedShape(value, expectedType) {
+  if (!expectedType) return true;
+  if (expectedType === 'array') return Array.isArray(value);
+  if (expectedType === 'object') return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+  return true;
+}
+
+/**
+ * Detailed storage reader that distinguishes:
+ * - missing keys (`status: 'missing'`)
+ * - valid parsed JSON (`status: 'ok'`)
+ * - corrupted JSON or invalid data shape (`status: 'corrupted'`)
+ * - inaccessible storage (`status: 'unavailable'` or `'error'`)
+ */
+export function readStorageDetailed(key, fallback, options = {}) {
+  const { expectedType = null, storage = null } = options;
+  const target = getStorageTarget(storage);
+  if (!target) {
+    return {
+      ok: false,
+      status: 'unavailable',
+      key,
+      data: fallback,
+      raw: null,
+      errorType: 'StorageUnavailable',
+      message: 'LocalStorage is not available in this environment.',
+    };
+  }
+
+  let raw = null;
+  try {
+    raw = target.getItem(key);
+  } catch (err) {
+    const errorType = classifyStorageError(err);
+    const message = `Failed accessing LocalStorage key "${key}": ${err?.message || errorType}`;
+    storageDiagnostics.lastReadError = { key, errorType, message };
+    return {
+      ok: false,
+      status: 'error',
+      key,
+      data: fallback,
+      raw: null,
+      errorType,
+      message,
+    };
+  }
+
+  if (raw === null || raw === undefined || raw === '') {
+    return {
+      ok: true,
+      status: 'missing',
+      key,
+      data: fallback,
+      raw: null,
+      errorType: null,
+      message: null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!isExpectedShape(parsed, expectedType)) {
+      const message = `Stored value for "${key}" did not match expected shape (${expectedType}).`;
+      if (!storageDiagnostics.corruptedKeys.includes(key)) {
+        storageDiagnostics.corruptedKeys.push(key);
+      }
+      storageDiagnostics.lastReadError = { key, errorType: 'InvalidShapeError', message };
+      return {
+        ok: false,
+        status: 'corrupted',
+        key,
+        data: fallback,
+        raw,
+        errorType: 'InvalidShapeError',
+        message,
+      };
+    }
+
+    return {
+      ok: true,
+      status: 'ok',
+      key,
+      data: parsed,
+      raw,
+      errorType: null,
+      message: null,
+    };
+  } catch (err) {
+    const errorType = classifyStorageError(err);
+    const message = `Corrupted JSON in LocalStorage key "${key}": ${err?.message || 'SyntaxError'}`;
+    if (!storageDiagnostics.corruptedKeys.includes(key)) {
+      storageDiagnostics.corruptedKeys.push(key);
+    }
+    storageDiagnostics.lastReadError = { key, errorType, message };
+    return {
+      ok: false,
+      status: 'corrupted',
+      key,
+      data: fallback,
+      raw,
+      errorType,
+      message,
+    };
+  }
+}
+
+/**
+ * Detailed storage writer that detects QuotaExceededError, SecurityError,
+ * read-only storage, and verifies write persistence.
+ */
+export function writeStorageDetailed(key, value, options = {}) {
+  const { storage = null, verify = false } = options;
+  const target = getStorageTarget(storage);
+  if (!target) {
+    const errObj = {
+      ok: false,
+      key,
+      errorType: 'StorageUnavailable',
+      message: 'LocalStorage is unavailable in this environment.',
+    };
+    storageDiagnostics.lastWriteError = errObj;
+    return errObj;
+  }
+
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch (err) {
+    const errObj = {
+      ok: false,
+      key,
+      errorType: 'SerializationError',
+      message: `Failed serializing data for "${key}": ${err?.message || 'Invalid JSON value'}`,
+    };
+    storageDiagnostics.lastWriteError = errObj;
+    return errObj;
+  }
+
+  try {
+    target.setItem(key, serialized);
+    if (verify) {
+      const readBack = target.getItem(key);
+      if (readBack !== serialized) {
+        const errObj = {
+          ok: false,
+          key,
+          errorType: 'WriteVerificationError',
+          message: `Storage write verification failed for "${key}" (storage may be read-only).`,
+        };
+        storageDiagnostics.lastWriteError = errObj;
+        return errObj;
+      }
+    }
+    return {
+      ok: true,
+      key,
+      errorType: null,
+      message: null,
+    };
+  } catch (err) {
+    const errorType = classifyStorageError(err);
+    const friendlyMessage =
+      errorType === 'QuotaExceededError'
+        ? 'Browser LocalStorage quota exceeded. Please remove large attachments or export and clear old records.'
+        : errorType === 'SecurityError'
+        ? 'Browser security settings blocked saving to LocalStorage.'
+        : `Failed saving to LocalStorage (${key}): ${err?.message || errorType}`;
+    const errObj = {
+      ok: false,
+      key,
+      errorType,
+      message: friendlyMessage,
+    };
+    storageDiagnostics.lastWriteError = errObj;
+    return errObj;
+  }
+}
+
+export function readStorage(key, fallback, expectedType = null) {
+  const spec = DATA_STORAGE_SPECS.find((s) => s.key === key);
+  const resolvedType = expectedType || spec?.expectedType || null;
+  const result = readStorageDetailed(key, fallback, { expectedType: resolvedType });
+  return result.data;
 }
 
 export function writeStorage(key, value) {
-  if (!isBrowser()) return false;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (err) {
-    console.error(`Failed writing storage key ${key}:`, err);
-    return false;
-  }
+  const result = writeStorageDetailed(key, value);
+  return result.ok;
 }
 
 /**
  * Pure, deterministic sanitizer that strips only known prototype demo records
  * while preserving every user-created or admin-edited record.
+ *
+ * Price Migration Rules (Phase 2):
+ * - Only clears `startingPrice` if:
+ *   1. `item.id` is in `LEGACY_SEED_PRICE_BY_ID`
+ *   2. `Number(item.startingPrice) === LEGACY_SEED_PRICE_BY_ID[item.id]`
+ *   3. `item.priceConfirmed !== true`
+ * - Never modifies custom packages created by the admin, even if priced at ₹15,000 or ₹28,000.
+ * - Never overwrites admin-modified prices on seed packages (e.g., ₹18,000).
+ * - Preserves `priceConfirmed` accurately without blindly marking every non-null price confirmed.
  */
 export function sanitizeLegacyDataset(dataset = {}) {
   const rawOrders = Array.isArray(dataset.orders) ? dataset.orders : [];
@@ -106,34 +352,56 @@ export function sanitizeLegacyDataset(dataset = {}) {
     return true;
   });
 
-  const rawPackages = Array.isArray(dataset.packages) ? dataset.packages : INITIAL_PACKAGES;
-  const packages = rawPackages.map((pkg) => {
-    if (!pkg || typeof pkg !== 'object') return pkg;
-    const isLegacyPrice =
-      pkg.priceConfirmed !== true &&
-      KNOWN_DEMO_MARKERS.legacyUnconfirmedPrices.includes(Number(pkg.startingPrice));
+  const sanitizePricedCatalogItem = (item) => {
+    if (!item || typeof item !== 'object') return item;
+    const hasKnownSeedId = Object.prototype.hasOwnProperty.call(LEGACY_SEED_PRICE_BY_ID, item.id);
+    const expectedSeedPrice = hasKnownSeedId ? LEGACY_SEED_PRICE_BY_ID[item.id] : undefined;
+    const hasNumericPrice =
+      item.startingPrice !== null &&
+      item.startingPrice !== undefined &&
+      item.startingPrice !== '' &&
+      !Number.isNaN(Number(item.startingPrice));
+    const numericPrice = hasNumericPrice ? Number(item.startingPrice) : null;
+
+    const isUnconfirmedLegacySeedPrice =
+      hasKnownSeedId &&
+      numericPrice !== null &&
+      numericPrice === expectedSeedPrice &&
+      item.priceConfirmed !== true;
+
+    if (isUnconfirmedLegacySeedPrice) {
+      return {
+        ...item,
+        startingPrice: null,
+        priceConfirmed: false,
+      };
+    }
+
     return {
-      ...pkg,
-      startingPrice: isLegacyPrice ? null : (pkg.startingPrice ?? null),
-      priceConfirmed: isLegacyPrice ? false : Boolean(pkg.priceConfirmed || pkg.startingPrice !== null),
+      ...item,
+      startingPrice: numericPrice,
+      priceConfirmed: Boolean(item.priceConfirmed),
     };
-  });
+  };
+
+  const rawPackages = Array.isArray(dataset.packages) ? dataset.packages : INITIAL_PACKAGES;
+  const packages = rawPackages.map(sanitizePricedCatalogItem);
 
   const rawServices = Array.isArray(dataset.services) ? dataset.services : INITIAL_SERVICES;
-  const services = rawServices.map((svc) => {
-    if (!svc || typeof svc !== 'object') return svc;
-    const isLegacyPrice =
-      svc.priceConfirmed !== true &&
-      KNOWN_DEMO_MARKERS.legacyUnconfirmedPrices.includes(Number(svc.startingPrice));
-    return {
-      ...svc,
-      startingPrice: isLegacyPrice ? null : (svc.startingPrice ?? null),
-      priceConfirmed: isLegacyPrice ? false : Boolean(svc.priceConfirmed || svc.startingPrice !== null),
-    };
-  });
+  const services = rawServices.map(sanitizePricedCatalogItem);
+
+  const maintenancePlans = Array.isArray(dataset.maintenancePlans)
+    ? dataset.maintenancePlans.map((plan) => {
+        if (!plan || typeof plan !== 'object') return plan;
+        const seedMatch = INITIAL_MAINTENANCE_PLANS.find((s) => s.id === plan.id);
+        return seedMatch ? { ...seedMatch, ...plan } : plan;
+      })
+    : INITIAL_MAINTENANCE_PLANS;
+
+  const addons = Array.isArray(dataset.addons) ? dataset.addons : INITIAL_ADDONS;
 
   const rawSettings =
-    dataset.settings && typeof dataset.settings === 'object'
+    dataset.settings && typeof dataset.settings === 'object' && !Array.isArray(dataset.settings)
       ? dataset.settings
       : INITIAL_SETTINGS;
 
@@ -198,121 +466,410 @@ export function sanitizeLegacyDataset(dataset = {}) {
     team,
     packages,
     services,
+    maintenancePlans,
+    addons,
     settings,
   };
 }
 
 /**
- * Safe, non-destructive LocalStorage migration.
- * - Backs up any pre-existing LocalStorage state under STORAGE_KEYS.BACKUP_SNAPSHOT before modifying.
- * - Removes only known legacy demo/sample records.
- * - Preserves all user-created orders, inquiries, portfolio items, team members, and custom settings.
+ * Inspects current storage state before any initialization or migration.
+ * Detects existing `dks_v2_*` data keys even if `dks_v2_seeded_flag` is missing!
  */
-export function ensureSeededStorage() {
-  if (!isBrowser()) return;
-
-  const isSeeded = window.localStorage.getItem(STORAGE_KEYS.SEEDED);
-  const appliedMigration = window.localStorage.getItem(STORAGE_KEYS.MIGRATION_VERSION);
-
-  if (!isSeeded) {
-    writeStorage(STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
-    writeStorage(STORAGE_KEYS.PACKAGES, INITIAL_PACKAGES);
-    writeStorage(STORAGE_KEYS.MAINTENANCE, INITIAL_MAINTENANCE_PLANS);
-    writeStorage(STORAGE_KEYS.ADDONS, INITIAL_ADDONS);
-    writeStorage(STORAGE_KEYS.PORTFOLIO, INITIAL_PORTFOLIO);
-    writeStorage(STORAGE_KEYS.TEAM, INITIAL_TEAM);
-    writeStorage(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
-    writeStorage(STORAGE_KEYS.INQUIRIES, INITIAL_INQUIRIES);
-    writeStorage(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
-    window.localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
-    window.localStorage.setItem(STORAGE_KEYS.MIGRATION_VERSION, CURRENT_MIGRATION_VERSION);
-    return;
+export function inspectStorageState(customStorage = null) {
+  const target = getStorageTarget(customStorage);
+  if (!target) {
+    return {
+      available: false,
+      hasAnyDataKey: false,
+      isSeeded: false,
+      appliedMigration: null,
+      inProgress: false,
+      existingDataKeys: [],
+      unknownKeys: {},
+      corruptedKeys: [],
+      readResults: {},
+    };
   }
 
-  if (appliedMigration !== CURRENT_MIGRATION_VERSION) {
-    const existingDataset = {
-      orders: readStorage(STORAGE_KEYS.ORDERS, INITIAL_ORDERS),
-      inquiries: readStorage(STORAGE_KEYS.INQUIRIES, INITIAL_INQUIRIES),
-      portfolio: readStorage(STORAGE_KEYS.PORTFOLIO, INITIAL_PORTFOLIO),
-      team: readStorage(STORAGE_KEYS.TEAM, INITIAL_TEAM),
-      packages: readStorage(STORAGE_KEYS.PACKAGES, INITIAL_PACKAGES),
-      services: readStorage(STORAGE_KEYS.SERVICES, INITIAL_SERVICES),
-      maintenancePlans: readStorage(STORAGE_KEYS.MAINTENANCE, INITIAL_MAINTENANCE_PLANS),
-      addons: readStorage(STORAGE_KEYS.ADDONS, INITIAL_ADDONS),
-      settings: readStorage(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS),
-    };
+  let isSeeded = false;
+  let appliedMigration = null;
+  let inProgress = false;
+  const existingDataKeys = [];
+  const corruptedKeys = [];
+  const readResults = {};
+  const unknownKeys = {};
 
-    // Preserve a recoverable backup snapshot before modifying any records
-    if (!window.localStorage.getItem(STORAGE_KEYS.BACKUP_SNAPSHOT)) {
-      writeStorage(STORAGE_KEYS.BACKUP_SNAPSHOT, {
-        backedUpAt: new Date().toISOString(),
-        migrationVersion: CURRENT_MIGRATION_VERSION,
-        data: existingDataset,
-      });
+  try {
+    isSeeded = target.getItem(STORAGE_KEYS.SEEDED) === 'true';
+    appliedMigration = target.getItem(STORAGE_KEYS.MIGRATION_VERSION);
+    inProgress = target.getItem(STORAGE_KEYS.MIGRATION_IN_PROGRESS) === 'true';
+  } catch (err) {
+    return {
+      available: false,
+      hasAnyDataKey: false,
+      isSeeded: false,
+      appliedMigration: null,
+      inProgress: false,
+      existingDataKeys: [],
+      unknownKeys: {},
+      corruptedKeys: [],
+      readResults: {},
+      error: classifyStorageError(err),
+    };
+  }
+
+  const knownKeySet = new Set(Object.values(STORAGE_KEYS));
+
+  for (const spec of DATA_STORAGE_SPECS) {
+    const res = readStorageDetailed(spec.key, spec.fallback, {
+      expectedType: spec.expectedType,
+      storage: target,
+    });
+    readResults[spec.field] = res;
+    if (res.status === 'ok' || res.status === 'corrupted') {
+      existingDataKeys.push(spec.key);
+    }
+    if (res.status === 'corrupted') {
+      corruptedKeys.push(spec.key);
+    }
+  }
+
+  // Capture any extra or unknown keys in storage so they are preserved in backups
+  try {
+    const length = typeof target.length === 'number' ? target.length : 0;
+    for (let i = 0; i < length; i += 1) {
+      const k = target.key(i);
+      if (k && !knownKeySet.has(k)) {
+        unknownKeys[k] = target.getItem(k);
+      }
+    }
+  } catch {
+    // Ignore enumeration issues if custom storage mock does not implement .key(i)
+  }
+
+  return {
+    available: true,
+    hasAnyDataKey: existingDataKeys.length > 0,
+    isSeeded,
+    appliedMigration,
+    inProgress,
+    existingDataKeys,
+    unknownKeys,
+    corruptedKeys,
+    readResults,
+  };
+}
+
+/**
+ * Safe, non-destructive LocalStorage initialization and migration (Phase 1):
+ * 1. Checks if ANY `dks_v2_*` data key exists BEFORE writing `INITIAL_*` defaults.
+ * 2. Only seeds `INITIAL_*` defaults when the browser has ZERO existing `dks_v2_*` data keys.
+ * 3. When legacy or un-migrated data exists (even if `dks_v2_seeded_flag` is missing):
+ *    - Writes a complete backup snapshot to `dks_v2_backup_pre_cleanup` first (including raw values of any corrupted or unknown keys).
+ *    - Verifies that the backup write succeeded; if the backup write fails, ABORTS migration immediately without overwriting any user data.
+ *    - Never overwrites a key containing corrupted JSON with an empty array — leaves the raw key untouched and records a diagnostic error.
+ *    - Sanitizes only known demo records and unconfirmed legacy seed prices while preserving all user/admin data.
+ */
+export function ensureSeededStorage(customStorage = null) {
+  const target = getStorageTarget(customStorage);
+  if (!target) {
+    const result = { status: 'unavailable', migrated: false, backedUp: false };
+    storageDiagnostics.lastMigrationResult = result;
+    return result;
+  }
+
+  const inspection = inspectStorageState(target);
+  if (!inspection.available) {
+    const result = { status: 'unavailable', migrated: false, backedUp: false };
+    storageDiagnostics.lastMigrationResult = result;
+    return result;
+  }
+
+  // Case 1: Fresh browser with zero existing dks_v2_* data keys and not seeded
+  if (!inspection.hasAnyDataKey && !inspection.isSeeded) {
+    for (const spec of DATA_STORAGE_SPECS) {
+      const writeRes = writeStorageDetailed(spec.key, spec.fallback, { storage: target });
+      if (!writeRes.ok) {
+        const result = {
+          status: 'seed_failed',
+          migrated: false,
+          backedUp: false,
+          errorType: writeRes.errorType,
+          message: writeRes.message,
+        };
+        storageDiagnostics.lastMigrationResult = result;
+        return result;
+      }
+    }
+    try {
+      target.setItem(STORAGE_KEYS.SEEDED, 'true');
+      target.setItem(STORAGE_KEYS.MIGRATION_VERSION, CURRENT_MIGRATION_VERSION);
+    } catch (err) {
+      const result = {
+        status: 'seed_failed',
+        migrated: false,
+        backedUp: false,
+        errorType: classifyStorageError(err),
+        message: err?.message || 'Failed setting seeded flag.',
+      };
+      storageDiagnostics.lastMigrationResult = result;
+      return result;
     }
 
-    const sanitized = sanitizeLegacyDataset(existingDataset);
-
-    writeStorage(STORAGE_KEYS.ORDERS, sanitized.orders);
-    writeStorage(STORAGE_KEYS.INQUIRIES, sanitized.inquiries);
-    writeStorage(STORAGE_KEYS.PORTFOLIO, sanitized.portfolio);
-    writeStorage(STORAGE_KEYS.TEAM, sanitized.team);
-    writeStorage(STORAGE_KEYS.PACKAGES, sanitized.packages);
-    writeStorage(STORAGE_KEYS.SERVICES, sanitized.services);
-    writeStorage(STORAGE_KEYS.SETTINGS, sanitized.settings);
-    window.localStorage.setItem(STORAGE_KEYS.MIGRATION_VERSION, CURRENT_MIGRATION_VERSION);
+    const result = { status: 'seeded_fresh', migrated: false, backedUp: false };
+    storageDiagnostics.lastMigrationResult = result;
+    return result;
   }
+
+  // Case 2: Already seeded, migration version matches current, no interrupted migration, and no missing keys
+  const allSpecsPresent = DATA_STORAGE_SPECS.every(
+    (spec) => inspection.readResults[spec.field]?.status === 'ok'
+  );
+  if (
+    inspection.isSeeded &&
+    inspection.appliedMigration === CURRENT_MIGRATION_VERSION &&
+    !inspection.inProgress &&
+    allSpecsPresent &&
+    inspection.corruptedKeys.length === 0
+  ) {
+    const result = { status: 'already_up_to_date', migrated: false, backedUp: false };
+    storageDiagnostics.lastMigrationResult = result;
+    return result;
+  }
+
+  // Case 3: Existing data is present (with or without dks_v2_seeded_flag) or partial/older migration
+  const existingDataset = {};
+  const rawCorruptedMap = {};
+
+  for (const spec of DATA_STORAGE_SPECS) {
+    const res = inspection.readResults[spec.field];
+    if (res.status === 'corrupted') {
+      rawCorruptedMap[spec.key] = res.raw;
+      existingDataset[spec.field] = spec.fallback;
+    } else if (res.status === 'ok') {
+      existingDataset[spec.field] = res.data;
+    } else {
+      existingDataset[spec.field] = spec.fallback;
+    }
+  }
+
+  // Step 3A: Create or verify backup snapshot BEFORE modifying any existing key
+  let existingBackupRaw = null;
+  try {
+    existingBackupRaw = target.getItem(STORAGE_KEYS.BACKUP_SNAPSHOT);
+  } catch {
+    existingBackupRaw = null;
+  }
+
+  let backupVerified = Boolean(existingBackupRaw);
+  if (!existingBackupRaw) {
+    const backupPayload = {
+      backedUpAt: new Date().toISOString(),
+      migrationVersion: CURRENT_MIGRATION_VERSION,
+      previousMigrationVersion: inspection.appliedMigration || null,
+      wasSeededFlagPresent: inspection.isSeeded,
+      data: existingDataset,
+      corruptedRawKeys: rawCorruptedMap,
+      unknownKeys: inspection.unknownKeys,
+    };
+
+    const backupWrite = writeStorageDetailed(STORAGE_KEYS.BACKUP_SNAPSHOT, backupPayload, {
+      storage: target,
+      verify: true,
+    });
+
+    if (!backupWrite.ok) {
+      // CRITICAL SAFETY RULE: Abort migration if backup fails! Never overwrite existing data without backup.
+      const result = {
+        status: 'aborted_backup_failed',
+        migrated: false,
+        backedUp: false,
+        errorType: backupWrite.errorType,
+        message: backupWrite.message,
+      };
+      storageDiagnostics.lastMigrationResult = result;
+      return result;
+    }
+    backupVerified = true;
+  }
+
+  // Step 3B: Mark migration in progress so partial failures can be detected
+  try {
+    target.setItem(STORAGE_KEYS.MIGRATION_IN_PROGRESS, 'true');
+  } catch (err) {
+    const result = {
+      status: 'aborted_write_failed',
+      migrated: false,
+      backedUp: backupVerified,
+      errorType: classifyStorageError(err),
+      message: 'Failed writing migration in-progress marker.',
+    };
+    storageDiagnostics.lastMigrationResult = result;
+    return result;
+  }
+
+  const sanitized = sanitizeLegacyDataset(existingDataset);
+
+  // Step 3C: Write sanitized dataset, skipping any key that had corrupted raw JSON so user data is never wiped
+  for (const spec of DATA_STORAGE_SPECS) {
+    if (inspection.corruptedKeys.includes(spec.key)) {
+      // Preserve raw corrupted value in place rather than overwriting with empty fallback
+      continue;
+    }
+    const nextValue = sanitized[spec.field] ?? spec.fallback;
+    const writeRes = writeStorageDetailed(spec.key, nextValue, { storage: target });
+    if (!writeRes.ok) {
+      const result = {
+        status: 'partial_migration_error',
+        migrated: false,
+        backedUp: backupVerified,
+        failedKey: spec.key,
+        errorType: writeRes.errorType,
+        message: writeRes.message,
+      };
+      storageDiagnostics.lastMigrationResult = result;
+      return result;
+    }
+  }
+
+  try {
+    target.setItem(STORAGE_KEYS.SEEDED, 'true');
+    if (inspection.corruptedKeys.length === 0) {
+      target.setItem(STORAGE_KEYS.MIGRATION_VERSION, CURRENT_MIGRATION_VERSION);
+    }
+    target.removeItem(STORAGE_KEYS.MIGRATION_IN_PROGRESS);
+  } catch (err) {
+    const result = {
+      status: 'partial_migration_error',
+      migrated: false,
+      backedUp: backupVerified,
+      errorType: classifyStorageError(err),
+      message: err?.message || 'Failed finalizing migration flags.',
+    };
+    storageDiagnostics.lastMigrationResult = result;
+    return result;
+  }
+
+  const result = {
+    status: inspection.corruptedKeys.length > 0 ? 'migrated_with_corrupted_keys_preserved' : 'migrated',
+    migrated: true,
+    backedUp: backupVerified,
+    corruptedKeys: [...inspection.corruptedKeys],
+  };
+  storageDiagnostics.lastMigrationResult = result;
+  return result;
+}
+
+/**
+ * Restores data from STORAGE_KEYS.BACKUP_SNAPSHOT if available.
+ */
+export function restoreFromBackupSnapshot(customStorage = null) {
+  const target = getStorageTarget(customStorage);
+  if (!target) {
+    return { ok: false, message: 'LocalStorage is unavailable.' };
+  }
+
+  const backupRes = readStorageDetailed(STORAGE_KEYS.BACKUP_SNAPSHOT, null, {
+    expectedType: 'object',
+    storage: target,
+  });
+
+  if (!backupRes.ok || !backupRes.data || !backupRes.data.data) {
+    return {
+      ok: false,
+      message: 'No valid backup snapshot found in LocalStorage.',
+    };
+  }
+
+  const savedData = backupRes.data.data;
+  for (const spec of DATA_STORAGE_SPECS) {
+    if (spec.field in savedData) {
+      const writeRes = writeStorageDetailed(spec.key, savedData[spec.field], { storage: target });
+      if (!writeRes.ok) {
+        return {
+          ok: false,
+          message: `Failed restoring "${spec.key}": ${writeRes.message}`,
+        };
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    restoredAt: new Date().toISOString(),
+    data: savedData,
+    message: 'LocalStorage data restored from backup snapshot.',
+  };
 }
 
 /**
  * Exports all current LocalStorage records + any pre-migration backup snapshot
  * so the website owner can save or inspect their data before/during backend migration.
  */
-export function exportLocalDataSnapshot() {
-  if (!isBrowser()) return null;
+export function exportLocalDataSnapshot(customStorage = null) {
+  const target = getStorageTarget(customStorage);
+  if (!target) return null;
   return {
     exportedAt: new Date().toISOString(),
-    migrationVersion: window.localStorage.getItem(STORAGE_KEYS.MIGRATION_VERSION) || null,
+    migrationVersion: target.getItem(STORAGE_KEYS.MIGRATION_VERSION) || null,
+    diagnostics: getStorageDiagnostics(),
     currentData: {
-      orders: readStorage(STORAGE_KEYS.ORDERS, []),
-      inquiries: readStorage(STORAGE_KEYS.INQUIRIES, []),
-      portfolio: readStorage(STORAGE_KEYS.PORTFOLIO, []),
-      team: readStorage(STORAGE_KEYS.TEAM, []),
-      packages: readStorage(STORAGE_KEYS.PACKAGES, []),
-      services: readStorage(STORAGE_KEYS.SERVICES, []),
-      maintenancePlans: readStorage(STORAGE_KEYS.MAINTENANCE, []),
-      addons: readStorage(STORAGE_KEYS.ADDONS, []),
-      settings: readStorage(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS),
+      orders: readStorageDetailed(STORAGE_KEYS.ORDERS, [], { expectedType: 'array', storage: target }).data,
+      inquiries: readStorageDetailed(STORAGE_KEYS.INQUIRIES, [], { expectedType: 'array', storage: target }).data,
+      portfolio: readStorageDetailed(STORAGE_KEYS.PORTFOLIO, [], { expectedType: 'array', storage: target }).data,
+      team: readStorageDetailed(STORAGE_KEYS.TEAM, [], { expectedType: 'array', storage: target }).data,
+      packages: readStorageDetailed(STORAGE_KEYS.PACKAGES, [], { expectedType: 'array', storage: target }).data,
+      services: readStorageDetailed(STORAGE_KEYS.SERVICES, [], { expectedType: 'array', storage: target }).data,
+      maintenancePlans: readStorageDetailed(STORAGE_KEYS.MAINTENANCE, [], { expectedType: 'array', storage: target }).data,
+      addons: readStorageDetailed(STORAGE_KEYS.ADDONS, [], { expectedType: 'array', storage: target }).data,
+      settings: readStorageDetailed(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS, { expectedType: 'object', storage: target }).data,
     },
-    preCleanupBackup: readStorage(STORAGE_KEYS.BACKUP_SNAPSHOT, null),
+    preCleanupBackup: readStorageDetailed(STORAGE_KEYS.BACKUP_SNAPSHOT, null, { storage: target }).data,
   };
 }
 
 /**
  * Safe reset helper: only resets catalog/configuration defaults if explicitly confirmed by Admin,
- * while backing up current state first.
+ * while backing up current state first and aborting if backup fails.
  */
-export function resetAllDemoData() {
-  if (!isBrowser()) return;
-  const currentSnapshot = exportLocalDataSnapshot();
+export function resetAllDemoData(customStorage = null) {
+  const target = getStorageTarget(customStorage);
+  if (!target) return { ok: false, message: 'LocalStorage is unavailable.' };
+
+  const currentSnapshot = exportLocalDataSnapshot(target);
   if (currentSnapshot) {
-    writeStorage(STORAGE_KEYS.BACKUP_SNAPSHOT, {
-      backedUpAt: new Date().toISOString(),
-      reason: 'manual_admin_reset',
-      data: currentSnapshot.currentData,
-    });
+    const backupRes = writeStorageDetailed(
+      STORAGE_KEYS.BACKUP_SNAPSHOT,
+      {
+        backedUpAt: new Date().toISOString(),
+        reason: 'manual_admin_reset',
+        migrationVersion: CURRENT_MIGRATION_VERSION,
+        data: currentSnapshot.currentData,
+      },
+      { storage: target, verify: true }
+    );
+    if (!backupRes.ok) {
+      return { ok: false, message: backupRes.message };
+    }
   }
-  // Remove only demo/sample artifacts and restore clean default catalog without wiping real orders/inquiries
+
   const sanitized = sanitizeLegacyDataset(currentSnapshot?.currentData || {});
-  writeStorage(STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
-  writeStorage(STORAGE_KEYS.PACKAGES, INITIAL_PACKAGES);
-  writeStorage(STORAGE_KEYS.MAINTENANCE, INITIAL_MAINTENANCE_PLANS);
-  writeStorage(STORAGE_KEYS.ADDONS, INITIAL_ADDONS);
-  writeStorage(STORAGE_KEYS.PORTFOLIO, sanitized.portfolio);
-  writeStorage(STORAGE_KEYS.TEAM, sanitized.team);
-  writeStorage(STORAGE_KEYS.ORDERS, sanitized.orders);
-  writeStorage(STORAGE_KEYS.INQUIRIES, sanitized.inquiries);
-  writeStorage(STORAGE_KEYS.SETTINGS, sanitized.settings);
-  window.localStorage.setItem(STORAGE_KEYS.SEEDED, 'true');
-  window.localStorage.setItem(STORAGE_KEYS.MIGRATION_VERSION, CURRENT_MIGRATION_VERSION);
+  writeStorageDetailed(STORAGE_KEYS.SERVICES, INITIAL_SERVICES, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.PACKAGES, INITIAL_PACKAGES, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.MAINTENANCE, INITIAL_MAINTENANCE_PLANS, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.ADDONS, INITIAL_ADDONS, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.PORTFOLIO, sanitized.portfolio, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.TEAM, sanitized.team, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.ORDERS, sanitized.orders, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.INQUIRIES, sanitized.inquiries, { storage: target });
+  writeStorageDetailed(STORAGE_KEYS.SETTINGS, sanitized.settings, { storage: target });
+  try {
+    target.setItem(STORAGE_KEYS.SEEDED, 'true');
+    target.setItem(STORAGE_KEYS.MIGRATION_VERSION, CURRENT_MIGRATION_VERSION);
+  } catch {
+    // Ignore flag write error if quota reached
+  }
+  return { ok: true, message: 'Catalog defaults restored and backup snapshot saved.' };
 }
+

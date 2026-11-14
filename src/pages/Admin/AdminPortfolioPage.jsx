@@ -5,6 +5,7 @@ import { PORTFOLIO_CATEGORIES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import { mediaService } from '../../services/media/mediaService.js';
 
 const EMPTY_PROJECT = {
   title: '',
@@ -30,19 +31,23 @@ const EMPTY_PROJECT = {
 };
 
 export default function AdminPortfolioPage() {
-  const { portfolio, createProject, updateProject, deleteProject, requestConfirm } = useApp();
+  const { portfolio, createProject, updateProject, deleteProject, requestConfirm, addToast } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_PROJECT);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const openCreate = () => {
     setEditing(null);
     setForm(EMPTY_PROJECT);
+    setUploadError('');
     setModalOpen(true);
   };
 
   const openEdit = (proj) => {
     setEditing(proj);
+    setUploadError('');
     setForm({
       ...EMPTY_PROJECT,
       ...proj,
@@ -54,19 +59,34 @@ export default function AdminPortfolioPage() {
     setModalOpen(true);
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setForm((f) => ({ ...f, coverImage: reader.result }));
+    setUploadError('');
+    setUploadingImage(true);
+    try {
+      const result = await mediaService.uploadImage(file, {
+        entityType: 'portfolio',
+        entityId: editing?.id || 'draft',
+      });
+      if (!result.success) {
+        setUploadError(result.message || 'Image upload failed.');
+        addToast(result.message || 'Image upload failed.', 'error');
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+      const prevCover = form.coverImage;
+      if (prevCover && prevCover.startsWith('idb://') && prevCover !== result.data.reference) {
+        await mediaService.deleteImage(prevCover);
+      }
+      setForm((f) => ({ ...f, coverImage: result.data.reference }));
+      addToast('Screenshot stored in browser media storage.');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     const galleryLines = form.galleryText
       .split('\n')
@@ -109,10 +129,12 @@ export default function AdminPortfolioPage() {
       demoVideoUrl: form.demoVideoUrl.trim(),
     };
 
-    if (editing) {
-      updateProject(editing.id, payload);
-    } else {
-      createProject(payload);
+    const res = editing
+      ? await updateProject(editing.id, payload)
+      : await createProject(payload);
+
+    if (res && res.success === false) {
+      return;
     }
     setModalOpen(false);
   };
@@ -123,7 +145,12 @@ export default function AdminPortfolioPage() {
       message: 'This removes the portfolio record from local browser storage.',
       confirmLabel: 'Delete Project',
       variant: 'danger',
-      onConfirm: () => deleteProject(proj.id),
+      onConfirm: async () => {
+        if (proj.coverImage && proj.coverImage.startsWith('idb://')) {
+          await mediaService.deleteImage(proj.coverImage);
+        }
+        await deleteProject(proj.id);
+      },
     });
   };
 
@@ -454,13 +481,19 @@ export default function AdminPortfolioPage() {
 
               <div>
                 <label htmlFor="proj-cover" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Screenshot / Cover Image (Upload or image URL)
+                  Screenshot / Cover Image (JPG, PNG, WebP, GIF, AVIF — Max 5 MB)
                 </label>
                 <div className="flex items-center gap-3">
                   <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] cursor-pointer hover:bg-[#F7FAF7] shrink-0">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>Upload Screenshot</span>
-                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    <span>{uploadingImage ? 'Uploading...' : 'Upload Screenshot'}</span>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif"
+                      disabled={uploadingImage}
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
                   </label>
                   <input
                     id="proj-cover"
@@ -471,6 +504,9 @@ export default function AdminPortfolioPage() {
                     className="flex-1 px-3 py-2 text-xs rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
+                {uploadError && (
+                  <p className="mt-1.5 text-xs text-red-600">{uploadError}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -49,7 +49,7 @@ export default function AdminOrdersPage() {
     });
   };
 
-  const handleSaveUpdate = (e) => {
+  const handleSaveUpdate = async (e) => {
     e.preventDefault();
     if (!selectedOrder || !editDraft) return;
     const numericQuote =
@@ -57,7 +57,7 @@ export default function AdminOrdersPage() {
         ? null
         : Number(editDraft.quotationAmount);
 
-    updateOrder(selectedOrder.id, {
+    const res = await updateOrder(selectedOrder.id, {
       status: editDraft.status,
       estimatedBudget: editDraft.estimatedBudget,
       expectedDeliveryDate: editDraft.expectedDeliveryDate,
@@ -71,8 +71,10 @@ export default function AdminOrdersPage() {
       customerUpdate: editDraft.customerUpdate,
       internalNotes: editDraft.internalNotes,
     });
-    setSelectedOrderId(null);
-    setEditDraft(null);
+    if (res?.success !== false) {
+      setSelectedOrderId(null);
+      setEditDraft(null);
+    }
   };
 
   const handleDelete = (order) => {

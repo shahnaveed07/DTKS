@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AppProvider } from './context/AppContext.jsx';
 import PublicLayout from './components/layout/PublicLayout.jsx';
 import AdminLayout from './components/layout/AdminLayout.jsx';
+import RequireAdmin from './components/auth/RequireAdmin.jsx';
 import ToastContainer from './components/common/ToastContainer.jsx';
 import ConfirmDialog from './components/common/ConfirmDialog.jsx';
 
@@ -37,9 +38,11 @@ function AdminRouteFallback() {
 
 function renderAdmin(title, element) {
   return (
-    <AdminLayout title={title}>
-      <Suspense fallback={<AdminRouteFallback />}>{element}</Suspense>
-    </AdminLayout>
+    <RequireAdmin>
+      <AdminLayout title={title}>
+        <Suspense fallback={<AdminRouteFallback />}>{element}</Suspense>
+      </AdminLayout>
+    </RequireAdmin>
   );
 }
 

@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
 
 export default function Footer() {
-  const { settings, services } = useApp();
+  const { settings, services, adminAccessPolicy } = useApp();
   const currentYear = new Date().getFullYear();
 
   const hasEmail = Boolean(settings.contactEmail && settings.contactEmail.trim());
@@ -32,14 +32,16 @@ export default function Footer() {
             <p className="mt-3 text-sm text-[#D6EBDD] leading-relaxed">
               DreamTech Kashmir Solutions (DTKS) builds fast, responsive business websites, portfolios, landing pages, e-commerce storefronts, and custom websites for clients in Kashmir and beyond.
             </p>
-            <div className="mt-5 flex items-center gap-3">
-              <Link
-                to="/admin"
-                className="px-3.5 py-2 text-xs font-medium rounded-lg border border-white/25 text-white hover:bg-white/10 transition-colors whitespace-nowrap"
-              >
-                Admin Panel
-              </Link>
-            </div>
+            {adminAccessPolicy !== 'blocked_production_local' && (
+              <div className="mt-5 flex items-center gap-3">
+                <Link
+                  to="/admin"
+                  className="px-3.5 py-2 text-xs font-medium rounded-lg border border-white/25 text-white hover:bg-white/10 transition-colors whitespace-nowrap"
+                >
+                  Admin Panel
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Navigation */}

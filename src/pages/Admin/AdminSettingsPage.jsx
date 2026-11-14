@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Save, Download } from 'lucide-react';
+import { Save, Download, RotateCcw } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
 
 export default function AdminSettingsPage() {
-  const { settings, updateSettings, exportLocalData } = useApp();
+  const { settings, updateSettings, exportLocalData, restoreFromBackup, isMutating } = useApp();
   const [form, setForm] = useState(settings);
 
   const handleHighlightChange = (id, field, value) => {
@@ -26,9 +26,9 @@ export default function AdminSettingsPage() {
     }));
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    updateSettings({
+    await updateSettings({
       ...form,
       workingHoursConfirmed: Boolean(form.workingHours && form.workingHours.trim()),
     });
@@ -60,6 +60,15 @@ export default function AdminSettingsPage() {
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               type="button"
+              onClick={restoreFromBackup}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] bg-white hover:bg-[#F7FAF7] text-[#17231C] transition-colors whitespace-nowrap"
+              title="Restore browser records from dks_v2_backup_pre_cleanup snapshot"
+            >
+              <RotateCcw className="w-4 h-4 text-[#16834A]" />
+              <span>Restore Pre-Cleanup Backup</span>
+            </button>
+            <button
+              type="button"
               onClick={exportLocalData}
               className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] bg-white hover:bg-[#F7FAF7] text-[#17231C] transition-colors whitespace-nowrap"
             >
@@ -68,10 +77,11 @@ export default function AdminSettingsPage() {
             </button>
             <button
               type="submit"
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white whitespace-nowrap"
+              disabled={isMutating}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 text-white whitespace-nowrap"
             >
               <Save className="w-4 h-4" />
-              <span>Save Settings</span>
+              <span>{isMutating ? 'Saving...' : 'Save Settings'}</span>
             </button>
           </div>
         </div>

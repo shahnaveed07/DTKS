@@ -150,6 +150,24 @@ export const MAINTENANCE_PREFERENCES = [
 ];
 
 /**
+ * Exact mapping of original legacy seed IDs to their unconfirmed prototype starting prices.
+ * Used during migration so that ONLY unmodified legacy seed records have their unconfirmed
+ * prototype prices cleared, while admin-created custom packages or admin-modified prices
+ * are never touched.
+ */
+export const LEGACY_SEED_PRICE_BY_ID = {
+  'pkg-starter': 15000,
+  'pkg-business': 28000,
+  'pkg-custom': 45000,
+  'svc-business': 28000,
+  'svc-ecommerce': 25000,
+  'svc-landing-portfolio': 15000,
+  'svc-education-healthcare': 22000,
+  'svc-hospitality-realestate': 30000,
+  'svc-custom-portals': 20000,
+};
+
+/**
  * Known Legacy Demo Markers used strictly by the non-destructive LocalStorage migration
  * to remove only preloaded prototype sample records while preserving any real user-created data.
  */
@@ -176,7 +194,7 @@ export const KNOWN_DEMO_MARKERS = {
     '+91 (000) 000-0000 (Placeholder)',
     'Srinagar, Jammu & Kashmir (Office Address Configurable)',
   ],
-  legacyUnconfirmedPrices: [15000, 20000, 22000, 25000, 28000, 30000, 45000],
+  legacySeedPriceById: LEGACY_SEED_PRICE_BY_ID,
 };
 
 export const INITIAL_SERVICES = [
@@ -503,9 +521,12 @@ export const INITIAL_MAINTENANCE_PLANS = [
     billingCycle: 'Billed Monthly',
     price: null,
     currency: 'INR',
+    bugFixSupport: 'Post-launch bug fixes & layout issue resolution',
+    contentUpdateAllowance: 'Up to 4 minor content or image updates per month',
     updateAllowance: 'Up to 4 minor content or image updates per month',
     backupFrequency: 'Weekly automated website backups',
     securityChecks: 'Routine dependency, SSL & uptime monitoring',
+    performanceMonitoring: 'Monthly Core Web Vitals & uptime health check',
     responseTime: 'Standard support response within 24–48 business hours',
     scopeNote:
       'Covers bug fixes, minor text/image swaps, and health checks. Major new features or full page redesigns are quoted separately.',
@@ -517,9 +538,12 @@ export const INITIAL_MAINTENANCE_PLANS = [
     billingCycle: 'Billed Annually',
     price: null,
     currency: 'INR',
+    bugFixSupport: 'Priority bug fixes, browser compatibility & layout resolution',
+    contentUpdateAllowance: 'Up to 6 minor content or section updates per month',
     updateAllowance: 'Up to 6 minor content or section updates per month',
     backupFrequency: 'Weekly automated backups + pre-update restore points',
     securityChecks: 'Proactive security patching, SSL renewal & quarterly speed audit',
+    performanceMonitoring: 'Continuous uptime monitoring & quarterly speed optimization',
     responseTime: 'Priority support response within 24 business hours',
     scopeNote:
       'Ideal for businesses wanting year-round peace of mind. Major feature additions or structural rebuilds are quoted separately.',

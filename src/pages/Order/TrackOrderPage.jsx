@@ -9,24 +9,52 @@ import { findTrackedOrder, formatCurrency } from '../../utils/orderUtils.js';
 
 export default function TrackOrderPage() {
   const [searchParams] = useSearchParams();
-  const { orders, settings } = useApp();
+  const { orders, settings, trackOrder, submissionMode } = useApp();
 
   const [referenceId, setReferenceId] = useState(searchParams.get('ref') || '');
   const [email, setEmail] = useState(searchParams.get('email') || '');
   const [searched, setSearched] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [lookupError, setLookupError] = useState('');
   const [matchedOrder, setMatchedOrder] = useState(null);
 
   useEffect(() => {
     const initialRef = searchParams.get('ref');
     const initialEmail = searchParams.get('email');
     if (initialRef && initialEmail) {
-      setMatchedOrder(findTrackedOrder(orders, initialRef, initialEmail));
-      setSearched(true);
+      if (submissionMode === 'api') {
+        setIsSearching(true);
+        trackOrder(initialRef, initialEmail)
+          .then((res) => {
+            setMatchedOrder(res?.success ? res.data : null);
+            setLookupError(res?.success ? '' : res?.message || '');
+            setSearched(true);
+          })
+          .finally(() => setIsSearching(false));
+      } else {
+        setMatchedOrder(findTrackedOrder(orders, initialRef, initialEmail));
+        setSearched(true);
+      }
     }
-  }, [searchParams, orders]);
+  }, [searchParams, orders, submissionMode, trackOrder]);
 
-  const handleLookup = (e) => {
+  const handleLookup = async (e) => {
     e.preventDefault();
+    setLookupError('');
+    if (submissionMode === 'api') {
+      setIsSearching(true);
+      try {
+        const res = await trackOrder(referenceId, email);
+        setMatchedOrder(res?.success ? res.data : null);
+        if (!res?.success && res?.errorType !== 'NotFoundError') {
+          setLookupError(res?.message || 'Unable to reach order tracking service.');
+        }
+      } finally {
+        setIsSearching(false);
+        setSearched(true);
+      }
+      return;
+    }
     const found = findTrackedOrder(orders, referenceId, email);
     setMatchedOrder(found);
     setSearched(true);
@@ -52,12 +80,16 @@ export default function TrackOrderPage() {
             Enter the Reference ID generated during order submission along with your email address.
           </p>
 
-          <div className="mt-5 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 px-4 py-3 flex items-start gap-2.5 text-xs text-[#17231C]/80">
-            <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
-            <span>
-              Frontend preview mode: order status lookup reads from your browser&apos;s LocalStorage until the production backend API is connected.
-            </span>
-          </div>
+          {submissionMode !== 'api' && (
+            <div className="mt-5 rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 px-4 py-3 flex items-start gap-2.5 text-xs text-[#17231C]/80">
+              <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
+              <span>
+                {submissionMode === 'production_unconfigured'
+                  ? 'Online order tracking is being configured alongside our production backend. Only locally saved browser records can be queried until backend synchronization is enabled.'
+                  : 'Local development mode: order status lookup reads from your current browser’s LocalStorage until the production backend API is connected.'}
+              </span>
+            </div>
+          )}
         </div>
       </section>
 
@@ -100,10 +132,11 @@ export default function TrackOrderPage() {
             <div className="sm:col-span-3">
               <button
                 type="submit"
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
+                disabled={isSearching}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-60 text-white transition-colors whitespace-nowrap"
               >
                 <Search className="w-4 h-4" />
-                <span>Check Status</span>
+                <span>{isSearching ? 'Checking...' : 'Check Status'}</span>
               </button>
             </div>
           </form>
@@ -113,13 +146,18 @@ export default function TrackOrderPage() {
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div>
                 <h2 className="text-sm font-semibold text-[#17231C]">
-                  No Matching Local Request Found
+                  {lookupError ? 'Order Lookup Error' : 'No Matching Order Record Found'}
                 </h2>
                 <p className="mt-1 text-xs sm:text-sm text-[#64756B]">
-                  Verify that the Reference ID and email match a request saved in this browser, or{' '}
-                  <Link to="/request-quote" className="text-[#16834A] hover:underline font-medium">
-                    submit a new project request
-                  </Link>.
+                  {lookupError || (
+                    <>
+                      Verify that the Reference ID and email match your submitted website order, or{' '}
+                      <Link to="/request-quote" className="text-[#16834A] hover:underline font-medium">
+                        submit a new project request
+                      </Link>
+                      .
+                    </>
+                  )}
                 </p>
               </div>
             </div>

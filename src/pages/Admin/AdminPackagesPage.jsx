@@ -59,7 +59,7 @@ export default function AdminPackagesPage() {
     setModalOpen(true);
   };
 
-  const handleSavePackage = (e) => {
+  const handleSavePackage = async (e) => {
     e.preventDefault();
     const numericPrice =
       pkgForm.startingPrice === '' || pkgForm.startingPrice === null
@@ -87,12 +87,12 @@ export default function AdminPackagesPage() {
       featured: Boolean(pkgForm.featured),
     };
 
-    if (editingPkg) {
-      updatePackage(editingPkg.id, payload);
-    } else {
-      createPackage(payload);
+    const res = editingPkg
+      ? await updatePackage(editingPkg.id, payload)
+      : await createPackage(payload);
+    if (res?.success !== false) {
+      setModalOpen(false);
     }
-    setModalOpen(false);
   };
 
   const handleDeletePackage = (pkg) => {

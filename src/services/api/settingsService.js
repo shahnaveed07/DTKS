@@ -1,15 +1,20 @@
-import { STORAGE_KEYS, readStorage, writeStorage } from '../storage/localStorageAdapter.js';
+import {
+  STORAGE_KEYS,
+  readStorage,
+  writeStorageDetailed,
+} from '../storage/localStorageAdapter.js';
 import { INITIAL_SETTINGS } from '../../data/seedData.js';
 import { API_ENDPOINTS } from '../models/backendModels.js';
 import {
   apiRequest,
+  createServiceError,
   createServiceResponse,
   getDataAdapterMode,
 } from './apiClient.js';
 
 export const settingsService = {
   get() {
-    return readStorage(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+    return readStorage(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS, 'object');
   },
 
   update(patch) {
@@ -19,7 +24,10 @@ export const settingsService = {
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    writeStorage(STORAGE_KEYS.SETTINGS, next);
+    const writeRes = writeStorageDetailed(STORAGE_KEYS.SETTINGS, next, { verify: true });
+    if (!writeRes.ok) {
+      return { __writeError: writeRes };
+    }
     return next;
   },
 
@@ -38,6 +46,12 @@ export const settingsService = {
       return apiRequest(API_ENDPOINTS.settings, { method: 'PUT', body: patch });
     }
     const updated = this.update(patch);
+    if (updated?.__writeError) {
+      return createServiceError(updated.__writeError.message, null, {
+        errorType: updated.__writeError.errorType,
+      });
+    }
     return createServiceResponse(updated, 'Settings saved in local browser storage.');
   },
 };
+

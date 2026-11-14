@@ -26,28 +26,53 @@ const EMPTY_FORM = {
 };
 
 export default function ContactPage() {
-  const { settings, createInquiry } = useApp();
+  const {
+    settings,
+    createInquiry,
+    submissionMode,
+    adminAccessPolicy,
+    isMutating,
+  } = useApp();
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
   const [submittedRecord, setSubmittedRecord] = useState(null);
+
+  const isProductionUnconfigured = submissionMode === 'production_unconfigured';
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
+    if (submitError) {
+      setSubmitError('');
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
+    if (isProductionUnconfigured) {
+      setSubmitError(
+        'Online website order submission is currently being configured. Please contact DreamTech Kashmir Solutions through a verified contact channel.'
+      );
+      return;
+    }
+
     const validation = validateContactForm(formData);
     if (!validation.isValid) {
       setErrors(validation.errors);
       return;
     }
 
-    const saved = createInquiry(formData);
-    setSubmittedRecord(saved);
+    const res = await createInquiry(formData);
+    if (!res || res.success === false) {
+      setSubmitError(res?.message || 'Failed saving inquiry. Please try again.');
+      return;
+    }
+
+    setSubmittedRecord(res.data || res);
     setFormData(EMPTY_FORM);
     setErrors({});
   };
@@ -225,10 +250,20 @@ export default function ContactPage() {
                       <CheckCircle2 className="w-6 h-6" />
                     </div>
                     <h2 className="font-display text-2xl font-bold text-[#17231C]">
-                      Inquiry Recorded Locally
+                      {submissionMode === 'api'
+                        ? 'Inquiry Received'
+                        : 'Inquiry Recorded Locally (Demo Mode)'}
                     </h2>
                     <p className="text-sm text-[#64756B] leading-relaxed">
-                      Thank you, <strong className="text-[#17231C]">{submittedRecord.name}</strong>. Your message has been saved in browser LocalStorage while the production backend API is being prepared.
+                      {submissionMode === 'api' ? (
+                        <>
+                          Thank you, <strong className="text-[#17231C]">{submittedRecord.name}</strong>. Your inquiry has been received by DreamTech Kashmir Solutions.
+                        </>
+                      ) : (
+                        <>
+                          Thank you, <strong className="text-[#17231C]">{submittedRecord.name}</strong>. Local development mode: your message has been saved only in this browser&apos;s LocalStorage while the production backend API is being prepared.
+                        </>
+                      )}
                     </p>
                     <div className="rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] p-4 text-xs text-[#64756B]">
                       <p><strong className="text-[#17231C]">Subject:</strong> {submittedRecord.subject}</p>
@@ -242,12 +277,14 @@ export default function ContactPage() {
                       >
                         Send Another Message
                       </button>
-                      <Link
-                        to="/admin/inquiries"
-                        className="px-4 py-2 text-sm font-medium rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors"
-                      >
-                        View in Admin Inquiries
-                      </Link>
+                      {adminAccessPolicy !== 'blocked_production_local' && (
+                        <Link
+                          to="/admin/inquiries"
+                          className="px-4 py-2 text-sm font-medium rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors"
+                        >
+                          View in Admin Inquiries
+                        </Link>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -259,12 +296,35 @@ export default function ContactPage() {
                       </h2>
                     </div>
 
-                    <div className="rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2.5 flex items-start gap-2.5 text-xs text-[#64756B]">
-                      <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
-                      <span>
-                        Frontend preview mode: inquiries submitted here are saved in your browser&apos;s LocalStorage until the production backend API is connected.
-                      </span>
-                    </div>
+                    {isProductionUnconfigured ? (
+                      <div
+                        role="status"
+                        className="rounded-lg border border-amber-300 bg-amber-50/90 px-3.5 py-3 flex items-start gap-2.5 text-xs text-amber-950"
+                      >
+                        <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                        <span>
+                          Online website order submission is currently being configured. Please contact DreamTech Kashmir Solutions through a verified contact channel.
+                        </span>
+                      </div>
+                    ) : (
+                      submissionMode === 'local_demo' && (
+                        <div className="rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2.5 flex items-start gap-2.5 text-xs text-[#64756B]">
+                          <Info className="w-4 h-4 text-[#16834A] shrink-0 mt-0.5" />
+                          <span>
+                            Development preview mode: inquiries submitted here are saved only in your current browser&apos;s LocalStorage until the production backend API is connected.
+                          </span>
+                        </div>
+                      )
+                    )}
+
+                    {submitError && (
+                      <div
+                        role="alert"
+                        className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700"
+                      >
+                        {submitError}
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div>
@@ -354,10 +414,11 @@ export default function ContactPage() {
                       </p>
                       <button
                         type="submit"
-                        className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
+                        disabled={isProductionUnconfigured || isMutating}
+                        className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors whitespace-nowrap"
                       >
                         <Send className="w-4 h-4" />
-                        <span>Send Message</span>
+                        <span>{isMutating ? 'Sending...' : 'Send Message'}</span>
                       </button>
                     </div>
                   </form>

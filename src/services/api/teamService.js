@@ -1,15 +1,20 @@
-import { STORAGE_KEYS, readStorage, writeStorage } from '../storage/localStorageAdapter.js';
+import {
+  STORAGE_KEYS,
+  readStorage,
+  writeStorageDetailed,
+} from '../storage/localStorageAdapter.js';
 import { INITIAL_TEAM } from '../../data/seedData.js';
 import { API_ENDPOINTS } from '../models/backendModels.js';
 import {
   apiRequest,
+  createServiceError,
   createServiceResponse,
   getDataAdapterMode,
 } from './apiClient.js';
 
 export const teamService = {
   getAll() {
-    const list = readStorage(STORAGE_KEYS.TEAM, INITIAL_TEAM);
+    const list = readStorage(STORAGE_KEYS.TEAM, INITIAL_TEAM, 'array');
     return [...list].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
   },
 
@@ -17,7 +22,7 @@ export const teamService = {
     const list = this.getAll();
     const maxOrder = list.reduce((max, m) => Math.max(max, m.order || 0), 0);
     const created = {
-      id: `team-${Date.now()}`,
+      id: `team-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       order: maxOrder + 1,
       visible: true,
       isPlaceholder: false,
@@ -28,7 +33,10 @@ export const teamService = {
       updatedAt: new Date().toISOString(),
     };
     const next = [...list, created];
-    writeStorage(STORAGE_KEYS.TEAM, next);
+    const writeRes = writeStorageDetailed(STORAGE_KEYS.TEAM, next, { verify: true });
+    if (!writeRes.ok) {
+      return { __writeError: writeRes };
+    }
     return created;
   },
 
@@ -40,7 +48,13 @@ export const teamService = {
       updated = { ...item, ...patch, updatedAt: new Date().toISOString() };
       return updated;
     });
-    writeStorage(STORAGE_KEYS.TEAM, next);
+    if (!updated) {
+      return { __notFound: true };
+    }
+    const writeRes = writeStorageDetailed(STORAGE_KEYS.TEAM, next, { verify: true });
+    if (!writeRes.ok) {
+      return { __writeError: writeRes };
+    }
     return updated;
   },
 
@@ -60,13 +74,23 @@ export const teamService = {
       ...member,
       order: idx + 1,
     }));
-    writeStorage(STORAGE_KEYS.TEAM, normalized);
+    const writeRes = writeStorageDetailed(STORAGE_KEYS.TEAM, normalized, { verify: true });
+    if (!writeRes.ok) {
+      return { __writeError: writeRes };
+    }
     return normalized;
   },
 
   remove(id) {
-    const next = this.getAll().filter((m) => m.id !== id);
-    writeStorage(STORAGE_KEYS.TEAM, next);
+    const list = this.getAll();
+    if (!list.some((m) => m.id === id)) {
+      return { __notFound: true };
+    }
+    const next = list.filter((m) => m.id !== id);
+    const writeRes = writeStorageDetailed(STORAGE_KEYS.TEAM, next, { verify: true });
+    if (!writeRes.ok) {
+      return { __writeError: writeRes };
+    }
     return next;
   },
 
@@ -79,4 +103,75 @@ export const teamService = {
     }
     return createServiceResponse(this.getAll(), 'Team members loaded from local storage.');
   },
+
+  async createTeamMember(payload) {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(API_ENDPOINTS.team, { method: 'POST', body: payload });
+    }
+    const created = this.create(payload);
+    if (created?.__writeError) {
+      return createServiceError(created.__writeError.message, null, {
+        errorType: created.__writeError.errorType,
+      });
+    }
+    return createServiceResponse(created, `Team member "${created.fullName}" added.`);
+  },
+
+  async updateTeamMember(id, patch) {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(`${API_ENDPOINTS.team}/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: patch,
+      });
+    }
+    const updated = this.update(id, patch);
+    if (updated?.__notFound) {
+      return createServiceError(`Team member "${id}" not found.`, null, {
+        errorType: 'NotFoundError',
+      });
+    }
+    if (updated?.__writeError) {
+      return createServiceError(updated.__writeError.message, null, {
+        errorType: updated.__writeError.errorType,
+      });
+    }
+    return createServiceResponse(updated, 'Team member updated.');
+  },
+
+  async reorderTeamMember(id, direction) {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(`${API_ENDPOINTS.team}/${encodeURIComponent(id)}/reorder`, {
+        method: 'POST',
+        body: { direction },
+      });
+    }
+    const res = this.reorder(id, direction);
+    if (res?.__writeError) {
+      return createServiceError(res.__writeError.message, null, {
+        errorType: res.__writeError.errorType,
+      });
+    }
+    return createServiceResponse(res, 'Team display order updated.');
+  },
+
+  async deleteTeamMember(id) {
+    if (getDataAdapterMode() === 'api') {
+      return apiRequest(`${API_ENDPOINTS.team}/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+    }
+    const res = this.remove(id);
+    if (res?.__notFound) {
+      return createServiceError(`Team member "${id}" not found.`, null, {
+        errorType: 'NotFoundError',
+      });
+    }
+    if (res?.__writeError) {
+      return createServiceError(res.__writeError.message, null, {
+        errorType: res.__writeError.errorType,
+      });
+    }
+    return createServiceResponse(res, 'Team member removed.');
+  },
 };
+

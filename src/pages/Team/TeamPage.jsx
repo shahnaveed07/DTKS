@@ -5,6 +5,7 @@ import SEO from '../../components/common/SEO.jsx';
 import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
 import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 
 export default function TeamPage() {
   const { team, settings } = useApp();
@@ -55,14 +56,14 @@ export default function TeamPage() {
                   <div>
                     <div className="flex items-center gap-4 mb-5">
                       {member.avatarUrl ? (
-                        <img
+                        <ImageWithFallback
                           src={member.avatarUrl}
                           alt={`${member.fullName} — ${member.role} at DreamTech Kashmir Solutions`}
+                          fallbackTitle={member.initials || member.fullName}
                           width={64}
                           height={64}
                           loading="lazy"
                           decoding="async"
-                          referrerPolicy="no-referrer"
                           className="w-16 h-16 rounded-xl object-cover border border-[#E3EBE5] shrink-0"
                         />
                       ) : (

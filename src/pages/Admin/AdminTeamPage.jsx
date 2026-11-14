@@ -15,6 +15,8 @@ import { useApp } from '../../context/AppContext.jsx';
 import { TEAM_ROLES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
+import { mediaService } from '../../services/media/mediaService.js';
 
 const EMPTY_MEMBER = {
   fullName: '',
@@ -41,14 +43,18 @@ export default function AdminTeamPage() {
     deleteTeamMember,
     reorderTeamMember,
     requestConfirm,
+    addToast,
   } = useApp();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_MEMBER);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const openCreate = () => {
     setEditing(null);
+    setUploadError('');
     setForm({
       ...EMPTY_MEMBER,
       order: team.length + 1,
@@ -58,6 +64,7 @@ export default function AdminTeamPage() {
 
   const openEdit = (member) => {
     setEditing(member);
+    setUploadError('');
     setForm({
       ...EMPTY_MEMBER,
       ...member,
@@ -67,19 +74,34 @@ export default function AdminTeamPage() {
     setModalOpen(true);
   };
 
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setForm((f) => ({ ...f, avatarUrl: reader.result }));
+    setUploadError('');
+    setUploadingPhoto(true);
+    try {
+      const result = await mediaService.uploadImage(file, {
+        entityType: 'team',
+        entityId: editing?.id || 'draft',
+      });
+      if (!result.success) {
+        setUploadError(result.message || 'Photo upload failed.');
+        addToast(result.message || 'Photo upload failed.', 'error');
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+      const prevAvatar = form.avatarUrl;
+      if (prevAvatar && prevAvatar.startsWith('idb://') && prevAvatar !== result.data.reference) {
+        await mediaService.deleteImage(prevAvatar);
+      }
+      setForm((f) => ({ ...f, avatarUrl: result.data.reference }));
+      addToast('Photograph stored in browser media storage.');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     const trimmedName = form.fullName.trim();
     const computedInitials =
@@ -113,10 +135,12 @@ export default function AdminTeamPage() {
       isPlaceholder: false,
     };
 
-    if (editing) {
-      updateTeamMember(editing.id, payload);
-    } else {
-      createTeamMember(payload);
+    const res = editing
+      ? await updateTeamMember(editing.id, payload)
+      : await createTeamMember(payload);
+
+    if (res && res.success === false) {
+      return;
     }
     setModalOpen(false);
   };
@@ -127,7 +151,12 @@ export default function AdminTeamPage() {
       message: 'This deletes the team profile from local storage.',
       confirmLabel: 'Remove Member',
       variant: 'danger',
-      onConfirm: () => deleteTeamMember(member.id),
+      onConfirm: async () => {
+        if (member.avatarUrl && member.avatarUrl.startsWith('idb://')) {
+          await mediaService.deleteImage(member.avatarUrl);
+        }
+        await deleteTeamMember(member.id);
+      },
     });
   };
 
@@ -164,10 +193,12 @@ export default function AdminTeamPage() {
               >
                 <div className="flex items-start gap-4">
                   {member.avatarUrl ? (
-                    <img
+                    <ImageWithFallback
                       src={member.avatarUrl}
                       alt={member.fullName}
-                      referrerPolicy="no-referrer"
+                      fallbackTitle={member.initials || member.fullName}
+                      width={56}
+                      height={56}
                       className="w-14 h-14 rounded-xl object-cover border border-[#E3EBE5] shrink-0"
                     />
                   ) : (
@@ -386,13 +417,19 @@ export default function AdminTeamPage() {
 
               <div>
                 <label htmlFor="tm-avatar" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Profile Photograph (Upload or URL)
+                  Profile Photograph (JPG, PNG, WebP, GIF, AVIF — Max 5 MB)
                 </label>
                 <div className="flex items-center gap-3">
                   <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] cursor-pointer hover:bg-[#F7FAF7] shrink-0">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>Upload Photo</span>
-                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                    <span>{uploadingPhoto ? 'Uploading...' : 'Upload Photo'}</span>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif"
+                      disabled={uploadingPhoto}
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
                   </label>
                   <input
                     id="tm-avatar"
@@ -403,6 +440,9 @@ export default function AdminTeamPage() {
                     className="flex-1 px-3 py-2 text-sm rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
                   />
                 </div>
+                {uploadError && (
+                  <p className="mt-1.5 text-xs text-red-600">{uploadError}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
