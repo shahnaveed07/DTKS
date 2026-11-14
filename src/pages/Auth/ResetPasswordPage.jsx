@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { KeyRound, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useClientAuth } from '../../context/ClientAuthContext.jsx';
@@ -21,6 +21,19 @@ export default function ResetPasswordPage() {
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [resetComplete, setResetComplete] = useState(false);
+  const redirectTimerRef = useRef(null);
+
+  useEffect(() => {
+    setToken(initialToken);
+  }, [initialToken]);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,6 +51,9 @@ export default function ResetPasswordPage() {
     try {
       const res = await resetPassword(validation.data);
       if (!res.success) {
+        if (res.details && typeof res.details === 'object') {
+          setErrors(res.details);
+        }
         setServerError(res.message || 'This reset token is invalid or has expired.');
         return;
       }
@@ -45,7 +61,7 @@ export default function ResetPasswordPage() {
       setConfirmPassword('');
       setResetComplete(true);
       addToast('Password updated. You can now sign in.', 'success');
-      setTimeout(() => {
+      redirectTimerRef.current = setTimeout(() => {
         navigate('/login', { replace: true });
       }, 1500);
     } finally {

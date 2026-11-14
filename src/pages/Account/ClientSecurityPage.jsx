@@ -39,6 +39,9 @@ export default function ClientSecurityPage() {
     setSubmitting(false);
 
     if (!res.success) {
+      if (res.details && typeof res.details === 'object') {
+        setErrors(res.details);
+      }
       setServerError(res.message || 'Unable to update your password.');
       return;
     }
@@ -46,8 +49,11 @@ export default function ClientSecurityPage() {
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    setSuccessMsg(res.message || 'Your password has been updated.');
-    addToast('Password changed successfully.', 'success');
+    setSuccessMsg(
+      res.message || 'Your password has been updated. Please sign in again with your new password.'
+    );
+    addToast('Password updated. Please sign in again.', 'success');
+    navigate('/login', { replace: true, state: { passwordChanged: true } });
   };
 
   const handleRevokeAll = () => {

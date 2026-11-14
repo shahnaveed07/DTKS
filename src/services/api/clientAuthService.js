@@ -139,13 +139,59 @@ export const clientAuthService = {
     };
   },
 
-  async register({ fullName, email, phone, password, acceptTerms } = {}) {
+  async register({
+    fullName,
+    email,
+    phone,
+    password,
+    confirmPassword,
+    acceptTerms,
+    legalVersion,
+  } = {}) {
     if (getDataAdapterMode() === 'api') {
-      return clientApiRequest(API_ENDPOINTS.clientAuthRegister, {
+      const res = await clientApiRequest(API_ENDPOINTS.clientAuthRegister, {
         method: 'POST',
-        body: { fullName, email, phone, password, acceptTerms: Boolean(acceptTerms) },
+        body: {
+          fullName,
+          email,
+          phone,
+          password,
+          confirmPassword: confirmPassword ?? password,
+          acceptTerms: Boolean(acceptTerms),
+          ...(legalVersion ? { legalVersion } : {}),
+        },
         skipAuthRefresh: true,
       });
+
+      const pendingFromDetails = Boolean(
+        res.details?.accountPendingVerification ||
+          res.data?.accountPendingVerification ||
+          res.details?.verificationEmailSent === false ||
+          res.data?.verificationEmailSent === false ||
+          res.details?.deliveryStatus === 'failed' ||
+          res.data?.deliveryStatus === 'failed' ||
+          res.errorCode === 'VERIFICATION_EMAIL_FAILED' ||
+          res.errorCode === 'EMAIL_DELIVERY_FAILED'
+      );
+
+      const verificationEmailSent =
+        res.data?.verificationEmailSent !== undefined
+          ? Boolean(res.data.verificationEmailSent)
+          : res.details?.verificationEmailSent !== undefined
+          ? Boolean(res.details.verificationEmailSent)
+          : res.data?.deliveryStatus === 'failed' || res.details?.deliveryStatus === 'failed'
+          ? false
+          : Boolean(res.success);
+
+      return {
+        ...res,
+        accountPendingVerification: pendingFromDetails || Boolean(res.success),
+        verificationEmailSent,
+        deliveryStatus:
+          res.data?.deliveryStatus ||
+          res.details?.deliveryStatus ||
+          (verificationEmailSent ? 'sent' : 'failed'),
+      };
     }
 
     if (getClientAccessPolicy() === 'blocked_production_local') {
@@ -390,6 +436,10 @@ export const clientAuthService = {
   },
 
   async logout({ allDevices = false } = {}) {
+    if (allDevices) {
+      return this.revokeAllSessions();
+    }
+
     const accessToken = getClientAccessToken();
     const refreshToken = getClientRefreshToken();
 
@@ -399,7 +449,6 @@ export const clientAuthService = {
           method: 'POST',
           body: {
             ...(refreshToken ? { refreshToken } : {}),
-            ...(allDevices ? { allDevices: true } : {}),
           },
           skipAuthRefresh: true,
         });
@@ -454,9 +503,10 @@ export const clientAuthService = {
     );
   },
 
-  async resetPassword({ token, newPassword } = {}) {
+  async resetPassword({ token, newPassword, confirmPassword } = {}) {
     const cleanToken = String(token || '').trim();
     const rawPassword = String(newPassword || '');
+    const rawConfirmPassword = String(confirmPassword ?? rawPassword);
     if (!cleanToken || !rawPassword) {
       return createServiceError('Reset token and new password are required.', null, {
         errorCode: 'VALIDATION_ERROR',
@@ -467,7 +517,11 @@ export const clientAuthService = {
     if (getDataAdapterMode() === 'api') {
       return clientApiRequest(API_ENDPOINTS.clientAuthResetPassword, {
         method: 'POST',
-        body: { token: cleanToken, newPassword: rawPassword },
+        body: {
+          token: cleanToken,
+          newPassword: rawPassword,
+          confirmPassword: rawConfirmPassword,
+        },
         skipAuthRefresh: true,
       });
     }
@@ -510,14 +564,20 @@ export const clientAuthService = {
 
   async updateProfile({ fullName, phone, city = '', businessName = '' } = {}) {
     if (getDataAdapterMode() === 'api') {
-      const res = await clientApiRequest(API_ENDPOINTS.clientAccountProfile, {
+      const res = await clientApiRequest(API_ENDPOINTS.clientAuthProfile, {
         method: 'PATCH',
         body: { fullName, phone, city, businessName },
       });
       if (!res.success) return res;
-      const client = sanitizeClientProfile(res.data?.client || res.data?.customer || res.data);
+      const rawClient = res.data?.client || res.data?.customer || null;
+      const client = sanitizeClientProfile(rawClient);
+      if (!client) {
+        return createServiceError('Invalid client profile response received from server.', null, {
+          errorCode: 'INVALID_RESPONSE',
+        });
+      }
       const current = getClientAuthSession();
-      if (current && client) {
+      if (current) {
         setClientAuthSession({ ...current, client });
       }
       return createServiceResponse({ client }, res.message || 'Profile updated successfully.');
@@ -557,10 +617,14 @@ export const clientAuthService = {
 
   async changePassword({ currentPassword, newPassword } = {}) {
     if (getDataAdapterMode() === 'api') {
-      return clientApiRequest(API_ENDPOINTS.clientAccountChangePassword, {
+      const res = await clientApiRequest(API_ENDPOINTS.clientAuthChangePassword, {
         method: 'POST',
         body: { currentPassword, newPassword },
       });
+      if (res.success) {
+        clearClientAuthSession();
+      }
+      return res;
     }
 
     if (getClientAccessPolicy() === 'blocked_production_local') {
@@ -591,14 +655,18 @@ export const clientAuthService = {
     writeLocalClients(
       clients.map((c) => (c.id === target.id ? { ...c, passwordDigest: nextDigest, updatedAt: now } : c))
     );
-    return createServiceResponse({ updated: true }, 'Password changed successfully.');
+    clearClientAuthSession();
+    return createServiceResponse(
+      { updated: true },
+      'Password changed successfully. Please sign in again.'
+    );
   },
 
   async revokeAllSessions() {
     if (getDataAdapterMode() === 'api') {
-      const res = await clientApiRequest(API_ENDPOINTS.clientAccountRevokeSessions, {
+      const res = await clientApiRequest(API_ENDPOINTS.clientAuthLogout, {
         method: 'POST',
-        body: {},
+        body: { allDevices: true },
       });
       if (res.success) {
         clearClientAuthSession();

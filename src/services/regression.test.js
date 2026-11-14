@@ -1021,8 +1021,14 @@ test('Order tracking in API mode uses GET /api/v1/orders/track with query params
   }
 });
 
-test('Admin Accounts service issues real /api/v1/admin/users requests and never fakes success on 404/403', async () => {
+test('Admin Accounts service issues /api/v1/admin/accounts requests, parses data.accounts/data.account, and handles invitation flows', async () => {
   createMockLocalStorage();
+  const sessionStore = new Map();
+  globalThis.window.sessionStorage = {
+    getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
+    setItem: (k, v) => sessionStore.set(k, String(v)),
+    removeItem: (k) => sessionStore.delete(k),
+  };
   clearAdminAuthSession();
   setRuntimeEnvOverrides({
     isProd: true,
@@ -1035,47 +1041,233 @@ test('Admin Accounts service issues real /api/v1/admin/users requests and never 
     admin: { id: 'adm-1', email: 'super@dtks.in', role: 'super_admin' },
   });
 
+  assert.equal(authService.deleteAdminUser, undefined, 'Hard delete must not exist');
+
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
-    calls.push({ url: String(url), method: init.method || 'GET', body: init.body });
-    if (String(url).includes('/admin/users') && (init.method || 'GET') === 'GET') {
+    const urlStr = String(url);
+    const method = init.method || 'GET';
+    const body = init.body ? JSON.parse(init.body) : null;
+    calls.push({ url: urlStr, method, body });
+
+    if (urlStr.includes('/admin/accounts?') && method === 'GET') {
       return {
-        ok: false,
-        status: 404,
+        ok: true,
+        status: 200,
         headers: { get: () => 'application/json' },
         json: async () => ({
-          success: false,
-          error: { code: 'NOT_FOUND', message: 'Endpoint not available on DTKS_BE' },
+          success: true,
+          data: {
+            accounts: [
+              {
+                id: 'adm-2',
+                name: 'Invited Editor',
+                email: 'editor@dtks.in',
+                role: 'editor',
+                isActive: false,
+                invitePending: true,
+                invitedByAdminId: 'adm-1',
+                createdAt: '2026-04-01T10:00:00Z',
+              },
+            ],
+            pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+          },
         }),
       };
     }
+
+    if (urlStr.endsWith('/admin/accounts/adm-2') && method === 'GET') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            account: {
+              id: 'adm-2',
+              name: 'Invited Editor',
+              email: 'editor@dtks.in',
+              role: 'editor',
+              isActive: false,
+              invitePending: true,
+            },
+          },
+        }),
+      };
+    }
+
+    if (urlStr.endsWith('/admin/accounts') && method === 'POST') {
+      if (body?.email === 'partial@dtks.in') {
+        return {
+          ok: false,
+          status: 502,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: {
+              code: 'INVITE_EMAIL_FAILED',
+              message: 'Account created, but invitation email failed to send.',
+              details: {
+                accountCreated: true,
+                account: {
+                  id: 'adm-partial',
+                  name: 'Partial Admin',
+                  email: 'partial@dtks.in',
+                  role: 'admin',
+                  isActive: false,
+                  invitePending: true,
+                },
+              },
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            account: {
+              id: 'adm-2',
+              name: 'Invited Editor',
+              email: 'editor@dtks.in',
+              role: 'editor',
+              isActive: false,
+              invitePending: true,
+            },
+          },
+        }),
+      };
+    }
+
+    if (urlStr.endsWith('/admin/accounts/adm-2/resend-invite') && method === 'POST') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { sent: true } }),
+      };
+    }
+
+    if (urlStr.endsWith('/admin/accounts/adm-2/status') && method === 'PATCH') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            account: { id: 'adm-2', name: 'Invited Editor', email: 'editor@dtks.in', role: 'admin', isActive: false },
+          },
+        }),
+      };
+    }
+
+    if (urlStr.endsWith('/admin/accounts/adm-2') && method === 'PATCH') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            account: { id: 'adm-2', name: 'Renamed Editor', email: 'editor@dtks.in', role: 'admin', isActive: true },
+          },
+        }),
+      };
+    }
+
+    if (urlStr.endsWith('/admin/accounts/adm-2/sessions') && method === 'DELETE') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { revoked: true } }),
+      };
+    }
+
+    if (urlStr.endsWith('/auth/accept-invite') && method === 'POST') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { accepted: true } }),
+      };
+    }
+
     return {
-      ok: true,
-      status: 201,
+      ok: false,
+      status: 404,
       headers: { get: () => 'application/json' },
-      json: async () => ({
-        success: true,
-        data: { user: { id: 'adm-2', name: 'New Editor', email: 'editor@dtks.in', role: 'editor', status: 'active' } },
-      }),
+      json: async () => ({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } }),
     };
   };
 
   try {
-    const listFail = await authService.listAdminUsers({ search: 'editor', page: 1 });
-    assert.equal(listFail.success, false);
-    assert.equal(listFail.statusCode, 404);
-    assert.match(listFail.message, /Endpoint not available/);
-    assert.ok(calls[0].url.includes('/api/v1/admin/users?search=editor&page=1'));
+    const listRes = await authService.listAdminUsers({ search: 'editor', role: 'editor', status: 'pending', page: 1, limit: 10 });
+    assert.equal(listRes.success, true);
+    assert.equal(listRes.data.accounts.length, 1);
+    assert.equal(listRes.data.accounts[0].invitePending, true);
+    assert.ok(calls[0].url.includes('/api/v1/admin/accounts?search=editor&role=editor&status=pending&page=1&limit=10'));
 
-    const created = await authService.createAdminUser({
-      name: 'New Editor',
+    const detailRes = await authService.getAdminUser('adm-2');
+    assert.equal(detailRes.success, true);
+    assert.equal(detailRes.data.account.email, 'editor@dtks.in');
+
+    const createRes = await authService.createAdminUser({
+      name: 'Invited Editor',
       email: 'editor@dtks.in',
-      password: 'StrongPassword#2026',
+      password: 'ShouldNotBeSentPassword',
       role: 'editor',
     });
-    assert.equal(created.success, true);
-    assert.equal(created.data.admin.email, 'editor@dtks.in');
+    assert.equal(createRes.success, true);
+    const createCall = calls.find((c) => c.url.endsWith('/admin/accounts') && c.method === 'POST');
+    assert.deepEqual(createCall.body, { name: 'Invited Editor', email: 'editor@dtks.in', role: 'editor' });
+
+    const partialRes = await authService.createAdminUser({
+      name: 'Partial Admin',
+      email: 'partial@dtks.in',
+      role: 'admin',
+    });
+    assert.equal(partialRes.success, false);
+    assert.equal(partialRes.accountCreated, true);
+    assert.equal(partialRes.partialAccount.id, 'adm-partial');
+
+    const editRes = await authService.updateAdminUser('adm-2', { name: 'Renamed Editor', role: 'admin', isActive: false });
+    assert.equal(editRes.success, true);
+    const editCall = calls.find((c) => c.url.endsWith('/admin/accounts/adm-2') && c.method === 'PATCH');
+    assert.deepEqual(editCall.body, { name: 'Renamed Editor', role: 'admin' });
+
+    const statusRes = await authService.updateAdminUserStatus('adm-2', false);
+    assert.equal(statusRes.success, true);
+    const statusCall = calls.find((c) => c.url.endsWith('/admin/accounts/adm-2/status') && c.method === 'PATCH');
+    assert.deepEqual(statusCall.body, { isActive: false });
+
+    const resendRes = await authService.resendAdminInvite('adm-2');
+    assert.equal(resendRes.success, true);
+
+    const revokeRes = await authService.revokeAdminSessions('adm-2');
+    assert.equal(revokeRes.success, true);
+
+    // Accepting invitation must clear any stale admin session
+    assert.ok(getAdminAuthSession());
+    const acceptRes = await authService.acceptAdminInvite({
+      token: 'invite-tok-123',
+      password: 'StrongPassword#2026',
+      confirmPassword: 'StrongPassword#2026',
+    });
+    assert.equal(acceptRes.success, true);
+    assert.equal(getAdminAuthSession(), null);
+    const acceptCall = calls.find((c) => c.url.endsWith('/auth/accept-invite'));
+    assert.deepEqual(acceptCall.body, {
+      token: 'invite-tok-123',
+      password: 'StrongPassword#2026',
+      confirmPassword: 'StrongPassword#2026',
+    });
   } finally {
     globalThis.fetch = originalFetch;
     clearAdminAuthSession();
@@ -1119,6 +1311,215 @@ test('Client and Admin sessions remain strictly isolated across storage, CSRF, a
 
   clearAdminAuthSession();
   assert.equal(storage.getItem('dtks_admin_auth_session_v1'), null);
+});
+
+test('Client API auth fixes: confirmPassword on register & reset, /client/auth/profile, change-password session clear, and allDevices logout', async () => {
+  createMockLocalStorage();
+  const sessionStore = new Map();
+  globalThis.window.sessionStorage = {
+    getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
+    setItem: (k, v) => sessionStore.set(k, String(v)),
+    removeItem: (k) => sessionStore.delete(k),
+  };
+  clearClientAuthSession();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const urlStr = String(url);
+    const method = init.method || 'GET';
+    const body = init.body ? JSON.parse(init.body) : null;
+    calls.push({ url: urlStr, method, body, headers: init.headers || {} });
+
+    if (urlStr.endsWith('/client/auth/register') && method === 'POST') {
+      if (body?.email === 'emailfail@kashmir.in') {
+        return {
+          ok: false,
+          status: 502,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: {
+              code: 'VERIFICATION_EMAIL_FAILED',
+              message: 'Account created, verification email failed to deliver.',
+              details: { accountPendingVerification: true, verificationEmailSent: false, deliveryStatus: 'failed' },
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { client: { id: 'c-1', email: body.email }, verificationEmailSent: true } }),
+      };
+    }
+
+    if (urlStr.endsWith('/client/auth/reset-password') && method === 'POST') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { reset: true } }),
+      };
+    }
+
+    if (urlStr.endsWith('/client/auth/profile') && method === 'PATCH') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            client: {
+              id: 'cli-1',
+              fullName: body.fullName,
+              email: 'aamir@kashmir.in',
+              phone: body.phone,
+              city: body.city,
+              businessName: body.businessName,
+              emailVerified: true,
+            },
+          },
+        }),
+      };
+    }
+
+    if (urlStr.endsWith('/client/auth/change-password') && method === 'POST') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { updated: true } }),
+      };
+    }
+
+    if (urlStr.endsWith('/client/auth/logout') && method === 'POST') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { loggedOut: true } }),
+      };
+    }
+
+    if (urlStr.endsWith('/client/orders') && method === 'GET') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { orders: [{ id: 'ord-1', referenceId: 'DKS-2026-0001', projectName: 'Craft Store', status: 'In Review' }] },
+        }),
+      };
+    }
+
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } }),
+    };
+  };
+
+  try {
+    // 1. Registration sends confirmPassword
+    const regOk = await clientAuthService.register({
+      fullName: 'Aamir Khan',
+      email: 'aamir@kashmir.in',
+      phone: '+91 94190 12345',
+      password: 'Password123!',
+      confirmPassword: 'Password123!',
+      acceptTerms: true,
+    });
+    assert.equal(regOk.success, true);
+    assert.equal(calls[0].body.confirmPassword, 'Password123!');
+
+    // 2. Partial registration email delivery failure
+    const regPartial = await clientAuthService.register({
+      fullName: 'Email Fail User',
+      email: 'emailfail@kashmir.in',
+      phone: '+91 94190 12345',
+      password: 'Password123!',
+      confirmPassword: 'Password123!',
+      acceptTerms: true,
+    });
+    assert.equal(regPartial.success, false);
+    assert.equal(regPartial.accountPendingVerification, true);
+    assert.equal(regPartial.verificationEmailSent, false);
+
+    // 3. Reset password sends confirmPassword
+    const resetRes = await clientAuthService.resetPassword({
+      token: 'rst-tok-1',
+      newPassword: 'NewPassword#2026',
+      confirmPassword: 'NewPassword#2026',
+    });
+    assert.equal(resetRes.success, true);
+    const resetCall = calls.find((c) => c.url.endsWith('/client/auth/reset-password'));
+    assert.deepEqual(resetCall.body, {
+      token: 'rst-tok-1',
+      newPassword: 'NewPassword#2026',
+      confirmPassword: 'NewPassword#2026',
+    });
+
+    // 4. Authenticated profile update & orders envelope parsing
+    setClientAuthSession({
+      accessToken: 'cli-tok-1',
+      refreshToken: 'cli-ref-1',
+      csrfToken: 'cli-csrf-1',
+      client: { id: 'cli-1', fullName: 'Aamir', email: 'aamir@kashmir.in', emailVerified: true },
+    });
+
+    const profRes = await clientAuthService.updateProfile({
+      fullName: 'Aamir Khan',
+      phone: '+91 94190 12345',
+      city: 'Srinagar',
+      businessName: 'Kashmir Crafts',
+    });
+    assert.equal(profRes.success, true);
+    assert.equal(getClientAuthSession().client.city, 'Srinagar');
+    const profCall = calls.find((c) => c.url.endsWith('/client/auth/profile'));
+    assert.equal(profCall.method, 'PATCH');
+
+    const ordersRes = await clientAccountService.listOrders();
+    assert.equal(ordersRes.success, true);
+    assert.equal(ordersRes.data.length, 1);
+
+    // 5. Change password calls /client/auth/change-password and clears client session
+    const chgRes = await clientAuthService.changePassword({
+      currentPassword: 'Password123!',
+      newPassword: 'UpdatedPassword#2026',
+    });
+    assert.equal(chgRes.success, true);
+    assert.equal(getClientAuthSession(), null);
+
+    // 6. All-device revocation calls POST /client/auth/logout with { allDevices: true } + auth headers and clears session
+    setClientAuthSession({
+      accessToken: 'cli-tok-2',
+      refreshToken: 'cli-ref-2',
+      csrfToken: 'cli-csrf-2',
+      client: { id: 'cli-1', email: 'aamir@kashmir.in', emailVerified: true },
+    });
+    const revokeRes = await clientAuthService.revokeAllSessions();
+    assert.equal(revokeRes.success, true);
+    assert.equal(getClientAuthSession(), null);
+    const revokeCall = calls.find((c) => c.url.endsWith('/client/auth/logout') && c.body?.allDevices === true);
+    assert.ok(revokeCall);
+    assert.deepEqual(revokeCall.body, { allDevices: true });
+    assert.equal(revokeCall.headers.Authorization, 'Bearer cli-tok-2');
+    assert.equal(revokeCall.headers['X-CSRF-Token'], 'cli-csrf-2');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearClientAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
 });
 
 test('Client auth lifecycle works in local_demo mode without storing plaintext passwords and fails honestly in API mode', async () => {
@@ -1194,6 +1595,7 @@ test('Client auth lifecycle works in local_demo mode without storing plaintext p
   const resetRes = await clientAuthService.resetPassword({
     token: forgotRes.data.localResetToken,
     newPassword: newSecret,
+    confirmPassword: newSecret,
   });
   assert.equal(resetRes.success, true);
 

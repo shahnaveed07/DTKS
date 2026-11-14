@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Search,
   UserPlus,
@@ -6,10 +7,12 @@ import {
   Edit3,
   Power,
   KeyRound,
-  Trash2,
+  Mail,
   X,
   RefreshCw,
   ShieldAlert,
+  AlertTriangle,
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -22,7 +25,6 @@ import {
   formatAdminRole,
   validateAdminAccountForm,
 } from '../../utils/authValidation.js';
-import { PasswordInput } from '../../components/auth/PasswordStrengthMeter.jsx';
 import SEO from '../../components/common/SEO.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
@@ -37,6 +39,35 @@ function formatDateTime(value) {
     month: 'short',
     day: 'numeric',
   });
+}
+
+function getAccountStatusDisplay(admin) {
+  if (admin?.invitePending && admin?.inviteExpired) {
+    return {
+      label: 'Invitation Expired',
+      textClass: 'text-red-600',
+      description: 'Invitation link expired before setup was completed. Resend an invitation.',
+    };
+  }
+  if (admin?.invitePending) {
+    return {
+      label: 'Invitation Pending',
+      textClass: 'text-amber-700',
+      description: 'Invited administrator has not set a password or accepted the invitation yet.',
+    };
+  }
+  if (admin?.isActive) {
+    return {
+      label: 'Active',
+      textClass: 'text-[#16834A]',
+      description: 'Account is active and permitted to sign in.',
+    };
+  }
+  return {
+    label: 'Inactive',
+    textClass: 'text-red-600',
+    description: 'Account is deactivated and blocked from signing in.',
+  };
 }
 
 export default function AdminAccountsPage() {
@@ -56,7 +87,7 @@ export default function AdminAccountsPage() {
   const canView = canViewAdminAccounts(currentRole);
   const canManage = canManageAdminAccounts(currentRole);
 
-  const [admins, setAdmins] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -66,19 +97,22 @@ export default function AdminAccountsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
 
+  // Local dev helper banner for newly issued invite token
+  const [localInvitePreview, setLocalInvitePreview] = useState(null);
+
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [inviteDeliveryIssue, setInviteDeliveryIssue] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
   const [editingAdmin, setEditingAdmin] = useState(null);
   const [viewingAdmin, setViewingAdmin] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
 
-  // Form state
+  // Form state (invitation creation has name, email, role ONLY — no initial password)
   const [formValues, setFormValues] = useState({
     name: '',
     email: '',
-    password: '',
     role: 'editor',
-    isActive: true,
   });
   const [formErrors, setFormErrors] = useState({});
   const [formServerError, setFormServerError] = useState('');
@@ -104,10 +138,10 @@ export default function AdminAccountsPage() {
         statusCode: res.statusCode,
         errorCode: res.errorCode,
       });
-      setAdmins([]);
+      setAccounts([]);
     } else {
-      const list = Array.isArray(res.data?.admins) ? res.data.admins : [];
-      setAdmins(list);
+      const list = Array.isArray(res.data?.accounts) ? res.data.accounts : [];
+      setAccounts(list);
       setPagination(res.data?.pagination || null);
     }
     setLoading(false);
@@ -117,32 +151,32 @@ export default function AdminAccountsPage() {
     fetchAdmins();
   }, [fetchAdmins]);
 
-  // Client-side fallback filtering/pagination if backend returns the full unpaginated array
+  // Client-side fallback filtering if backend omits pagination
   const displayedAdmins = useMemo(() => {
-    if (pagination) return admins;
+    if (pagination) return accounts;
     const q = search.trim().toLowerCase();
-    return admins.filter((item) => {
+    return accounts.filter((item) => {
       if (roleFilter !== 'all' && item.role !== roleFilter) return false;
-      if (statusFilter === 'active' && !item.isActive) return false;
-      if (statusFilter === 'inactive' && item.isActive) return false;
+      if (statusFilter === 'active' && (item.invitePending || !item.isActive)) return false;
+      if (statusFilter === 'inactive' && (item.invitePending || item.isActive)) return false;
+      if (statusFilter === 'pending' && !item.invitePending) return false;
       if (q) {
         const hay = `${item.name} ${item.email} ${item.role}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [admins, pagination, search, roleFilter, statusFilter]);
+  }, [accounts, pagination, search, roleFilter, statusFilter]);
 
   const openCreateModal = () => {
     setFormValues({
       name: '',
       email: '',
-      password: '',
       role: 'editor',
-      isActive: true,
     });
     setFormErrors({});
     setFormServerError('');
+    setInviteDeliveryIssue(null);
     setShowCreateModal(true);
   };
 
@@ -150,9 +184,7 @@ export default function AdminAccountsPage() {
     setFormValues({
       name: admin.name || '',
       email: admin.email || '',
-      password: '',
       role: admin.role || 'editor',
-      isActive: Boolean(admin.isActive),
     });
     setFormErrors({});
     setFormServerError('');
@@ -164,10 +196,36 @@ export default function AdminAccountsPage() {
     if (isApiMode) {
       setViewLoading(true);
       const res = await authService.getAdminUser(admin.id);
-      if (res.success && res.data?.admin) {
-        setViewingAdmin(res.data.admin);
+      if (res.success && res.data?.account) {
+        setViewingAdmin(res.data.account);
       }
       setViewLoading(false);
+    }
+  };
+
+  const handleResendInvite = async (admin) => {
+    if (!canManage || !admin?.id || resendingId) return;
+    setResendingId(admin.id);
+    try {
+      const res = await authService.resendAdminInvite(admin.id);
+      if (!res.success) {
+        addToast(res.message || `Failed sending invitation email to ${admin.email}.`, 'error');
+        return;
+      }
+      addToast(`Invitation resent to ${admin.email}.`, 'success');
+      if (res.data?.localInviteToken) {
+        setLocalInvitePreview({
+          email: admin.email,
+          token: res.data.localInviteToken,
+        });
+      }
+      if (inviteDeliveryIssue?.account?.id === admin.id) {
+        setInviteDeliveryIssue(null);
+        setShowCreateModal(false);
+      }
+      await fetchAdmins();
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -178,7 +236,9 @@ export default function AdminAccountsPage() {
     setFormServerError('');
 
     const validation = validateAdminAccountForm({
-      ...formValues,
+      name: formValues.name,
+      email: formValues.email,
+      role: formValues.role,
       isEdit: false,
     });
     if (!validation.isValid) {
@@ -188,18 +248,45 @@ export default function AdminAccountsPage() {
 
     setSubmitting(true);
     try {
-      const res = await authService.createAdminUser({
-        ...validation.data,
-        isActive: formValues.isActive,
-      });
+      const res = await authService.createAdminUser(validation.data);
+
+      // Handle partial creation where backend created the account despite invitation email failure
+      if (
+        (!res.success && res.accountCreated) ||
+        (res.success && res.data?.inviteEmailSent === false)
+      ) {
+        const createdAccount = res.partialAccount || res.data?.account || {
+          id: null,
+          name: validation.data.name,
+          email: validation.data.email,
+          role: validation.data.role,
+          invitePending: true,
+        };
+        await fetchAdmins();
+        setInviteDeliveryIssue({
+          account: createdAccount,
+          message:
+            res.message ||
+            `Account for ${validation.data.email} was created and is pending invitation delivery, but the invitation email could not be sent.`,
+        });
+        return;
+      }
+
       if (!res.success) {
         if (res.details && typeof res.details === 'object') {
           setFormErrors(res.details);
         }
-        setFormServerError(res.message || 'Unable to create administrator account.');
+        setFormServerError(res.message || 'Unable to send administrator invitation.');
         return;
       }
-      addToast(`Administrator account for ${validation.data.email} created.`, 'success');
+
+      if (res.data?.localInviteToken) {
+        setLocalInvitePreview({
+          email: validation.data.email,
+          token: res.data.localInviteToken,
+        });
+      }
+      addToast(`Invitation sent to ${validation.data.email}.`, 'success');
       setShowCreateModal(false);
       await fetchAdmins();
     } finally {
@@ -214,7 +301,8 @@ export default function AdminAccountsPage() {
     setFormServerError('');
 
     const validation = validateAdminAccountForm({
-      ...formValues,
+      name: formValues.name,
+      role: formValues.role,
       isEdit: true,
     });
     if (!validation.isValid) {
@@ -231,6 +319,9 @@ export default function AdminAccountsPage() {
           role: validation.data.role,
         });
         if (!res.success) {
+          if (res.details && typeof res.details === 'object') {
+            setFormErrors(res.details);
+          }
           setFormServerError(res.message || 'Failed updating administrator account.');
           return;
         }
@@ -257,7 +348,7 @@ export default function AdminAccountsPage() {
   };
 
   const handleToggleActive = (admin) => {
-    if (!canManage) return;
+    if (!canManage || admin.invitePending) return;
     const nextState = !admin.isActive;
     requestConfirm({
       title: nextState ? `Activate ${admin.name}?` : `Deactivate ${admin.name}?`,
@@ -267,7 +358,7 @@ export default function AdminAccountsPage() {
       confirmLabel: nextState ? 'Activate Account' : 'Deactivate Account',
       variant: nextState ? 'primary' : 'danger',
       onConfirm: async () => {
-        const res = await authService.updateAdminUser(admin.id, { isActive: nextState });
+        const res = await authService.updateAdminUserStatus(admin.id, nextState);
         if (!res.success) {
           addToast(res.message || 'Failed updating account status.', 'error');
           return;
@@ -276,13 +367,16 @@ export default function AdminAccountsPage() {
           nextState ? `${admin.email} activated.` : `${admin.email} deactivated.`,
           nextState ? 'success' : 'info'
         );
+        if (viewingAdmin?.id === admin.id && res.data?.account) {
+          setViewingAdmin(res.data.account);
+        }
         await fetchAdmins();
       },
     });
   };
 
   const handleRevokeSessions = (admin) => {
-    if (!canManage) return;
+    if (!canManage || admin.invitePending) return;
     requestConfirm({
       title: `Revoke active sessions for ${admin.name}?`,
       message: `${admin.email} will be signed out across all browsers and devices and must sign in again.`,
@@ -295,26 +389,6 @@ export default function AdminAccountsPage() {
           return;
         }
         addToast(`Active sessions revoked for ${admin.email}.`, 'info');
-        await fetchAdmins();
-      },
-    });
-  };
-
-  const handleDeleteAdmin = (admin) => {
-    if (!canManage) return;
-    requestConfirm({
-      title: `Delete administrator ${admin.name}?`,
-      message: `This permanently deletes ${admin.email}. Consider deactivating instead if you want to retain audit history.`,
-      confirmLabel: 'Delete Account',
-      variant: 'danger',
-      onConfirm: async () => {
-        const res = await authService.deleteAdminUser(admin.id);
-        if (!res.success) {
-          addToast(res.message || 'Failed deleting administrator account.', 'error');
-          return;
-        }
-        addToast(`Administrator ${admin.email} removed.`, 'info');
-        if (viewingAdmin?.id === admin.id) setViewingAdmin(null);
         await fetchAdmins();
       },
     });
@@ -350,7 +424,7 @@ export default function AdminAccountsPage() {
             </h1>
             <p className="mt-1 text-sm text-[#64756B]">
               {canManage
-                ? 'Manage DTKS administrator accounts, roles, activation status, and active sessions.'
+                ? 'Invite administrators, manage roles, activate or deactivate access, and revoke active sessions.'
                 : 'Read-only directory of DTKS administrator accounts and assigned roles.'}
             </p>
           </div>
@@ -362,7 +436,7 @@ export default function AdminAccountsPage() {
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap shrink-0"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Create Admin Account</span>
+              <span>Invite Admin</span>
             </button>
           )}
         </div>
@@ -370,7 +444,37 @@ export default function AdminAccountsPage() {
         {!canManage && (
           <div className="rounded-xl border border-[#E3EBE5] bg-[#E8F5EC]/60 px-4 py-3 text-xs text-[#17231C]">
             Signed in as <span className="font-semibold">{formatAdminRole(currentRole)}</span>.
-            Account creation, role elevation, deactivation, and session revocation are restricted to Super Admins.
+            Invitations, role changes, account activation/deactivation, and session revocation are restricted to Super Admins.
+          </div>
+        )}
+
+        {localInvitePreview && (
+          <div className="rounded-xl border border-[#16834A]/30 bg-[#E8F5EC]/70 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs text-[#116438] space-y-0.5">
+              <p className="font-semibold">
+                Local Development Invitation Link ({localInvitePreview.email})
+              </p>
+              <p className="text-[#64756B]">
+                Open the invitation acceptance route to test password setup and activation locally.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Link
+                to={`/admin/accept-invite?token=${encodeURIComponent(localInvitePreview.token)}`}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#16834A] hover:underline"
+              >
+                <span>Accept Invite</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setLocalInvitePreview(null)}
+                aria-label="Dismiss invitation link notice"
+                className="p-1 rounded text-[#64756B] hover:text-[#17231C]"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -421,6 +525,7 @@ export default function AdminAccountsPage() {
               <option value="all">All Statuses</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+              <option value="pending">Invitation Pending</option>
             </select>
           </div>
         </div>
@@ -473,47 +578,50 @@ export default function AdminAccountsPage() {
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-[#E3EBE5] bg-[#E8F5EC]/50 text-xs text-[#116438]">
-                    <th className="py-3 px-4 font-semibold">Admin Name</th>
-                    <th className="py-3 px-4 font-semibold">Email</th>
-                    <th className="py-3 px-4 font-semibold">Role</th>
-                    <th className="py-3 px-4 font-semibold">Status</th>
-                    <th className="py-3 px-4 font-semibold">Created</th>
-                    <th className="py-3 px-4 font-semibold">Last Login</th>
+                    <th className="py-3 px-4 font-semibold">Administrator</th>
+                    <th className="py-3 px-3 font-semibold">Role</th>
+                    <th className="py-3 px-3 font-semibold">Status</th>
+                    <th className="py-3 px-3 font-semibold hidden lg:table-cell">Created</th>
+                    <th className="py-3 px-3 font-semibold hidden md:table-cell">Last Login</th>
                     <th className="py-3 px-4 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E3EBE5]">
                   {displayedAdmins.map((admin) => {
                     const isSelf = sessionAdmin?.id && admin.id === sessionAdmin.id;
+                    const statusDisplay = getAccountStatusDisplay(admin);
                     return (
                       <tr key={admin.id} className="hover:bg-[#F7FAF7] transition-colors">
-                        <td className="py-3.5 px-4 font-semibold text-[#17231C]">
-                          {admin.name}
-                          {isSelf && (
-                            <span className="ml-2 text-xs font-normal text-[#16834A]">(You)</span>
-                          )}
+                        <td className="py-3.5 px-4 min-w-[200px] max-w-[280px]">
+                          <div className="font-semibold text-[#17231C] leading-snug">
+                            {admin.name}
+                            {isSelf && (
+                              <span className="ml-2 text-xs font-normal text-[#16834A]">(You)</span>
+                            )}
+                          </div>
+                          <div
+                            className="text-xs text-[#64756B] truncate mt-0.5"
+                            title={admin.email}
+                          >
+                            {admin.email}
+                          </div>
                         </td>
-                        <td className="py-3.5 px-4 text-[#64756B]">{admin.email}</td>
-                        <td className="py-3.5 px-4 text-xs font-medium text-[#17231C] whitespace-nowrap">
+                        <td className="py-3.5 px-3 text-xs font-medium text-[#17231C] whitespace-nowrap">
                           {formatAdminRole(admin.role)}
                         </td>
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span
-                            className={`text-xs font-semibold ${
-                              admin.isActive ? 'text-[#16834A]' : 'text-red-600'
-                            }`}
-                          >
-                            {admin.isActive ? 'Active' : 'Inactive'}
+                        <td className="py-3.5 px-3 whitespace-nowrap">
+                          <span className={`text-xs font-semibold ${statusDisplay.textClass}`}>
+                            {statusDisplay.label}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-mono-tabular text-xs text-[#64756B] whitespace-nowrap">
+                        <td className="py-3.5 px-3 font-mono-tabular text-xs text-[#64756B] whitespace-nowrap hidden lg:table-cell">
                           {formatDateTime(admin.createdAt)}
                         </td>
-                        <td className="py-3.5 px-4 font-mono-tabular text-xs text-[#64756B] whitespace-nowrap">
+                        <td className="py-3.5 px-3 font-mono-tabular text-xs text-[#64756B] whitespace-nowrap hidden md:table-cell">
                           {formatDateTime(admin.lastLoginAt)}
                         </td>
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1.5">
+                          <div className="inline-flex items-center justify-end gap-1.5">
                             <button
                               type="button"
                               onClick={() => openViewModal(admin)}
@@ -531,11 +639,28 @@ export default function AdminAccountsPage() {
                                   onClick={() => openEditModal(admin)}
                                   aria-label={`Edit ${admin.name}`}
                                   className="p-1.5 rounded-lg border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A] transition-colors"
-                                  title="Edit account & role"
+                                  title="Edit name & role"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
-                                {!isSelf && (
+
+                                {admin.invitePending && (
+                                  <button
+                                    type="button"
+                                    disabled={resendingId === admin.id}
+                                    onClick={() => handleResendInvite(admin)}
+                                    aria-label={`Resend invitation to ${admin.name}`}
+                                    title="Resend invitation email"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                                  >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    <span>
+                                      {resendingId === admin.id ? 'Sending...' : 'Resend Invite'}
+                                    </span>
+                                  </button>
+                                )}
+
+                                {!isSelf && !admin.invitePending && (
                                   <>
                                     <button
                                       type="button"
@@ -545,7 +670,9 @@ export default function AdminAccountsPage() {
                                           ? `Deactivate ${admin.name}`
                                           : `Activate ${admin.name}`
                                       }
-                                      title={admin.isActive ? 'Deactivate account' : 'Activate account'}
+                                      title={
+                                        admin.isActive ? 'Deactivate account' : 'Activate account'
+                                      }
                                       className="p-1.5 rounded-lg border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A] transition-colors"
                                     >
                                       <Power className="w-3.5 h-3.5" />
@@ -558,15 +685,6 @@ export default function AdminAccountsPage() {
                                       className="p-1.5 rounded-lg border border-[#E3EBE5] text-amber-700 hover:bg-amber-50 transition-colors"
                                     >
                                       <KeyRound className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteAdmin(admin)}
-                                      aria-label={`Delete ${admin.name}`}
-                                      title="Delete account"
-                                      className="p-1.5 rounded-lg border border-[#E3EBE5] text-red-600 hover:bg-red-50 transition-colors"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </>
                                 )}
@@ -627,7 +745,7 @@ export default function AdminAccountsPage() {
         )}
       </div>
 
-      {/* Create Admin Account Modal */}
+      {/* Invite Admin Modal */}
       {showCreateModal && canManage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#17231C]/45 backdrop-blur-xs"
@@ -638,11 +756,14 @@ export default function AdminAccountsPage() {
           <div className="w-full max-w-lg rounded-xl border border-[#E3EBE5] bg-white p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between">
               <h2 id="create-admin-title" className="font-display text-lg font-bold text-[#17231C]">
-                Create Admin Account
+                {inviteDeliveryIssue ? 'Invitation Pending Delivery' : 'Invite Administrator'}
               </h2>
               <button
                 type="button"
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setInviteDeliveryIssue(null);
+                }}
                 aria-label="Close modal"
                 className="p-1 rounded text-[#64756B] hover:text-[#17231C]"
               >
@@ -650,56 +771,96 @@ export default function AdminAccountsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4" noValidate>
-              {formServerError && (
-                <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
-                  {formServerError}
+            {inviteDeliveryIssue ? (
+              <div className="space-y-4">
+                <div
+                  role="status"
+                  className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3 text-xs text-amber-900"
+                >
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">
+                      Account created as Invitation Pending ({inviteDeliveryIssue.account?.email})
+                    </p>
+                    <p className="leading-relaxed text-amber-800">
+                      {inviteDeliveryIssue.message}
+                    </p>
+                  </div>
                 </div>
-              )}
 
-              <div>
-                <label htmlFor="create-admin-name" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Full Name<span className="text-red-600 ml-0.5">*</span>
-                </label>
-                <input
-                  id="create-admin-name"
-                  type="text"
-                  value={formValues.name}
-                  onChange={(e) => setFormValues((v) => ({ ...v, name: e.target.value }))}
-                  placeholder="Enter full name"
-                  className="w-full px-3.5 py-2 text-sm rounded-lg border border-[#E3EBE5] text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                />
-                {formErrors.name && <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>}
+                <div className="flex items-center justify-end gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setInviteDeliveryIssue(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
+                  >
+                    Close
+                  </button>
+                  {inviteDeliveryIssue.account?.id && (
+                    <button
+                      type="button"
+                      disabled={resendingId === inviteDeliveryIssue.account.id}
+                      onClick={() => handleResendInvite(inviteDeliveryIssue.account)}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 text-white"
+                    >
+                      <Mail className="w-4 h-4" />
+                      <span>
+                        {resendingId === inviteDeliveryIssue.account.id
+                          ? 'Resending...'
+                          : 'Resend Invitation'}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
+            ) : (
+              <form onSubmit={handleCreateSubmit} className="space-y-4" noValidate>
+                <p className="text-xs text-[#64756B] leading-relaxed">
+                  The invited administrator will receive an email link to set their own password and activate their account.
+                </p>
 
-              <div>
-                <label htmlFor="create-admin-email" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Administrator Email<span className="text-red-600 ml-0.5">*</span>
-                </label>
-                <input
-                  id="create-admin-email"
-                  type="email"
-                  value={formValues.email}
-                  onChange={(e) => setFormValues((v) => ({ ...v, email: e.target.value }))}
-                  placeholder="admin@dreamtechkashmirsolutions.studio"
-                  className="w-full px-3.5 py-2 text-sm rounded-lg border border-[#E3EBE5] text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                />
-                {formErrors.email && <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>}
-              </div>
+                {formServerError && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700"
+                  >
+                    {formServerError}
+                  </div>
+                )}
 
-              <PasswordInput
-                id="create-admin-password"
-                label="Initial Password"
-                value={formValues.password}
-                onChange={(e) => setFormValues((v) => ({ ...v, password: e.target.value }))}
-                placeholder="Minimum 8 characters"
-                autoComplete="new-password"
-                required
-                showStrength
-                error={formErrors.password}
-              />
+                <div>
+                  <label htmlFor="create-admin-name" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Full Name<span className="text-red-600 ml-0.5">*</span>
+                  </label>
+                  <input
+                    id="create-admin-name"
+                    type="text"
+                    value={formValues.name}
+                    onChange={(e) => setFormValues((v) => ({ ...v, name: e.target.value }))}
+                    placeholder="Enter full name"
+                    className="w-full px-3.5 py-2 text-sm rounded-lg border border-[#E3EBE5] text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                  {formErrors.name && <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>}
+                </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="create-admin-email" className="block text-xs font-semibold text-[#17231C] mb-1">
+                    Email<span className="text-red-600 ml-0.5">*</span>
+                  </label>
+                  <input
+                    id="create-admin-email"
+                    type="email"
+                    value={formValues.email}
+                    onChange={(e) => setFormValues((v) => ({ ...v, email: e.target.value }))}
+                    placeholder="admin@dreamtechkashmirsolutions.studio"
+                    className="w-full px-3.5 py-2 text-sm rounded-lg border border-[#E3EBE5] text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                  />
+                  {formErrors.email && <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>}
+                </div>
+
                 <div>
                   <label htmlFor="create-admin-role" className="block text-xs font-semibold text-[#17231C] mb-1">
                     Role
@@ -714,38 +875,28 @@ export default function AdminAccountsPage() {
                     <option value="admin">Admin</option>
                     <option value="super_admin">Super Admin</option>
                   </select>
+                  {formErrors.role && <p className="mt-1 text-xs text-red-600">{formErrors.role}</p>}
                 </div>
 
-                <div className="flex items-end pb-2">
-                  <label className="inline-flex items-center gap-2 text-xs font-medium text-[#17231C]">
-                    <input
-                      type="checkbox"
-                      checked={formValues.isActive}
-                      onChange={(e) => setFormValues((v) => ({ ...v, isActive: e.target.checked }))}
-                      className="accent-[#16834A]"
-                    />
-                    <span>Account active immediately</span>
-                  </label>
+                <div className="pt-2 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 text-white"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>{submitting ? 'Sending Invitation...' : 'Send Invitation'}</span>
+                  </button>
                 </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-sm font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 text-white"
-                >
-                  {submitting ? 'Creating...' : 'Create Account'}
-                </button>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -885,12 +1036,24 @@ export default function AdminAccountsPage() {
                 </div>
                 <div>
                   <dt className="text-xs text-[#64756B]">Status</dt>
-                  <dd
-                    className={`mt-0.5 font-semibold ${
-                      viewingAdmin.isActive ? 'text-[#16834A]' : 'text-red-600'
-                    }`}
-                  >
-                    {viewingAdmin.isActive ? 'Active' : 'Inactive'}
+                  <dd className={`mt-0.5 font-semibold ${getAccountStatusDisplay(viewingAdmin).textClass}`}>
+                    {getAccountStatusDisplay(viewingAdmin).label}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[#64756B]">Invitation Accepted</dt>
+                  <dd className="mt-0.5 font-mono-tabular text-xs text-[#17231C]">
+                    {viewingAdmin.inviteAcceptedAt
+                      ? formatDateTime(viewingAdmin.inviteAcceptedAt)
+                      : viewingAdmin.invitePending
+                      ? 'Pending'
+                      : '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[#64756B]">Invited By</dt>
+                  <dd className="mt-0.5 font-mono-tabular text-xs text-[#17231C] truncate">
+                    {viewingAdmin.invitedByAdminId || '—'}
                   </dd>
                 </div>
                 <div>
@@ -905,19 +1068,40 @@ export default function AdminAccountsPage() {
                     {formatDateTime(viewingAdmin.lastLoginAt)}
                   </dd>
                 </div>
+                {viewingAdmin.deactivatedAt && (
+                  <div className="col-span-2">
+                    <dt className="text-xs text-[#64756B]">Deactivated At</dt>
+                    <dd className="mt-0.5 font-mono-tabular text-xs text-red-600">
+                      {formatDateTime(viewingAdmin.deactivatedAt)}
+                    </dd>
+                  </div>
+                )}
               </dl>
             )}
 
-            <div className="pt-2 flex justify-end gap-3 border-t border-[#E3EBE5]">
-              {canManage && sessionAdmin?.id !== viewingAdmin.id && (
+            <div className="pt-2 flex flex-wrap justify-end gap-3 border-t border-[#E3EBE5]">
+              {canManage && viewingAdmin.invitePending && (
                 <button
                   type="button"
-                  onClick={() => handleRevokeSessions(viewingAdmin)}
-                  className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-[#E3EBE5] text-amber-700 hover:bg-amber-50"
+                  disabled={resendingId === viewingAdmin.id}
+                  onClick={() => handleResendInvite(viewingAdmin)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
                 >
-                  Revoke Sessions
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>{resendingId === viewingAdmin.id ? 'Sending...' : 'Resend Invitation'}</span>
                 </button>
               )}
+              {canManage &&
+                sessionAdmin?.id !== viewingAdmin.id &&
+                !viewingAdmin.invitePending && (
+                  <button
+                    type="button"
+                    onClick={() => handleRevokeSessions(viewingAdmin)}
+                    className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-[#E3EBE5] text-amber-700 hover:bg-amber-50"
+                  >
+                    Revoke Sessions
+                  </button>
+                )}
               <button
                 type="button"
                 onClick={() => setViewingAdmin(null)}

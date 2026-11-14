@@ -292,13 +292,23 @@ export async function clientApiRequest(endpoint, options = {}) {
       } catch {
         payload = null;
       }
+    } else {
+      try {
+        const text = await response.text();
+        if (text && text.trim().startsWith('{')) {
+          payload = JSON.parse(text);
+        }
+      } catch {
+        payload = null;
+      }
     }
 
     const isClientAuthPublicEndpoint =
       normalizedEndpoint.includes('/client/auth/login') ||
       normalizedEndpoint.includes('/client/auth/register') ||
+      normalizedEndpoint.includes('/client/auth/verify-email') ||
+      normalizedEndpoint.includes('/client/auth/resend-verification') ||
       normalizedEndpoint.includes('/client/auth/refresh') ||
-      normalizedEndpoint.includes('/client/auth/logout') ||
       normalizedEndpoint.includes('/client/auth/forgot-password') ||
       normalizedEndpoint.includes('/client/auth/reset-password');
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserPlus, CheckCircle2, MailCheck, ArrowRight } from 'lucide-react';
+import { UserPlus, CheckCircle2, MailCheck, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useClientAuth } from '../../context/ClientAuthContext.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 import { validateClientRegistrationInput } from '../../utils/authValidation.js';
@@ -52,6 +52,27 @@ export default function RegisterPage() {
     setIsSubmitting(true);
     try {
       const res = await registerClient(validation.data);
+
+      const pendingWithEmailFailure = Boolean(
+        (!res.success && res.accountPendingVerification) ||
+          (res.success && (res.verificationEmailSent === false || res.deliveryStatus === 'failed'))
+      );
+
+      if (pendingWithEmailFailure) {
+        setForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+        setRegisteredState({
+          email: validation.data.email,
+          fullName: validation.data.fullName,
+          localVerificationToken: res.data?.localVerificationToken || null,
+          emailDeliveryFailed: true,
+          deliveryMessage:
+            res.message ||
+            'Your account was created and is pending email verification, but the verification email could not be delivered right now.',
+        });
+        addToast('Account created, but verification email failed to deliver. Please resend verification.', 'error');
+        return;
+      }
+
       if (!res.success) {
         if (res.details && typeof res.details === 'object') {
           setErrors(res.details);
@@ -65,6 +86,7 @@ export default function RegisterPage() {
         email: validation.data.email,
         fullName: validation.data.fullName,
         localVerificationToken: res.data?.localVerificationToken || null,
+        emailDeliveryFailed: false,
       });
       addToast('Registration submitted. Check your email to verify your account.', 'success');
     } finally {
@@ -81,12 +103,13 @@ export default function RegisterPage() {
         addToast(res.message || 'Unable to resend verification email.', 'error');
         return;
       }
-      if (res.data?.localVerificationToken) {
-        setRegisteredState((prev) => ({
-          ...prev,
-          localVerificationToken: res.data.localVerificationToken,
-        }));
-      }
+      setRegisteredState((prev) => ({
+        ...prev,
+        emailDeliveryFailed: false,
+        ...(res.data?.localVerificationToken
+          ? { localVerificationToken: res.data.localVerificationToken }
+          : {}),
+      }));
       addToast('Verification email instructions sent.', 'info');
     } finally {
       setResending(false);
@@ -123,17 +146,50 @@ export default function RegisterPage() {
           </div>
         ) : registeredState ? (
           <div className="rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-5">
-            <div className="w-11 h-11 rounded-lg bg-[#E8F5EC] text-[#16834A] flex items-center justify-center">
-              <MailCheck className="w-5 h-5" />
+            <div
+              className={`w-11 h-11 rounded-lg flex items-center justify-center ${
+                registeredState.emailDeliveryFailed
+                  ? 'bg-amber-50 text-amber-700'
+                  : 'bg-[#E8F5EC] text-[#16834A]'
+              }`}
+            >
+              {registeredState.emailDeliveryFailed ? (
+                <AlertTriangle className="w-5 h-5" />
+              ) : (
+                <MailCheck className="w-5 h-5" />
+              )}
             </div>
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold text-[#16834A]">Verification Required</p>
+              <p
+                className={`text-xs font-semibold ${
+                  registeredState.emailDeliveryFailed ? 'text-amber-700' : 'text-[#16834A]'
+                }`}
+              >
+                {registeredState.emailDeliveryFailed
+                  ? 'Account Created — Verification Email Failed'
+                  : 'Verification Required'}
+              </p>
               <h1 className="font-display text-2xl font-bold text-[#17231C]">
-                Check Your Email to Verify
+                {registeredState.emailDeliveryFailed
+                  ? 'Resend Verification Email'
+                  : 'Check Your Email to Verify'}
               </h1>
               <p className="text-sm text-[#64756B] leading-relaxed">
-                We created an account for <span className="font-semibold text-[#17231C]">{registeredState.email}</span>.
-                Confirm your email address using the verification link sent to your inbox before signing in.
+                {registeredState.emailDeliveryFailed ? (
+                  <>
+                    An account for{' '}
+                    <span className="font-semibold text-[#17231C]">{registeredState.email}</span>{' '}
+                    has been created and is awaiting email verification.{' '}
+                    {registeredState.deliveryMessage ||
+                      'We could not deliver the verification email right now. Please resend the verification link below instead of re-registering.'}
+                  </>
+                ) : (
+                  <>
+                    We created an account for{' '}
+                    <span className="font-semibold text-[#17231C]">{registeredState.email}</span>.
+                    Confirm your email address using the verification link sent to your inbox before signing in.
+                  </>
+                )}
               </p>
             </div>
 

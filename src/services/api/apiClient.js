@@ -588,7 +588,8 @@ export async function apiRequest(endpoint, options = {}) {
     const isAuthEndpoint =
       normalizedEndpoint.includes('/auth/login') ||
       normalizedEndpoint.includes('/auth/refresh') ||
-      normalizedEndpoint.includes('/auth/logout');
+      normalizedEndpoint.includes('/auth/logout') ||
+      normalizedEndpoint.includes('/auth/accept-invite');
 
     if (
       response.status === 401 &&
@@ -695,6 +696,8 @@ export async function verifyAdminSession() {
     if (existing) {
       setAdminAuthSession({ ...existing, admin: rawAdmin });
     }
+  } else if (res.statusCode === 401 || res.statusCode === 403) {
+    clearAdminAuthSession();
   }
 
   return {

@@ -20,10 +20,10 @@ export const clientAccountService = {
     if (getDataAdapterMode() === 'api') {
       const res = await clientApiRequest(API_ENDPOINTS.clientAccountOrders, { method: 'GET' });
       if (!res.success) return res;
-      const orders = Array.isArray(res.data)
-        ? res.data
-        : Array.isArray(res.data?.orders)
+      const orders = Array.isArray(res.data?.orders)
         ? res.data.orders
+        : Array.isArray(res.data)
+        ? res.data
         : [];
       return createServiceResponse(orders, res.message || 'Client orders loaded.');
     }
@@ -43,10 +43,10 @@ export const clientAccountService = {
     if (getDataAdapterMode() === 'api') {
       const res = await clientApiRequest(API_ENDPOINTS.clientAccountQuotations, { method: 'GET' });
       if (!res.success) return res;
-      const quotations = Array.isArray(res.data)
-        ? res.data
-        : Array.isArray(res.data?.quotations)
+      const quotations = Array.isArray(res.data?.quotations)
         ? res.data.quotations
+        : Array.isArray(res.data)
+        ? res.data
         : [];
       return createServiceResponse(quotations, res.message || 'Client quotations loaded.');
     }
@@ -77,10 +77,10 @@ export const clientAccountService = {
     if (getDataAdapterMode() === 'api') {
       const res = await clientApiRequest(API_ENDPOINTS.clientAccountProjects, { method: 'GET' });
       if (!res.success) return res;
-      const projects = Array.isArray(res.data)
-        ? res.data
-        : Array.isArray(res.data?.projects)
+      const projects = Array.isArray(res.data?.projects)
         ? res.data.projects
+        : Array.isArray(res.data)
+        ? res.data
         : [];
       return createServiceResponse(projects, res.message || 'Client projects loaded.');
     }

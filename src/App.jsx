@@ -30,6 +30,7 @@ import ForgotPasswordPage from './pages/Auth/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/Auth/ResetPasswordPage.jsx';
 
 const AdminLoginPage = lazy(() => import('./pages/Admin/AdminLoginPage.jsx'));
+const AdminAcceptInvitePage = lazy(() => import('./pages/Admin/AdminAcceptInvitePage.jsx'));
 const AdminDashboardPage = lazy(() => import('./pages/Admin/AdminDashboardPage.jsx'));
 const AdminOrdersPage = lazy(() => import('./pages/Admin/AdminOrdersPage.jsx'));
 const AdminPackagesPage = lazy(() => import('./pages/Admin/AdminPackagesPage.jsx'));
@@ -133,6 +134,14 @@ export function AppRoutes() {
           element={
             <Suspense fallback={<RouteModuleFallback label="Loading sign in..." />}>
               <AdminLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/accept-invite"
+          element={
+            <Suspense fallback={<RouteModuleFallback label="Loading invitation setup..." />}>
+              <AdminAcceptInvitePage />
             </Suspense>
           }
         />

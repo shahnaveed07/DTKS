@@ -121,6 +121,7 @@ export function validateClientRegistrationInput({
       email: cleanEmail,
       phone: cleanPhone,
       password: String(password || ''),
+      confirmPassword: String(confirmPassword || ''),
       acceptTerms: Boolean(acceptTerms),
     },
   };
@@ -178,6 +179,45 @@ export function validateResetPasswordInput({
     data: {
       token: cleanToken,
       newPassword: String(newPassword || ''),
+      confirmPassword: String(confirmPassword || ''),
+    },
+  };
+}
+
+export function validateAcceptInviteInput({
+  token = '',
+  password = '',
+  confirmPassword = '',
+} = {}) {
+  const errors = {};
+  const cleanToken = String(token || '').trim();
+
+  if (!cleanToken) {
+    errors.token = 'A valid administrator invitation token is required.';
+  }
+
+  const strength = evaluatePasswordStrength(password);
+  if (!password) {
+    errors.password = 'Password is required.';
+  } else if (!strength.checks.minLength) {
+    errors.password = 'Password must be at least 8 characters long.';
+  } else if (!strength.isAcceptable) {
+    errors.password = 'Include lowercase letters with at least one uppercase letter or number.';
+  }
+
+  if (!confirmPassword) {
+    errors.confirmPassword = 'Please confirm your password.';
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = 'Passwords do not match.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    data: {
+      token: cleanToken,
+      password: String(password || ''),
+      confirmPassword: String(confirmPassword || ''),
     },
   };
 }
@@ -217,7 +257,6 @@ export function validateChangePasswordInput({
 export function validateAdminAccountForm({
   name = '',
   email = '',
-  password = '',
   role = 'editor',
   isEdit = false,
 } = {}) {
@@ -231,14 +270,6 @@ export function validateAdminAccountForm({
   if (!isEdit && !isValidEmailAddress(cleanEmail)) {
     errors.email = 'Please enter a valid administrator email address.';
   }
-  if (!isEdit) {
-    const strength = evaluatePasswordStrength(password);
-    if (!password) {
-      errors.password = 'Initial password is required.';
-    } else if (!strength.checks.minLength) {
-      errors.password = 'Password must be at least 8 characters long.';
-    }
-  }
   if (!['super_admin', 'admin', 'editor'].includes(role)) {
     errors.role = 'Please select a valid administrator role.';
   }
@@ -246,12 +277,16 @@ export function validateAdminAccountForm({
   return {
     isValid: Object.keys(errors).length === 0,
     errors,
-    data: {
-      name: cleanName,
-      email: cleanEmail,
-      password: String(password || ''),
-      role,
-    },
+    data: isEdit
+      ? {
+          name: cleanName,
+          role,
+        }
+      : {
+          name: cleanName,
+          email: cleanEmail,
+          role,
+        },
   };
 }
 

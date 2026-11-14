@@ -88,6 +88,28 @@ export function ClientAuthProvider({ children }) {
     return res;
   }, []);
 
+  const changeClientPassword = useCallback(async (payload) => {
+    const res = await clientAuthService.changePassword(payload);
+    if (res.success) {
+      setClient(null);
+      setAuthStatus(
+        getClientAccessPolicy() === 'blocked_production_local' ? 'blocked' : 'unauthenticated'
+      );
+    }
+    return res;
+  }, []);
+
+  const revokeAllClientSessions = useCallback(async () => {
+    const res = await clientAuthService.revokeAllSessions();
+    if (res.success) {
+      setClient(null);
+      setAuthStatus(
+        getClientAccessPolicy() === 'blocked_production_local' ? 'blocked' : 'unauthenticated'
+      );
+    }
+    return res;
+  }, []);
+
   const value = {
     client,
     isClientAuthenticated: authStatus === 'authenticated' && Boolean(client),
@@ -103,8 +125,8 @@ export function ClientAuthProvider({ children }) {
     forgotPassword: clientAuthService.forgotPassword,
     resetPassword: clientAuthService.resetPassword,
     updateClientProfile,
-    changeClientPassword: clientAuthService.changePassword,
-    revokeAllClientSessions: clientAuthService.revokeAllSessions,
+    changeClientPassword,
+    revokeAllClientSessions,
   };
 
   return <ClientAuthContext.Provider value={value}>{children}</ClientAuthContext.Provider>;

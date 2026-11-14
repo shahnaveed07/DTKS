@@ -5,6 +5,7 @@ import {
   validateClientRegistrationInput,
   validateLoginCredentials,
   validateResetPasswordInput,
+  validateAcceptInviteInput,
   validateChangePasswordInput,
   validateAdminAccountForm,
   canViewAdminAccounts,
@@ -32,7 +33,7 @@ test('evaluatePasswordStrength scores empty, weak, fair, good, and strong passwo
   assert.equal(strong.label, 'Strong');
 });
 
-test('validateClientRegistrationInput enforces all required fields, password match, and terms', () => {
+test('validateClientRegistrationInput enforces all required fields, password match, terms, and preserves confirmPassword', () => {
   const invalid = validateClientRegistrationInput({
     fullName: 'A',
     email: 'not-an-email',
@@ -61,9 +62,10 @@ test('validateClientRegistrationInput enforces all required fields, password mat
 
   assert.equal(valid.isValid, true);
   assert.equal(valid.data.email, 'aamir@kashmircrafts.in');
+  assert.equal(valid.data.confirmPassword, 'Password123!');
 });
 
-test('validateLoginCredentials, validateResetPasswordInput, and validateChangePasswordInput validate properly', () => {
+test('validateLoginCredentials, validateResetPasswordInput, validateAcceptInviteInput, and validateChangePasswordInput validate properly', () => {
   assert.equal(validateLoginCredentials({ email: 'bad', password: '' }).isValid, false);
   assert.equal(
     validateLoginCredentials({ email: 'client@dtks.in', password: 'Secret123!' }).isValid,
@@ -79,6 +81,36 @@ test('validateLoginCredentials, validateResetPasswordInput, and validateChangePa
   assert.ok(badReset.errors.token);
   assert.ok(badReset.errors.confirmPassword);
 
+  const goodReset = validateResetPasswordInput({
+    token: 'reset-tok-1',
+    newPassword: 'Password123!',
+    confirmPassword: 'Password123!',
+  });
+  assert.equal(goodReset.isValid, true);
+  assert.equal(goodReset.data.confirmPassword, 'Password123!');
+
+  const badInvite = validateAcceptInviteInput({
+    token: '',
+    password: 'weak',
+    confirmPassword: 'other',
+  });
+  assert.equal(badInvite.isValid, false);
+  assert.ok(badInvite.errors.token);
+  assert.ok(badInvite.errors.password);
+  assert.ok(badInvite.errors.confirmPassword);
+
+  const goodInvite = validateAcceptInviteInput({
+    token: 'invite-tok-1',
+    password: 'Password123!',
+    confirmPassword: 'Password123!',
+  });
+  assert.equal(goodInvite.isValid, true);
+  assert.deepEqual(goodInvite.data, {
+    token: 'invite-tok-1',
+    password: 'Password123!',
+    confirmPassword: 'Password123!',
+  });
+
   const sameChange = validateChangePasswordInput({
     currentPassword: 'Password123!',
     newPassword: 'Password123!',
@@ -88,26 +120,42 @@ test('validateLoginCredentials, validateResetPasswordInput, and validateChangePa
   assert.ok(sameChange.errors.newPassword);
 });
 
-test('validateAdminAccountForm validates create vs edit requirements', () => {
+test('validateAdminAccountForm validates invitation-based create (name, email, role only) vs edit requirements', () => {
   const createInvalid = validateAdminAccountForm({
     name: 'X',
     email: 'bad',
-    password: '123',
     role: 'invalid',
     isEdit: false,
   });
   assert.equal(createInvalid.isValid, false);
   assert.ok(createInvalid.errors.name);
   assert.ok(createInvalid.errors.email);
-  assert.ok(createInvalid.errors.password);
   assert.ok(createInvalid.errors.role);
+  assert.equal(createInvalid.errors.password, undefined);
+
+  const createValid = validateAdminAccountForm({
+    name: 'Tariq Ahmad',
+    email: 'tariq@dtks.in',
+    role: 'admin',
+    isEdit: false,
+  });
+  assert.equal(createValid.isValid, true);
+  assert.deepEqual(createValid.data, {
+    name: 'Tariq Ahmad',
+    email: 'tariq@dtks.in',
+    role: 'admin',
+  });
 
   const editValid = validateAdminAccountForm({
     name: 'Tariq Ahmad',
-    role: 'admin',
+    role: 'super_admin',
     isEdit: true,
   });
   assert.equal(editValid.isValid, true);
+  assert.deepEqual(editValid.data, {
+    name: 'Tariq Ahmad',
+    role: 'super_admin',
+  });
 });
 
 test('RBAC visibility helpers restrict admin accounts accurately across super_admin, admin, and editor', () => {

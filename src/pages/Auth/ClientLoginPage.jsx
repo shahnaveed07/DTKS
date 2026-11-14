@@ -26,6 +26,7 @@ export default function ClientLoginPage() {
     '/account',
     '/account'
   );
+  const passwordChanged = Boolean(location.state?.passwordChanged);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -120,6 +121,15 @@ export default function ClientLoginPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              {passwordChanged && !loginError && (
+                <div
+                  role="status"
+                  className="rounded-lg border border-[#16834A]/30 bg-[#E8F5EC]/70 px-3.5 py-2.5 text-xs text-[#116438]"
+                >
+                  Your password was changed and previous sessions were signed out. Sign in with your new password to continue.
+                </div>
+              )}
+
               {loginError && (
                 <div
                   role="alert"
