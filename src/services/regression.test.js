@@ -21,6 +21,11 @@ import {
   getSubmissionMode,
   getAdminAccessPolicy,
   verifyAdminSession,
+  apiRequest,
+  loginAdmin,
+  logoutAdmin,
+  clearAdminAuthSession,
+  getCsrfToken,
 } from './api/apiClient.js';
 import { orderService } from './api/orderService.js';
 import { inquiryService } from './api/inquiryService.js';
@@ -851,4 +856,115 @@ test('Image Validation & Media Upload rejects oversized/invalid files and stores
   assert.match(typeCheck.message, /Unsupported image type/);
 
   setRuntimeEnvOverrides(null);
+});
+
+test('API Auth Client supports HttpOnly refresh cookies, X-CSRF-Token headers, automatic 401 refresh, and logout', async () => {
+  createMockLocalStorage();
+  clearAdminAuthSession();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+
+  const recordedCalls = [];
+  const originalFetch = globalThis.fetch;
+  let protectedCallCount = 0;
+
+  globalThis.fetch = async (url, init = {}) => {
+    recordedCalls.push({ url, method: init.method || 'GET', headers: init.headers || {}, credentials: init.credentials });
+
+    if (String(url).endsWith('/auth/login')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            accessToken: 'access-1',
+            csrfToken: 'csrf-1',
+            expiresIn: 900,
+            admin: { id: 'adm-1', email: 'admin@dreamtechkashmirsolutions.studio', role: 'super_admin' },
+          },
+        }),
+      };
+    }
+
+    if (String(url).endsWith('/admin/dashboard/stats')) {
+      protectedCallCount += 1;
+      if (protectedCallCount === 1) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ success: false, error: { code: 'TOKEN_EXPIRED', message: 'Expired' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { stats: { totalOrders: 3 } } }),
+      };
+    }
+
+    if (String(url).endsWith('/auth/refresh')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            accessToken: 'access-2',
+            csrfToken: 'csrf-2',
+            expiresIn: 900,
+          },
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: { loggedOut: true } }),
+    };
+  };
+
+  try {
+    const loginRes = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(loginRes.success, true);
+    assert.equal(loginRes.data.refreshToken, '');
+    assert.equal(getCsrfToken(), 'csrf-1');
+
+    // Trigger 401 -> automatic cookie+CSRF refresh -> retry with rotated accessToken
+    const statsRes = await apiRequest('/api/v1/admin/dashboard/stats');
+    assert.equal(statsRes.success, true);
+    assert.equal(statsRes.data.stats.totalOrders, 3);
+
+    const refreshCall = recordedCalls.find((c) => String(c.url).endsWith('/auth/refresh'));
+    assert.ok(refreshCall, 'Refresh endpoint must be called even without refreshToken in JSON');
+    assert.equal(refreshCall.credentials, 'include');
+    assert.equal(refreshCall.headers['X-CSRF-Token'], 'csrf-1');
+
+    const retriedStatsCall = recordedCalls.filter((c) => String(c.url).endsWith('/admin/dashboard/stats'))[1];
+    assert.equal(retriedStatsCall.headers.Authorization, 'Bearer access-2');
+
+    // Mutating request sends updated X-CSRF-Token and logout clears session
+    const logoutRes = await logoutAdmin();
+    assert.equal(logoutRes.success, true);
+    const logoutCall = recordedCalls.find((c) => String(c.url).endsWith('/auth/logout'));
+    assert.ok(logoutCall);
+    assert.equal(logoutCall.headers['X-CSRF-Token'], 'csrf-2');
+    assert.equal(getCsrfToken(), '');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
 });

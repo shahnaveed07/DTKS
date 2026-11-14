@@ -30,9 +30,32 @@ describe('DTKS Production Backend Audit & Security Test Suite (/api/v1)', () => 
   let r2Dir;
   let env;
   let accessToken = '';
-  let refreshToken = '';
+  let refreshCookie = '';
+  let csrfToken = '';
   let createdOrderId = '';
   let createdOrderRef = '';
+
+  function extractCookieValues(response) {
+    const rawCookies =
+      typeof response.headers.getSetCookie === 'function'
+        ? response.headers.getSetCookie()
+        : [];
+    const cookies = {};
+    for (const entry of rawCookies) {
+      const firstPart = String(entry || '').split(';')[0];
+      const eqIdx = firstPart.indexOf('=');
+      if (eqIdx > 0) {
+        const name = firstPart.slice(0, eqIdx).trim();
+        const val = firstPart.slice(eqIdx + 1).trim();
+        try {
+          cookies[name] = decodeURIComponent(val);
+        } catch {
+          cookies[name] = val;
+        }
+      }
+    }
+    return { rawCookies, cookies };
+  }
 
   before(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dtks-backend-audit-'));
@@ -157,7 +180,20 @@ describe('DTKS Production Backend Audit & Security Test Suite (/api/v1)', () => 
     );
 
     accessToken = loginRes.json.data.accessToken;
-    refreshToken = loginRes.json.data.refreshToken;
+    csrfToken = loginRes.json.data.csrfToken;
+    assert.equal(
+      loginRes.json.data.refreshToken,
+      undefined,
+      'Raw refreshToken must never be exposed in JSON body'
+    );
+    const { rawCookies, cookies } = extractCookieValues(loginRes.response);
+    assert.ok(cookies.dtks_refresh_token, 'Login must set dtks_refresh_token cookie');
+    assert.ok(cookies.dtks_csrf_token, 'Login must set dtks_csrf_token cookie');
+    assert.ok(
+      rawCookies.some((c) => c.startsWith('dtks_refresh_token=') && c.includes('HttpOnly')),
+      'dtks_refresh_token cookie must be HttpOnly'
+    );
+    refreshCookie = cookies.dtks_refresh_token;
   });
 
   it('3. Authentication & Invalid Credentials: Valid token accesses /auth/me; invalid credentials return 401', async () => {
@@ -194,25 +230,78 @@ describe('DTKS Production Backend Audit & Security Test Suite (/api/v1)', () => 
     assert.equal(expiredRes.json.error.code, 'TOKEN_EXPIRED');
   });
 
-  it('5. Refresh-Token Rotation & Revocation: Rotates token pair and rejects reuse of revoked refresh token', async () => {
+  it('5. Refresh-Token Rotation & Revocation: Rotates token pair via HttpOnly cookie + CSRF and rejects reuse of revoked refresh token', async () => {
+    const oldRefreshCookie = refreshCookie;
+    const oldCsrfToken = csrfToken;
+
+    // Missing CSRF header when using cookie auth must be rejected with 403
+    const missingCsrfRes = await apiRequest('/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: {
+        Cookie: `dtks_refresh_token=${encodeURIComponent(oldRefreshCookie)}; dtks_csrf_token=${encodeURIComponent(oldCsrfToken)}`,
+      },
+    });
+    assert.equal(missingCsrfRes.status, 403);
+    assert.equal(missingCsrfRes.json.error.code, 'CSRF_VALIDATION_FAILED');
+
+    // Valid cookie + X-CSRF-Token rotates tokens and sets new HttpOnly refresh cookie
     const refreshRes = await apiRequest('/api/v1/auth/refresh', {
       method: 'POST',
-      body: { refreshToken },
+      headers: {
+        Cookie: `dtks_refresh_token=${encodeURIComponent(oldRefreshCookie)}; dtks_csrf_token=${encodeURIComponent(oldCsrfToken)}`,
+        'X-CSRF-Token': oldCsrfToken,
+      },
     });
     assert.equal(refreshRes.status, 200);
     assert.ok(refreshRes.json.data.accessToken);
-    assert.ok(refreshRes.json.data.refreshToken);
-    assert.notEqual(refreshRes.json.data.refreshToken, refreshToken);
+    assert.ok(refreshRes.json.data.csrfToken);
+    assert.equal(
+      refreshRes.json.data.refreshToken,
+      undefined,
+      'Rotated refreshToken must never be exposed in JSON body'
+    );
+    const rotatedCookies = extractCookieValues(refreshRes.response).cookies;
+    assert.ok(rotatedCookies.dtks_refresh_token);
+    assert.notEqual(rotatedCookies.dtks_refresh_token, oldRefreshCookie);
 
-    // Reusing the old refresh token is rejected with 401
+    // Reusing the old revoked refresh cookie is rejected with 401 and revokes active sessions
     const reuseRes = await apiRequest('/api/v1/auth/refresh', {
       method: 'POST',
-      body: { refreshToken },
+      headers: {
+        Cookie: `dtks_refresh_token=${encodeURIComponent(oldRefreshCookie)}; dtks_csrf_token=${encodeURIComponent(oldCsrfToken)}`,
+        'X-CSRF-Token': oldCsrfToken,
+      },
     });
     assert.equal(reuseRes.status, 401);
 
-    accessToken = refreshRes.json.data.accessToken;
-    refreshToken = refreshRes.json.data.refreshToken;
+    // The rotated access token's session was revoked as part of replay protection
+    const revokedMeRes = await apiRequest('/api/v1/auth/me', {
+      token: refreshRes.json.data.accessToken,
+    });
+    assert.equal(revokedMeRes.status, 401);
+    assert.equal(revokedMeRes.json.error.code, 'SESSION_REVOKED');
+
+    // Re-authenticate cleanly for downstream tests and verify Bearer logout on a temporary session
+    const tempLogin = await apiRequest('/api/v1/auth/login', {
+      method: 'POST',
+      body: { email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD },
+    });
+    assert.equal(tempLogin.status, 200);
+    const tempLogout = await apiRequest('/api/v1/auth/logout', {
+      method: 'POST',
+      token: tempLogin.json.data.accessToken,
+    });
+    assert.equal(tempLogout.status, 200);
+    assert.equal(tempLogout.json.data.loggedOut, true);
+
+    const freshLogin = await apiRequest('/api/v1/auth/login', {
+      method: 'POST',
+      body: { email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD },
+    });
+    assert.equal(freshLogin.status, 200);
+    accessToken = freshLogin.json.data.accessToken;
+    csrfToken = freshLogin.json.data.csrfToken;
+    refreshCookie = extractCookieValues(freshLogin.response).cookies.dtks_refresh_token;
   });
 
   it('6. Role-Based Authorization (RBAC) & Destructive Reset Removal: Enforces editor vs super_admin permissions', async () => {

@@ -265,7 +265,7 @@ export async function handleApiRequest(request, env) {
 
     if (pathname === `${API_PREFIX}/auth/logout` && method === 'POST') {
       const auth = await authenticateAdmin(request, env, ROLES_ALL_ADMINS);
-      response = await logoutAdmin(request, env, auth.authenticated ? auth.admin : null);
+      response = await logoutAdmin(request, env, auth);
       return applySecurityAndCorsHeaders(response, request, env);
     }
 

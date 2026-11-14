@@ -10,10 +10,12 @@ import {
   Settings,
   ArrowLeft,
   RotateCcw,
+  LogOut,
   Menu,
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
+import { getAdminAuthSession, logoutAdmin } from '../../services/api/apiClient.js';
 import BrandLogo from '../common/BrandLogo.jsx';
 import SEO from '../common/SEO.jsx';
 
@@ -29,8 +31,10 @@ const ADMIN_NAV = [
 
 export default function AdminLayout({ title, children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { resetDemoData, requestConfirm } = useApp();
+  const { resetDemoData, requestConfirm, adminAccessPolicy, addToast } = useApp();
   const location = useLocation();
+  const isApiSessionMode = adminAccessPolicy === 'session_required';
+  const authSession = isApiSessionMode ? getAdminAuthSession() : null;
 
   const handleReset = () => {
     requestConfirm({
@@ -41,6 +45,11 @@ export default function AdminLayout({ title, children }) {
       variant: 'danger',
       onConfirm: resetDemoData,
     });
+  };
+
+  const handleSignOut = async () => {
+    await logoutAdmin();
+    addToast('Signed out from administrator session.');
   };
 
   const currentSection =
@@ -69,10 +78,12 @@ export default function AdminLayout({ title, children }) {
 
         <div className="px-4 py-3 border-b border-[#E3EBE5] bg-[#E8F5EC]/60">
           <p className="text-xs font-semibold text-[#116438]">
-            Frontend Demo Mode
+            {isApiSessionMode ? 'Backend API Session' : 'Frontend Demo Mode'}
           </p>
-          <p className="text-xs text-[#64756B] mt-0.5">
-            Changes persist in browser LocalStorage only.
+          <p className={`text-xs text-[#64756B] mt-0.5 ${isApiSessionMode ? 'truncate' : ''}`}>
+            {isApiSessionMode
+              ? authSession?.admin?.email || 'Authenticated administrator'
+              : 'Changes persist in browser LocalStorage only.'}
           </p>
         </div>
 
@@ -100,14 +111,25 @@ export default function AdminLayout({ title, children }) {
         </nav>
 
         <div className="p-3 border-t border-[#E3EBE5] space-y-2">
-          <button
-            type="button"
-            onClick={handleReset}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[#17231C] border border-[#E3EBE5] hover:bg-[#F7FAF7] transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5 shrink-0 text-[#16834A]" />
-            <span>Reset Demo Data</span>
-          </button>
+          {isApiSessionMode ? (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[#17231C] border border-[#E3EBE5] hover:bg-[#F7FAF7] transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0 text-[#16834A]" />
+              <span>Sign Out</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[#17231C] border border-[#E3EBE5] hover:bg-[#F7FAF7] transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5 shrink-0 text-[#16834A]" />
+              <span>Reset Demo Data</span>
+            </button>
+          )}
           <Link
             to="/"
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[#64756B] hover:bg-[#F7FAF7] hover:text-[#17231C] transition-colors"
@@ -167,14 +189,25 @@ export default function AdminLayout({ title, children }) {
               })}
             </nav>
             <div className="p-3 border-t border-[#E3EBE5] space-y-2">
-              <button
-                type="button"
-                onClick={handleReset}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-[#E3EBE5] text-[#17231C]"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-[#16834A]" />
-                <span>Reset Demo Data</span>
-              </button>
+              {isApiSessionMode ? (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-[#E3EBE5] text-[#17231C]"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-[#16834A]" />
+                  <span>Sign Out</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-[#E3EBE5] text-[#17231C]"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-[#16834A]" />
+                  <span>Reset Demo Data</span>
+                </button>
+              )}
               <Link
                 to="/"
                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-[#64756B]"
