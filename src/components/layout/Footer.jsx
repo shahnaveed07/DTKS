@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin, Globe } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
+import WhatsAppIcon from '../common/WhatsAppIcon.jsx';
+import { buildWhatsAppUrl, buildMailtoUrl } from '../../utils/orderUtils.js';
 
 export default function Footer() {
   const { settings, services, adminAccessPolicy } = useApp();
@@ -9,8 +11,11 @@ export default function Footer() {
 
   const hasEmail = Boolean(settings.contactEmail && settings.contactEmail.trim());
   const hasPhone = Boolean(settings.contactPhone && settings.contactPhone.trim());
+  const hasWhatsapp = Boolean(settings.whatsappNumber && settings.whatsappNumber.trim());
   const hasLocation = Boolean(settings.businessLocation && settings.businessLocation.trim());
   const serviceArea = settings.serviceArea || 'Srinagar, Kashmir, Jammu & Kashmir, India';
+  const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
+  const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
 
   const socialEntries = Object.entries(settings.socialLinks || {}).filter(
     ([, url]) => typeof url === 'string' && url.trim().length > 0
@@ -132,7 +137,25 @@ export default function Footer() {
               {hasEmail && (
                 <li className="flex items-start gap-2.5">
                   <Mail className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
-                  <span className="break-words min-w-0">{settings.contactEmail}</span>
+                  <a
+                    href={mailtoUrl}
+                    className="break-words min-w-0 hover:text-white hover:underline transition-colors"
+                  >
+                    {settings.contactEmail}
+                  </a>
+                </li>
+              )}
+              {hasWhatsapp && (
+                <li className="flex items-start gap-2.5">
+                  <WhatsAppIcon className="w-4 h-4 shrink-0 mt-0.5 text-[#E8F5EC]" />
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-white hover:underline transition-colors"
+                  >
+                    {settings.whatsappNumber}
+                  </a>
                 </li>
               )}
               {hasPhone && (

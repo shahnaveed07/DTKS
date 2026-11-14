@@ -40,7 +40,7 @@ export const DATA_STORAGE_SPECS = [
   { field: 'settings', key: STORAGE_KEYS.SETTINGS, fallback: INITIAL_SETTINGS, expectedType: 'object' },
 ];
 
-export const CURRENT_MIGRATION_VERSION = '2026-11-real-data-v2';
+export const CURRENT_MIGRATION_VERSION = '2026-11-verified-contact-v3';
 
 const storageDiagnostics = {
   lastReadError: null,
@@ -436,6 +436,17 @@ export function sanitizeLegacyDataset(dataset = {}) {
     return hl;
   });
 
+  const cleanedEmail = cleanPlaceholderField(rawSettings.contactEmail);
+  const cleanedWhatsapp = cleanPlaceholderField(rawSettings.whatsappNumber);
+  const isLegacyDemoWhatsapp =
+    cleanedWhatsapp === '919419012345' || cleanedWhatsapp === '+91 94190 12345';
+  const isLegacyDemoEmail = cleanedEmail.toLowerCase() === 'hello@dreamtechkashmir.com';
+  const isLegacyDemoPhone =
+    cleanPlaceholderField(rawSettings.contactPhone) === '+91 94190 12345';
+  const isLegacyDemoLocation = cleanPlaceholderField(rawSettings.businessLocation).includes(
+    'Residency Road, Lal Chowk'
+  );
+
   const settings = {
     ...INITIAL_SETTINGS,
     ...rawSettings,
@@ -443,12 +454,29 @@ export function sanitizeLegacyDataset(dataset = {}) {
     brandAbbreviation: rawSettings.brandAbbreviation || INITIAL_SETTINGS.brandAbbreviation,
     officialDomain: INITIAL_SETTINGS.officialDomain,
     serviceArea: rawSettings.serviceArea || INITIAL_SETTINGS.serviceArea,
-    contactEmail: cleanPlaceholderField(rawSettings.contactEmail),
-    contactPhone: cleanPlaceholderField(rawSettings.contactPhone),
-    whatsappNumber: cleanPlaceholderField(rawSettings.whatsappNumber),
-    businessLocation: cleanPlaceholderField(rawSettings.businessLocation),
+    contactEmail:
+      rawSettings.contactDetailsCustomized === true
+        ? isLegacyDemoEmail
+          ? ''
+          : cleanedEmail
+        : !cleanedEmail || isLegacyDemoEmail
+        ? INITIAL_SETTINGS.contactEmail
+        : cleanedEmail,
+    contactPhone: isLegacyDemoPhone ? '' : cleanPlaceholderField(rawSettings.contactPhone),
+    whatsappNumber:
+      rawSettings.contactDetailsCustomized === true
+        ? isLegacyDemoWhatsapp
+          ? ''
+          : cleanedWhatsapp
+        : !cleanedWhatsapp || isLegacyDemoWhatsapp
+        ? INITIAL_SETTINGS.whatsappNumber
+        : cleanedWhatsapp,
+    businessLocation: isLegacyDemoLocation
+      ? ''
+      : cleanPlaceholderField(rawSettings.businessLocation),
     workingHours:
-      rawSettings.workingHours === 'Monday – Saturday · 10:00 AM – 6:30 PM IST' &&
+      (rawSettings.workingHours === 'Monday – Saturday · 10:00 AM – 6:30 PM IST' ||
+        rawSettings.workingHours === 'Monday – Saturday · 9:30 AM – 6:30 PM IST') &&
       !rawSettings.workingHoursConfirmed
         ? ''
         : cleanPlaceholderField(rawSettings.workingHours),

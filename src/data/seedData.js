@@ -621,9 +621,9 @@ export const INITIAL_SETTINGS = {
   tagline: 'Modern Website Design & Development for Growing Businesses',
   heroSupportText:
     'We design, build, deploy, and maintain responsive websites, e-commerce storefronts, and custom web portals tailored to your business requirements.',
-  contactEmail: '',
+  contactEmail: 'support@dreamtechkashmirsolutions.studio',
   contactPhone: '',
-  whatsappNumber: '',
+  whatsappNumber: '+91 9796854163',
   businessLocation: '',
   serviceArea: 'Srinagar, Kashmir, Jammu & Kashmir, India',
   workingHours: '',

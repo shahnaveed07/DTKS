@@ -75,12 +75,16 @@ test('noindex routes disable indexing and omit JSON-LD', () => {
   assert.equal(adminSeo.jsonLd, null);
 });
 
-test('structured data omits placeholder email/phone and skips ProfessionalService until verified details exist', () => {
+test('structured data includes verified default email/WhatsApp ContactPoint and skips ProfessionalService until calling phone or street address exists', () => {
   const org = buildOrganizationSchema(INITIAL_SETTINGS);
   assert.equal(org.name, 'DreamTech Kashmir Solutions');
   assert.ok(org.alternateName.includes('DTKS'));
-  assert.equal(org.email, undefined);
+  assert.equal(org.email, 'support@dreamtechkashmirsolutions.studio');
   assert.equal(org.telephone, undefined);
+  assert.ok(Array.isArray(org.contactPoint));
+  assert.equal(org.contactPoint[0].email, 'support@dreamtechkashmirsolutions.studio');
+  assert.equal(org.contactPoint[0].telephone, '+91 9796854163');
+  assert.equal(org.contactPoint[0].url, 'https://wa.me/919796854163');
   assert.equal(org.logo.width, 512);
   assert.equal(org.logo.height, 512);
 

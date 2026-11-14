@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Copy,
   Edit3,
+  Mail,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import {
@@ -16,7 +17,13 @@ import {
   MAINTENANCE_PREFERENCES,
 } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
-import { validateOrderStep, formatCurrency } from '../../utils/orderUtils.js';
+import WhatsAppIcon from '../../components/common/WhatsAppIcon.jsx';
+import {
+  validateOrderStep,
+  formatCurrency,
+  buildWhatsAppUrl,
+  buildMailtoUrl,
+} from '../../utils/orderUtils.js';
 
 const STEPS = [
   { number: 1, title: 'Category' },
@@ -88,6 +95,8 @@ export default function RequestQuotePage() {
   const hasVerifiedEmail = Boolean(settings.contactEmail && settings.contactEmail.trim());
   const hasVerifiedPhone = Boolean(settings.contactPhone && settings.contactPhone.trim());
   const hasVerifiedWhatsapp = Boolean(settings.whatsappNumber && settings.whatsappNumber.trim());
+  const mailtoUrl = buildMailtoUrl(settings.contactEmail);
+  const whatsappUrl = buildWhatsAppUrl(settings.whatsappNumber);
 
   const activePackages = useMemo(
     () => packages.filter((p) => p.active),
@@ -286,35 +295,76 @@ export default function RequestQuotePage() {
 
       <section className="border-b border-[#E3EBE5] bg-white py-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <p className="text-xs font-semibold text-[#16834A]">
-            Website Order &amp; Quotation Builder
-          </p>
-          <h1 className="mt-1.5 font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#17231C]">
-            Order a Website or Request a Quote
-          </h1>
-          <p className="mt-2 text-sm text-[#64756B]">
-            Complete the seven steps below to share your website requirements and generate your order reference.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-[#16834A]">
+                Website Order &amp; Quotation Builder
+              </p>
+              <h1 className="mt-1.5 font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#17231C]">
+                Order a Website or Request a Quote
+              </h1>
+              <p className="mt-2 text-sm text-[#64756B]">
+                Complete the seven steps below to share your website requirements and generate your order reference.
+              </p>
+            </div>
+            {(mailtoUrl || whatsappUrl) && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {mailtoUrl && (
+                  <a
+                    href={mailtoUrl}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors"
+                  >
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    <span>Email Us</span>
+                  </a>
+                )}
+                {whatsappUrl && (
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors"
+                  >
+                    <WhatsAppIcon className="w-3.5 h-3.5 shrink-0" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
 
           {isProductionUnconfigured ? (
             <div
               role="status"
-              className="mt-4 rounded-xl border border-amber-300 bg-amber-50/90 px-4 py-3.5 text-xs sm:text-sm text-[#17231C] space-y-1.5"
+              className="mt-4 rounded-xl border border-amber-300 bg-amber-50/90 px-4 py-3.5 text-xs sm:text-sm text-[#17231C] space-y-2"
             >
               <p className="font-semibold text-amber-900">
                 Online website order submission is currently being configured. Please contact DreamTech Kashmir Solutions through a verified contact channel.
               </p>
               {(hasVerifiedEmail || hasVerifiedPhone || hasVerifiedWhatsapp) && (
-                <p className="text-xs text-amber-900/90">
-                  Verified channels:{' '}
-                  {[
-                    hasVerifiedEmail ? `Email: ${settings.contactEmail}` : null,
-                    hasVerifiedPhone ? `Phone: ${settings.contactPhone}` : null,
-                    hasVerifiedWhatsapp ? `WhatsApp: ${settings.whatsappNumber}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-amber-900/90">
+                  {hasVerifiedEmail && (
+                    <a
+                      href={mailtoUrl}
+                      className="inline-flex items-center gap-1 font-medium underline hover:text-[#16834A]"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>{settings.contactEmail}</span>
+                    </a>
+                  )}
+                  {hasVerifiedWhatsapp && whatsappUrl && (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-medium underline hover:text-[#16834A]"
+                    >
+                      <WhatsAppIcon className="w-3.5 h-3.5" />
+                      <span>{settings.whatsappNumber}</span>
+                    </a>
+                  )}
+                  {hasVerifiedPhone && <span>Phone: {settings.contactPhone}</span>}
+                </div>
               )}
             </div>
           ) : (

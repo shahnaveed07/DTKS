@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Mail } from 'lucide-react';
+import { useApp } from '../../context/AppContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
+import WhatsAppIcon from '../common/WhatsAppIcon.jsx';
+import { buildWhatsAppUrl, buildMailtoUrl } from '../../utils/orderUtils.js';
 
 const NAV_LINKS = [
   { label: 'Home', to: '/' },
@@ -15,6 +18,12 @@ const NAV_LINKS = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { settings, adminAccessPolicy } = useApp();
+
+  const hasEmail = Boolean(settings?.contactEmail && settings.contactEmail.trim());
+  const hasWhatsapp = Boolean(settings?.whatsappNumber && settings.whatsappNumber.trim());
+  const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
+  const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
 
   useEffect(() => {
     setMobileOpen(false);
@@ -52,8 +61,21 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* Zone 3: Contact link + Primary CTA */}
-        <div className="hidden lg:flex items-center gap-4 shrink-0">
+        {/* Zone 3: Contact actions + Primary CTA */}
+        <div className="hidden lg:flex items-center gap-3 shrink-0">
+          {hasWhatsapp && (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Chat on WhatsApp (${settings.whatsappNumber})`}
+              title={`WhatsApp: ${settings.whatsappNumber}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] text-[#16834A] hover:bg-[#E8F5EC] hover:border-[#16834A] transition-colors whitespace-nowrap shrink-0"
+            >
+              <WhatsAppIcon className="w-3.5 h-3.5" />
+              <span>WhatsApp</span>
+            </a>
+          )}
           <Link
             to="/contact"
             className="text-sm font-medium text-[#17231C] hover:text-[#16834A] transition-colors whitespace-nowrap shrink-0 px-2 py-1.5"
@@ -83,7 +105,7 @@ export default function Navbar() {
       {/* Mobile Navigation Drawer */}
       <div
         className={`lg:hidden overflow-hidden transition-all duration-200 border-[#E3EBE5] bg-white ${
-          mobileOpen ? 'max-h-[460px] border-t' : 'max-h-0'
+          mobileOpen ? 'max-h-[540px] border-t' : 'max-h-0'
         }`}
       >
         <nav aria-label="Mobile navigation" className="px-4 py-4 flex flex-col gap-1">
@@ -127,6 +149,32 @@ export default function Navbar() {
           >
             Contact Us
           </NavLink>
+
+          {(hasEmail || hasWhatsapp) && (
+            <div className="pt-2 mt-1 border-t border-[#E3EBE5] grid grid-cols-2 gap-2.5">
+              {hasEmail && (
+                <a
+                  href={mailtoUrl}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7] transition-colors"
+                >
+                  <Mail className="w-3.5 h-3.5 text-[#16834A]" />
+                  <span>Email Us</span>
+                </a>
+              )}
+              {hasWhatsapp && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors"
+                >
+                  <WhatsAppIcon className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
+                </a>
+              )}
+            </div>
+          )}
+
           <div className="pt-3 mt-2 border-t border-[#E3EBE5] flex items-center gap-3">
             <Link
               to="/request-quote"
@@ -134,12 +182,14 @@ export default function Navbar() {
             >
               Get Started
             </Link>
-            <Link
-              to="/admin"
-              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors"
-            >
-              Admin
-            </Link>
+            {adminAccessPolicy !== 'blocked_production_local' && (
+              <Link
+                to="/admin"
+                className="px-4 py-2.5 text-sm font-medium rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors"
+              >
+                Admin
+              </Link>
+            )}
           </div>
         </nav>
       </div>

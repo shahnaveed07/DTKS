@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, Download, RotateCcw } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
@@ -6,6 +6,10 @@ import SEO from '../../components/common/SEO.jsx';
 export default function AdminSettingsPage() {
   const { settings, updateSettings, exportLocalData, restoreFromBackup, isMutating } = useApp();
   const [form, setForm] = useState(settings);
+
+  useEffect(() => {
+    setForm(settings);
+  }, [settings]);
 
   const handleHighlightChange = (id, field, value) => {
     setForm((prev) => ({
@@ -30,6 +34,7 @@ export default function AdminSettingsPage() {
     e.preventDefault();
     await updateSettings({
       ...form,
+      contactDetailsCustomized: true,
       workingHoursConfirmed: Boolean(form.workingHours && form.workingHours.trim()),
     });
   };

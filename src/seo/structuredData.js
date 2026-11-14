@@ -1,4 +1,5 @@
 import { SITE_CONFIG, buildCanonicalUrl, getSiteUrl } from './seoConfig.js';
+import { buildWhatsAppUrl } from '../utils/orderUtils.js';
 
 function isPlaceholderValue(value) {
   if (!value || typeof value !== 'string') return true;
@@ -50,11 +51,33 @@ export function buildOrganizationSchema(settings = {}) {
     })),
   };
 
-  if (!isPlaceholderValue(settings.contactEmail)) {
+  const hasValidEmail = !isPlaceholderValue(settings.contactEmail);
+  const hasValidPhone = !isPlaceholderValue(settings.contactPhone);
+  const hasValidWhatsapp = !isPlaceholderValue(settings.whatsappNumber);
+
+  if (hasValidEmail) {
     schema.email = settings.contactEmail.trim();
   }
-  if (!isPlaceholderValue(settings.contactPhone)) {
+  if (hasValidPhone) {
     schema.telephone = settings.contactPhone.trim();
+  }
+  if (hasValidEmail || hasValidWhatsapp || hasValidPhone) {
+    const contactPoint = {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      areaServed: 'IN',
+      availableLanguage: ['English'],
+    };
+    if (hasValidEmail) {
+      contactPoint.email = settings.contactEmail.trim();
+    }
+    if (hasValidPhone) {
+      contactPoint.telephone = settings.contactPhone.trim();
+    } else if (hasValidWhatsapp) {
+      contactPoint.telephone = settings.whatsappNumber.trim();
+      contactPoint.url = buildWhatsAppUrl(settings.whatsappNumber);
+    }
+    schema.contactPoint = [contactPoint];
   }
   if (sameAs.length > 0) {
     schema.sameAs = sameAs;

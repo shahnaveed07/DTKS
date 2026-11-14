@@ -14,8 +14,13 @@ import {
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
 import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
+import WhatsAppIcon from '../../components/common/WhatsAppIcon.jsx';
 import { ROUTE_SEO } from '../../seo/seoConfig.js';
-import { validateContactForm } from '../../utils/orderUtils.js';
+import {
+  validateContactForm,
+  buildWhatsAppUrl,
+  buildMailtoUrl,
+} from '../../utils/orderUtils.js';
 
 const EMPTY_FORM = {
   name: '',
@@ -84,6 +89,8 @@ export default function ContactPage() {
   const hasHours = Boolean(settings.workingHours && settings.workingHours.trim());
   const serviceArea = settings.serviceArea || 'Srinagar, Kashmir, Jammu & Kashmir, India';
   const officialDomain = settings.officialDomain || 'https://dreamtechkashmirsolutions.studio/';
+  const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
+  const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
 
   const socialEntries = Object.entries(settings.socialLinks || {}).filter(
     ([, url]) => typeof url === 'string' && url.trim().length > 0
@@ -104,7 +111,7 @@ export default function ContactPage() {
               Contact DreamTech Kashmir Solutions (DTKS)
             </h1>
             <p className="mt-4 text-base text-[#64756B] leading-relaxed">
-              Have a business website enquiry, website redesign question, maintenance request, or custom quotation requirement in Srinagar, Kashmir, or beyond? Send us a message below,{' '}
+              Have a business website enquiry, website redesign question, maintenance request, or custom quotation requirement in Srinagar, Kashmir, or beyond? Reach us directly via email or WhatsApp,{' '}
               <Link to="/packages" className="text-[#16834A] hover:text-[#116438] font-medium hover:underline">
                 view website packages
               </Link>
@@ -167,10 +174,10 @@ export default function ContactPage() {
                     <div className="flex items-start gap-3">
                       <Mail className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
                       <div className="min-w-0">
-                        <p className="text-xs text-[#64756B]">Email Address</p>
+                        <p className="text-xs text-[#64756B]">Official Email</p>
                         <a
-                          href={`mailto:${settings.contactEmail}`}
-                          className="font-medium text-[#17231C] hover:text-[#16834A] break-words"
+                          href={mailtoUrl}
+                          className="font-medium text-[#17231C] hover:text-[#16834A] hover:underline break-words"
                         >
                           {settings.contactEmail}
                         </a>
@@ -178,21 +185,31 @@ export default function ContactPage() {
                     </div>
                   )}
 
-                  {(hasPhone || hasWhatsapp) && (
+                  {hasWhatsapp && (
+                    <div className="flex items-start gap-3">
+                      <WhatsAppIcon className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
+                      <div>
+                        <p className="text-xs text-[#64756B]">Official WhatsApp</p>
+                        <a
+                          href={whatsappUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-[#17231C] hover:text-[#16834A] hover:underline"
+                        >
+                          {settings.whatsappNumber}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {hasPhone && (
                     <div className="flex items-start gap-3">
                       <Phone className="w-4 h-4 text-[#16834A] shrink-0 mt-1" />
                       <div>
-                        <p className="text-xs text-[#64756B]">Phone / WhatsApp</p>
-                        {hasPhone && (
-                          <p className="font-medium text-[#17231C]">
-                            {settings.contactPhone}
-                          </p>
-                        )}
-                        {hasWhatsapp && (
-                          <p className="text-xs text-[#64756B] mt-0.5">
-                            WhatsApp: {settings.whatsappNumber}
-                          </p>
-                        )}
+                        <p className="text-xs text-[#64756B]">Phone Number</p>
+                        <p className="font-medium text-[#17231C]">
+                          {settings.contactPhone}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -209,6 +226,31 @@ export default function ContactPage() {
                     </div>
                   )}
                 </div>
+
+                {(hasEmail || hasWhatsapp) && (
+                  <div className="pt-4 border-t border-[#E3EBE5] flex flex-col sm:flex-row gap-3">
+                    {hasEmail && (
+                      <a
+                        href={mailtoUrl}
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg border border-[#16834A] text-[#16834A] bg-white hover:bg-[#E8F5EC] transition-colors whitespace-nowrap"
+                      >
+                        <Mail className="w-4 h-4 shrink-0" />
+                        <span>Email Us</span>
+                      </a>
+                    )}
+                    {hasWhatsapp && (
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
+                      >
+                        <WhatsAppIcon className="w-4 h-4 shrink-0" />
+                        <span>Chat on WhatsApp</span>
+                      </a>
+                    )}
+                  </div>
+                )}
 
                 {!hasEmail && !hasPhone && !hasWhatsapp && (
                   <div className="pt-3 border-t border-[#E3EBE5] text-xs text-[#64756B] leading-relaxed">

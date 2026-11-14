@@ -275,8 +275,8 @@ test('Migration Scenario 7: Mixed demo and real team members removes only demo p
   assert.equal(team[0].fullName, 'Shah Naveed');
 });
 
-test('Migration Scenario 8: Settings migration clears demo contact values while preserving real admin contact values', () => {
-  // Case A: Demo settings are scrubbed
+test('Migration Scenario 8: Settings migration populates verified default Email/WhatsApp when demo values are scrubbed and preserves custom admin contact values', () => {
+  // Case A: Demo settings are scrubbed and default to verified email & WhatsApp while phone/location stay blank
   const demoSettings = {
     companyName: 'DreamTech Kashmir Solutions',
     contactEmail: 'contact@dreamtechkashmir.example',
@@ -290,7 +290,8 @@ test('Migration Scenario 8: Settings migration clears demo contact values while 
   });
   ensureSeededStorage();
   const cleanedA = JSON.parse(storageA.getItem(STORAGE_KEYS.SETTINGS));
-  assert.equal(cleanedA.contactEmail, '');
+  assert.equal(cleanedA.contactEmail, 'support@dreamtechkashmirsolutions.studio');
+  assert.equal(cleanedA.whatsappNumber, '+91 9796854163');
   assert.equal(cleanedA.contactPhone, '');
   assert.equal(cleanedA.businessLocation, '');
   assert.equal(cleanedA.workingHours, '');
@@ -304,6 +305,7 @@ test('Migration Scenario 8: Settings migration clears demo contact values while 
     businessLocation: 'Karan Nagar, Srinagar, J&K',
     workingHours: 'Mon-Sat 10:00 AM - 6:00 PM',
     workingHoursConfirmed: true,
+    contactDetailsCustomized: true,
   };
   const storageB = createMockLocalStorage({
     [STORAGE_KEYS.SETTINGS]: JSON.stringify(realSettings),
@@ -312,6 +314,7 @@ test('Migration Scenario 8: Settings migration clears demo contact values while 
   const cleanedB = JSON.parse(storageB.getItem(STORAGE_KEYS.SETTINGS));
   assert.equal(cleanedB.contactEmail, 'info@dreamtechkashmirsolutions.studio');
   assert.equal(cleanedB.contactPhone, '+91 99065 43210');
+  assert.equal(cleanedB.whatsappNumber, '+91 99065 43210');
   assert.equal(cleanedB.businessLocation, 'Karan Nagar, Srinagar, J&K');
   assert.equal(cleanedB.workingHours, 'Mon-Sat 10:00 AM - 6:00 PM');
 });

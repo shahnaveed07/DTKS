@@ -26,6 +26,21 @@ export function isValidPhone(phone) {
   return digits.length >= 7 && digits.length <= 15;
 }
 
+export function buildWhatsAppUrl(whatsappNumber = '') {
+  if (typeof whatsappNumber !== 'string') return '';
+  const digits = whatsappNumber.replace(/[^\d]/g, '');
+  if (!digits) return '';
+  const normalized = digits.length === 10 ? `91${digits}` : digits;
+  return `https://wa.me/${normalized}`;
+}
+
+export function buildMailtoUrl(email = '') {
+  if (typeof email !== 'string') return '';
+  const trimmed = email.trim();
+  if (!trimmed) return '';
+  return `mailto:${trimmed}`;
+}
+
 export function validateOrderStep(step, formData) {
   const errors = {};
 

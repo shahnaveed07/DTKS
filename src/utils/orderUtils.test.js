@@ -8,6 +8,8 @@ import {
   filterOrders,
   findTrackedOrder,
   computeDashboardStats,
+  buildWhatsAppUrl,
+  buildMailtoUrl,
 } from './orderUtils.js';
 import { sanitizeLegacyDataset } from '../services/storage/localStorageAdapter.js';
 import {
@@ -25,15 +27,17 @@ import {
   INITIAL_SETTINGS,
 } from '../data/seedData.js';
 
-test('seedData defaults contain zero demo orders, inquiries, sample portfolio, or placeholder team', () => {
+test('seedData defaults contain zero demo orders, inquiries, sample portfolio, or placeholder team and verified official contact defaults', () => {
   assert.deepEqual(INITIAL_ORDERS, []);
   assert.deepEqual(INITIAL_INQUIRIES, []);
   assert.deepEqual(INITIAL_PORTFOLIO, []);
   assert.deepEqual(INITIAL_TEAM, []);
-  assert.equal(INITIAL_SETTINGS.contactEmail, '');
+  assert.equal(INITIAL_SETTINGS.contactEmail, 'support@dreamtechkashmirsolutions.studio');
   assert.equal(INITIAL_SETTINGS.contactPhone, '');
-  assert.equal(INITIAL_SETTINGS.whatsappNumber, '');
+  assert.equal(INITIAL_SETTINGS.whatsappNumber, '+91 9796854163');
   assert.equal(INITIAL_SETTINGS.businessLocation, '');
+  assert.equal(buildMailtoUrl(INITIAL_SETTINGS.contactEmail), 'mailto:support@dreamtechkashmirsolutions.studio');
+  assert.equal(buildWhatsAppUrl(INITIAL_SETTINGS.whatsappNumber), 'https://wa.me/919796854163');
   for (const pkg of INITIAL_PACKAGES) {
     assert.equal(pkg.startingPrice, null);
     assert.equal(formatCurrency(pkg.startingPrice, pkg.currency), 'Request a Quote');
@@ -148,7 +152,7 @@ test('sanitizeLegacyDataset strips only known demo records and preserves real us
   assert.equal(sanitized.packages[0].startingPrice, null);
   assert.equal(sanitized.packages[1].startingPrice, 35000);
 
-  assert.equal(sanitized.settings.contactEmail, '');
+  assert.equal(sanitized.settings.contactEmail, 'support@dreamtechkashmirsolutions.studio');
   assert.equal(sanitized.settings.contactPhone, '');
   assert.equal(sanitized.settings.whatsappNumber, '+91 99061 23456');
   assert.equal(sanitized.settings.businessLocation, '');
