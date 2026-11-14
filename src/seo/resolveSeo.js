@@ -28,6 +28,12 @@ export function resolveSeoProps({
   const isForcedNoindex =
     noindex ||
     normalizedPath.startsWith('/admin') ||
+    normalizedPath.startsWith('/account') ||
+    normalizedPath === '/login' ||
+    normalizedPath === '/register' ||
+    normalizedPath === '/verify-email' ||
+    normalizedPath === '/forgot-password' ||
+    normalizedPath === '/reset-password' ||
     normalizedPath === '/track-order';
 
   const resolvedTitle =

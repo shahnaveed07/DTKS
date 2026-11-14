@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Menu, X, Mail } from 'lucide-react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, X, Mail, User, LogOut } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
+import { useClientAuth } from '../../context/ClientAuthContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
 import WhatsAppIcon from '../common/WhatsAppIcon.jsx';
 import { buildWhatsAppUrl, buildMailtoUrl } from '../../utils/orderUtils.js';
@@ -18,20 +19,31 @@ const NAV_LINKS = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
-  const { settings, adminAccessPolicy } = useApp();
+  const navigate = useNavigate();
+  const { settings, adminAccessPolicy, addToast } = useApp();
+  const { isClientAuthenticated, clientAccessPolicy, logoutClient } = useClientAuth();
 
   const hasEmail = Boolean(settings?.contactEmail && settings.contactEmail.trim());
   const hasWhatsapp = Boolean(settings?.whatsappNumber && settings.whatsappNumber.trim());
   const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
   const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
+  const showClientPortalControls = clientAccessPolicy !== 'blocked_production_local';
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
+  const handleClientSignOut = async () => {
+    await logoutClient();
+    addToast('Signed out from your client account.', 'info');
+    if (location.pathname.startsWith('/account')) {
+      navigate('/login', { replace: true });
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-[#E3EBE5] bg-white/95 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-4 xl:gap-6">
         {/* Zone 1: Brand Logo */}
         <Link
           to="/"
@@ -42,7 +54,7 @@ export default function Navbar() {
         </Link>
 
         {/* Zone 2: Clean single-line navigation links */}
-        <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-6">
+        <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-4 xl:gap-6">
           {NAV_LINKS.map((item) => (
             <NavLink
               key={item.to}
@@ -61,8 +73,8 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* Zone 3: Contact actions + Primary CTA */}
-        <div className="hidden lg:flex items-center gap-3 shrink-0">
+        {/* Zone 3: Client Account controls + Contact + Primary CTA */}
+        <div className="hidden lg:flex items-center gap-2.5 shrink-0">
           {hasWhatsapp && (
             <a
               href={whatsappUrl}
@@ -70,18 +82,57 @@ export default function Navbar() {
               rel="noopener noreferrer"
               aria-label={`Chat on WhatsApp (${settings.whatsappNumber})`}
               title={`WhatsApp: ${settings.whatsappNumber}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] text-[#16834A] hover:bg-[#E8F5EC] hover:border-[#16834A] transition-colors whitespace-nowrap shrink-0"
+              className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] text-[#16834A] hover:bg-[#E8F5EC] hover:border-[#16834A] transition-colors whitespace-nowrap shrink-0"
             >
               <WhatsAppIcon className="w-3.5 h-3.5" />
               <span>WhatsApp</span>
             </a>
           )}
+
           <Link
             to="/contact"
-            className="text-sm font-medium text-[#17231C] hover:text-[#16834A] transition-colors whitespace-nowrap shrink-0 px-2 py-1.5"
+            className="text-sm font-medium text-[#17231C] hover:text-[#16834A] transition-colors whitespace-nowrap shrink-0 px-1.5 py-1.5"
           >
-            Contact Us
+            Contact
           </Link>
+
+          {showClientPortalControls && isClientAuthenticated && (
+            <>
+              <Link
+                to="/account"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors whitespace-nowrap shrink-0"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>My Account</span>
+              </Link>
+              <button
+                type="button"
+                onClick={handleClientSignOut}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#64756B] hover:text-[#17231C] hover:bg-[#F7FAF7] transition-colors whitespace-nowrap shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </>
+          )}
+
+          {showClientPortalControls && !isClientAuthenticated && (
+            <>
+              <Link
+                to="/login"
+                className="text-sm font-medium text-[#17231C] hover:text-[#16834A] transition-colors whitespace-nowrap shrink-0 px-2 py-1.5"
+              >
+                Login
+              </Link>
+              <Link
+                to="/register"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors whitespace-nowrap shrink-0"
+              >
+                Create Account
+              </Link>
+            </>
+          )}
+
           <Link
             to="/request-quote"
             className="px-4 py-2 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap shrink-0 shadow-xs"
@@ -105,7 +156,7 @@ export default function Navbar() {
       {/* Mobile Navigation Drawer */}
       <div
         className={`lg:hidden overflow-hidden transition-all duration-200 border-[#E3EBE5] bg-white ${
-          mobileOpen ? 'max-h-[540px] border-t' : 'max-h-0'
+          mobileOpen ? 'max-h-[680px] border-t' : 'max-h-0'
         }`}
       >
         <nav aria-label="Mobile navigation" className="px-4 py-4 flex flex-col gap-1">
@@ -149,6 +200,63 @@ export default function Navbar() {
           >
             Contact Us
           </NavLink>
+
+          {/* Mobile Client Account Section */}
+          {showClientPortalControls && (
+            <div className="pt-2 mt-1 border-t border-[#E3EBE5] flex flex-col gap-1.5">
+              {isClientAuthenticated ? (
+                <>
+                  <NavLink
+                    to="/account"
+                    end
+                    className={({ isActive }) =>
+                      `px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-[#E8F5EC] text-[#116438]'
+                          : 'text-[#17231C] hover:bg-[#F7FAF7]'
+                      }`
+                    }
+                  >
+                    My Account
+                  </NavLink>
+                  <NavLink
+                    to="/account/orders"
+                    className={({ isActive }) =>
+                      `px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-[#E8F5EC] text-[#116438]'
+                          : 'text-[#17231C] hover:bg-[#F7FAF7]'
+                      }`
+                    }
+                  >
+                    My Orders
+                  </NavLink>
+                  <button
+                    type="button"
+                    onClick={handleClientSignOut}
+                    className="text-left px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <Link
+                    to="/login"
+                    className="text-center px-3 py-2.5 text-sm font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7] transition-colors"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="text-center px-3 py-2.5 text-sm font-semibold rounded-lg border border-[#16834A] text-[#16834A] hover:bg-[#E8F5EC] transition-colors"
+                  >
+                    Create Account
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
 
           {(hasEmail || hasWhatsapp) && (
             <div className="pt-2 mt-1 border-t border-[#E3EBE5] grid grid-cols-2 gap-2.5">

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -8,6 +8,7 @@ import {
   Users,
   MessageSquare,
   Settings,
+  ShieldCheck,
   ArrowLeft,
   RotateCcw,
   LogOut,
@@ -15,7 +16,12 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import { getAdminAuthSession, logoutAdmin } from '../../services/api/apiClient.js';
+import {
+  getAdminAuthSession,
+  logoutAdmin,
+  subscribeAdminAuth,
+} from '../../services/api/apiClient.js';
+import { filterAdminNavByRole, formatAdminRole } from '../../utils/authValidation.js';
 import BrandLogo from '../common/BrandLogo.jsx';
 import SEO from '../common/SEO.jsx';
 
@@ -26,6 +32,12 @@ const ADMIN_NAV = [
   { label: 'Portfolio', to: '/admin/portfolio', icon: Briefcase },
   { label: 'Team', to: '/admin/team', icon: Users },
   { label: 'Inquiries', to: '/admin/inquiries', icon: MessageSquare },
+  {
+    label: 'Admin Accounts',
+    to: '/admin/accounts',
+    icon: ShieldCheck,
+    roles: ['super_admin', 'admin'],
+  },
   { label: 'Website Settings', to: '/admin/settings', icon: Settings },
 ];
 
@@ -33,8 +45,25 @@ export default function AdminLayout({ title, children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { resetDemoData, requestConfirm, adminAccessPolicy, addToast } = useApp();
   const location = useLocation();
+  const navigate = useNavigate();
   const isApiSessionMode = adminAccessPolicy === 'session_required';
-  const authSession = isApiSessionMode ? getAdminAuthSession() : null;
+  const [authSession, setAuthSession] = useState(() =>
+    isApiSessionMode ? getAdminAuthSession() : null
+  );
+
+  useEffect(() => {
+    if (!isApiSessionMode) {
+      setAuthSession(null);
+      return undefined;
+    }
+    setAuthSession(getAdminAuthSession());
+    return subscribeAdminAuth((nextSession) => {
+      setAuthSession(nextSession);
+    });
+  }, [isApiSessionMode]);
+
+  const currentRole = isApiSessionMode ? authSession?.admin?.role || '' : 'super_admin';
+  const visibleNav = filterAdminNavByRole(ADMIN_NAV, currentRole);
 
   const handleReset = () => {
     requestConfirm({
@@ -49,11 +78,14 @@ export default function AdminLayout({ title, children }) {
 
   const handleSignOut = async () => {
     await logoutAdmin();
-    addToast('Signed out from administrator session.');
+    addToast('Signed out from administrator session.', 'info');
+    if (isApiSessionMode) {
+      navigate('/admin/login', { replace: true });
+    }
   };
 
   const currentSection =
-    ADMIN_NAV.find((item) =>
+    visibleNav.find((item) =>
       item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)
     )?.label || title;
 
@@ -62,7 +94,7 @@ export default function AdminLayout({ title, children }) {
       <SEO
         noindex
         fullTitle={title ? `${title} | Admin | DTKS` : 'Admin | DTKS'}
-        description="Administrative prototype interface for DreamTech Kashmir Solutions (DTKS)."
+        description="Administrative interface for DreamTech Kashmir Solutions (DTKS)."
       />
       {/* Desktop White Sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 border-r border-[#E3EBE5] bg-white">
@@ -77,9 +109,16 @@ export default function AdminLayout({ title, children }) {
         </div>
 
         <div className="px-4 py-3 border-b border-[#E3EBE5] bg-[#E8F5EC]/60">
-          <p className="text-xs font-semibold text-[#116438]">
-            {isApiSessionMode ? 'Backend API Session' : 'Frontend Demo Mode'}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-[#116438]">
+              {isApiSessionMode ? 'Backend API Session' : 'Frontend Demo Mode'}
+            </p>
+            {currentRole && (
+              <span className="text-[11px] font-medium text-[#16834A] whitespace-nowrap">
+                {formatAdminRole(currentRole)}
+              </span>
+            )}
+          </div>
           <p className={`text-xs text-[#64756B] mt-0.5 ${isApiSessionMode ? 'truncate' : ''}`}>
             {isApiSessionMode
               ? authSession?.admin?.email || 'Authenticated administrator'
@@ -88,7 +127,7 @@ export default function AdminLayout({ title, children }) {
         </div>
 
         <nav aria-label="Admin navigation" className="flex-1 p-3 space-y-1">
-          {ADMIN_NAV.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -166,7 +205,7 @@ export default function AdminLayout({ title, children }) {
               </button>
             </div>
             <nav aria-label="Mobile admin navigation" className="flex-1 p-3 space-y-1 overflow-y-auto">
-              {ADMIN_NAV.map((item) => {
+              {visibleNav.map((item) => {
                 const Icon = item.icon;
                 return (
                   <NavLink

@@ -14,6 +14,8 @@ import { teamService } from '../services/api/teamService.js';
 import { settingsService } from '../services/api/settingsService.js';
 import {
   getAdminAccessPolicy,
+  getAdminAuthSession,
+  getCsrfToken,
   getDataAdapterMode,
   getSubmissionMode,
 } from '../services/api/apiClient.js';
@@ -72,11 +74,14 @@ export function AppProvider({ children }) {
     setSettings(settingsService.get());
   }, []);
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async ({ includeAdmin = false } = {}) => {
     if (getDataAdapterMode() !== 'api') {
       refreshLocalState();
       return;
     }
+
+    const shouldLoadAdmin =
+      includeAdmin || Boolean(getAdminAuthSession()?.accessToken || getCsrfToken());
 
     setIsLoading(true);
     setError(null);
@@ -92,8 +97,12 @@ export function AppProvider({ children }) {
         packageService.fetchCatalog(),
         portfolioService.listPortfolio(),
         teamService.listTeam(),
-        orderService.listOrders(),
-        inquiryService.listInquiries(),
+        shouldLoadAdmin
+          ? orderService.listOrders()
+          : Promise.resolve({ success: true, data: null }),
+        shouldLoadAdmin
+          ? inquiryService.listInquiries()
+          : Promise.resolve({ success: true, data: null }),
         settingsService.getSettings(),
       ]);
 
@@ -568,8 +577,10 @@ export function AppProvider({ children }) {
     settings,
     toasts,
     confirmDialog,
+    confirmState: confirmDialog,
     addToast,
     dismissToast,
+    removeToast: dismissToast,
     requestConfirm,
     closeConfirm,
     refreshAll,

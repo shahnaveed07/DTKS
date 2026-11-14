@@ -24,9 +24,22 @@ import {
   apiRequest,
   loginAdmin,
   logoutAdmin,
+  setAdminAuthSession,
+  getAdminAuthSession,
   clearAdminAuthSession,
   getCsrfToken,
 } from './api/apiClient.js';
+import {
+  getClientAccessPolicy,
+  getClientAuthSession,
+  setClientAuthSession,
+  clearClientAuthSession,
+  getClientCsrfToken,
+  clientApiRequest,
+} from './api/clientApiClient.js';
+import { authService } from './api/authService.js';
+import { clientAuthService } from './api/clientAuthService.js';
+import { clientAccountService } from './api/clientAccountService.js';
 import { orderService } from './api/orderService.js';
 import { inquiryService } from './api/inquiryService.js';
 import { packageService } from './api/packageService.js';
@@ -965,6 +978,253 @@ test('API Auth Client supports HttpOnly refresh cookies, X-CSRF-Token headers, a
   } finally {
     globalThis.fetch = originalFetch;
     clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+// ============================================================================
+// SUITE 6: ADMIN USERS CRUD, TRACK ORDER CONTRACT & SESSION ISOLATION
+// ============================================================================
+
+test('Order tracking in API mode uses GET /api/v1/orders/track with query params and surfaces errors', async () => {
+  createMockLocalStorage();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+
+  const captured = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    captured.push({ url: String(url), method: init.method || 'GET' });
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({
+        success: true,
+        data: { order: { referenceId: 'DKS-2026-0042', status: 'In Progress' } },
+      }),
+    };
+  };
+
+  try {
+    const res = await orderService.trackOrder('DKS-2026-0042', 'client@kashmir.in');
+    assert.equal(res.success, true);
+    assert.equal(res.data.referenceId, 'DKS-2026-0042');
+    assert.equal(captured[0].method, 'GET');
+    assert.ok(captured[0].url.includes('/api/v1/orders/track?ref=DKS-2026-0042&email=client%40kashmir.in'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('Admin Accounts service issues real /api/v1/admin/users requests and never fakes success on 404/403', async () => {
+  createMockLocalStorage();
+  clearAdminAuthSession();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  setAdminAuthSession({
+    accessToken: 'adm-tok-1',
+    csrfToken: 'adm-csrf-1',
+    admin: { id: 'adm-1', email: 'super@dtks.in', role: 'super_admin' },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method || 'GET', body: init.body });
+    if (String(url).includes('/admin/users') && (init.method || 'GET') === 'GET') {
+      return {
+        ok: false,
+        status: 404,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Endpoint not available on DTKS_BE' },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      status: 201,
+      headers: { get: () => 'application/json' },
+      json: async () => ({
+        success: true,
+        data: { user: { id: 'adm-2', name: 'New Editor', email: 'editor@dtks.in', role: 'editor', status: 'active' } },
+      }),
+    };
+  };
+
+  try {
+    const listFail = await authService.listAdminUsers({ search: 'editor', page: 1 });
+    assert.equal(listFail.success, false);
+    assert.equal(listFail.statusCode, 404);
+    assert.match(listFail.message, /Endpoint not available/);
+    assert.ok(calls[0].url.includes('/api/v1/admin/users?search=editor&page=1'));
+
+    const created = await authService.createAdminUser({
+      name: 'New Editor',
+      email: 'editor@dtks.in',
+      password: 'StrongPassword#2026',
+      role: 'editor',
+    });
+    assert.equal(created.success, true);
+    assert.equal(created.data.admin.email, 'editor@dtks.in');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('Client and Admin sessions remain strictly isolated across storage, CSRF, and tokens', async () => {
+  const storage = createMockLocalStorage();
+  const sessionStore = new Map();
+  globalThis.window.sessionStorage = {
+    getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
+    setItem: (k, v) => sessionStore.set(k, String(v)),
+    removeItem: (k) => sessionStore.delete(k),
+  };
+
+  clearAdminAuthSession();
+  clearClientAuthSession();
+
+  setAdminAuthSession({
+    accessToken: 'admin-secret-token',
+    csrfToken: 'admin-csrf-token',
+    admin: { id: 'adm-1', email: 'admin@dtks.in', role: 'super_admin' },
+  });
+  setClientAuthSession({
+    accessToken: 'client-secret-token',
+    csrfToken: 'client-csrf-token',
+    client: { id: 'cli-1', fullName: 'Aamir Khan', email: 'aamir@kashmir.in', emailVerified: true },
+  });
+
+  assert.equal(getAdminAuthSession().admin.email, 'admin@dtks.in');
+  assert.equal(getClientAuthSession().client.email, 'aamir@kashmir.in');
+  assert.equal(getCsrfToken(), 'admin-csrf-token');
+  assert.equal(getClientCsrfToken(), 'client-csrf-token');
+
+  // Clearing client session must NOT clear admin session
+  clearClientAuthSession();
+  assert.equal(getClientAuthSession(), null);
+  assert.equal(getAdminAuthSession().admin.email, 'admin@dtks.in');
+  assert.equal(getCsrfToken(), 'admin-csrf-token');
+
+  clearAdminAuthSession();
+  assert.equal(storage.getItem('dtks_admin_auth_session_v1'), null);
+});
+
+test('Client auth lifecycle works in local_demo mode without storing plaintext passwords and fails honestly in API mode', async () => {
+  const storage = createMockLocalStorage();
+  const sessionStore = new Map();
+  globalThis.window.sessionStorage = {
+    getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
+    setItem: (k, v) => sessionStore.set(k, String(v)),
+    removeItem: (k) => sessionStore.delete(k),
+  };
+  clearClientAuthSession();
+  setRuntimeEnvOverrides({ isProd: false, dataAdapter: 'local', apiBaseUrl: '' });
+  ensureSeededStorage();
+
+  assert.equal(getClientAccessPolicy(), 'local_demo');
+
+  const rawSecret = 'MyK@shmirPass2026';
+  const regRes = await clientAuthService.register({
+    fullName: 'Zaid Rather',
+    email: 'zaid@kashmirexports.in',
+    phone: '+91 99061 11223',
+    password: rawSecret,
+    acceptTerms: true,
+  });
+  assert.equal(regRes.success, true);
+  assert.ok(regRes.data.localVerificationToken);
+
+  // Plaintext password must NEVER appear anywhere in storage
+  for (const val of Object.values(storage._dump())) {
+    assert.ok(!String(val).includes(rawSecret), 'Plaintext password must never be stored');
+  }
+
+  // Unverified login blocked
+  const blockedLogin = await clientAuthService.login({
+    email: 'zaid@kashmirexports.in',
+    password: rawSecret,
+  });
+  assert.equal(blockedLogin.success, false);
+  assert.equal(blockedLogin.errorCode, 'EMAIL_NOT_VERIFIED');
+
+  // Verify email & login
+  const verifyRes = await clientAuthService.verifyEmail({
+    token: regRes.data.localVerificationToken,
+  });
+  assert.equal(verifyRes.success, true);
+
+  const loginRes = await clientAuthService.login({
+    email: 'zaid@kashmirexports.in',
+    password: rawSecret,
+  });
+  assert.equal(loginRes.success, true);
+  assert.equal(loginRes.data.client.email, 'zaid@kashmirexports.in');
+
+  const profileRes = await clientAuthService.updateProfile({
+    fullName: 'Zaid Rather Updated',
+    phone: '+91 99061 11223',
+    city: 'Srinagar',
+    businessName: 'Kashmir Exports',
+  });
+  assert.equal(profileRes.success, true);
+  assert.equal(profileRes.data.client.city, 'Srinagar');
+
+  const ordersRes = await clientAccountService.listOrders();
+  assert.equal(ordersRes.success, true);
+  assert.ok(Array.isArray(ordersRes.data));
+
+  // Forgot & Reset password
+  const forgotRes = await clientAuthService.forgotPassword({ email: 'zaid@kashmirexports.in' });
+  assert.equal(forgotRes.success, true);
+  assert.ok(forgotRes.data.localResetToken);
+
+  const newSecret = 'NewK@shmirPass99';
+  const resetRes = await clientAuthService.resetPassword({
+    token: forgotRes.data.localResetToken,
+    newPassword: newSecret,
+  });
+  assert.equal(resetRes.success, true);
+
+  await clientAuthService.logout();
+  const reLogin = await clientAuthService.login({
+    email: 'zaid@kashmirexports.in',
+    password: newSecret,
+  });
+  assert.equal(reLogin.success, true);
+
+  // Switch to API mode -> must NOT return local data when backend returns 404
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 404,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ success: false, error: { code: 'NOT_FOUND', message: 'Route not deployed' } }),
+  });
+
+  try {
+    const apiRes = await clientApiRequest('/api/v1/client/orders');
+    assert.equal(apiRes.success, false);
+    assert.equal(apiRes.statusCode, 404);
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearClientAuthSession();
     setRuntimeEnvOverrides(null);
   }
 });

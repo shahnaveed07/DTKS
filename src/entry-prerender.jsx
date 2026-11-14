@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { renderToString } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom';
 import { AppProvider } from './context/AppContext.jsx';
+import { ClientAuthProvider } from './context/ClientAuthContext.jsx';
 import { AppRoutes } from './App.jsx';
 import { resolveSeoProps } from './components/common/SEO.jsx';
 import { ROUTE_SEO } from './seo/seoConfig.js';
@@ -150,9 +151,11 @@ export function renderRoute(url) {
   const appHtml = renderToString(
     <StrictMode>
       <AppProvider>
-        <StaticRouter location={routerLocation}>
-          <AppRoutes />
-        </StaticRouter>
+        <ClientAuthProvider>
+          <StaticRouter location={routerLocation}>
+            <AppRoutes />
+          </StaticRouter>
+        </ClientAuthProvider>
       </AppProvider>
     </StrictMode>
   );

@@ -172,10 +172,14 @@ export const orderService = {
 
   async trackOrder(referenceId, email) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.orderTrack, {
-        method: 'POST',
-        body: { referenceId, email },
-      });
+      const refParam = encodeURIComponent(String(referenceId || '').trim());
+      const emailParam = encodeURIComponent(String(email || '').trim());
+      const res = await apiRequest(
+        `${API_ENDPOINTS.orderTrack}?ref=${refParam}&email=${emailParam}`,
+        { method: 'GET' }
+      );
+      if (!res.success) return res;
+      return createServiceResponse(res.data?.order || res.data, res.message);
     }
     const found = this.track(referenceId, email);
     if (!found) {
