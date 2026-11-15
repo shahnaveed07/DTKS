@@ -97,16 +97,31 @@ export const teamService = {
   /**
    * Async Repository Interface (Backend-Ready Envelope: { success, data, message })
    */
-  async listTeam() {
+  async listTeam({ includeHidden = false } = {}) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.team, { method: 'GET' });
+      const endpoint = includeHidden
+        ? `${API_ENDPOINTS.team}?includeHidden=true`
+        : API_ENDPOINTS.team;
+      const res = await apiRequest(endpoint, { method: 'GET' });
+      if (!res.success) return res;
+      const list = Array.isArray(res.data?.team)
+        ? res.data.team
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
+      return createServiceResponse(list, res.message || 'Team loaded.');
     }
     return createServiceResponse(this.getAll(), 'Team members loaded from local storage.');
   },
 
   async createTeamMember(payload) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.team, { method: 'POST', body: payload });
+      const res = await apiRequest(API_ENDPOINTS.team, { method: 'POST', body: payload });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.member || res.data,
+        res.message || 'Team member added.'
+      );
     }
     const created = this.create(payload);
     if (created?.__writeError) {
@@ -119,10 +134,15 @@ export const teamService = {
 
   async updateTeamMember(id, patch) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(`${API_ENDPOINTS.team}/${encodeURIComponent(id)}`, {
+      const res = await apiRequest(`${API_ENDPOINTS.team}/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: patch,
       });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.member || res.data,
+        res.message || 'Team member updated.'
+      );
     }
     const updated = this.update(id, patch);
     if (updated?.__notFound) {
@@ -140,10 +160,17 @@ export const teamService = {
 
   async reorderTeamMember(id, direction) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(`${API_ENDPOINTS.team}/${encodeURIComponent(id)}/reorder`, {
+      const res = await apiRequest(`${API_ENDPOINTS.team}/${encodeURIComponent(id)}/reorder`, {
         method: 'POST',
         body: { direction },
       });
+      if (!res.success) return res;
+      const list = Array.isArray(res.data?.team)
+        ? res.data.team
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
+      return createServiceResponse(list, res.message || 'Team display order updated.');
     }
     const res = this.reorder(id, direction);
     if (res?.__writeError) {

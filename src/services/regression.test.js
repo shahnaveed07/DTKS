@@ -28,6 +28,7 @@ import {
   getAdminAuthSession,
   clearAdminAuthSession,
   getCsrfToken,
+  resolveBackendAssetUrl,
 } from './api/apiClient.js';
 import {
   getClientAccessPolicy,
@@ -46,11 +47,13 @@ import { packageService } from './api/packageService.js';
 import { portfolioService } from './api/portfolioService.js';
 import { teamService } from './api/teamService.js';
 import { settingsService } from './api/settingsService.js';
-import { mediaService } from './media/mediaService.js';
+import { mediaService, extractUploadedAssetKey } from './media/mediaService.js';
 import {
   formatCurrency,
   generateOrderReference,
   validateOrderStep,
+  computeDashboardStats,
+  sanitizeSafeExternalUrl,
 } from '../utils/orderUtils.js';
 
 /**
@@ -1630,3 +1633,380 @@ test('Client auth lifecycle works in local_demo mode without storing plaintext p
     setRuntimeEnvOverrides(null);
   }
 });
+
+// ============================================================================
+// SUITE 7: DTKS_BE ENVELOPES, MEDIA AUTH, COOKIE REFRESH, GUARD & SANITIZATION
+// ============================================================================
+
+test('DTKS_BE envelopes unwrap cleanly across orders, inquiries, catalog, services, portfolio, team, and settings', async () => {
+  createMockLocalStorage();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  setAdminAuthSession({
+    accessToken: 'adm-tok',
+    csrfToken: 'adm-csrf',
+    admin: { id: 'adm-1', email: 'admin@dreamtechkashmirsolutions.studio', role: 'super_admin' },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const requestedUrls = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    requestedUrls.push({ url: u, method: init.method || 'GET' });
+
+    if (u.endsWith('/orders') && (init.method || 'GET') === 'GET') {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            orders: [{ id: 'o1', referenceId: 'DKS-2026-0001', status: 'Pending' }],
+            pagination: { total: 1 },
+          },
+        }),
+      };
+    }
+    if (u.endsWith('/orders') && init.method === 'POST') {
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { order: { id: 'o2', referenceId: 'DKS-2026-0002', status: 'Pending' } },
+        }),
+      };
+    }
+    if (u.endsWith('/inquiries') || u.endsWith('/contact')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { inquiries: [{ id: 'i1', name: 'Faisal', status: 'New' }] },
+        }),
+      };
+    }
+    if (u.includes('/packages?includeInactive=true')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            packages: [{ id: 'p1', title: 'Business' }],
+            maintenancePlans: [{ id: 'm1', name: 'Monthly' }],
+            addons: [{ id: 'a1', name: 'SEO Setup' }],
+          },
+        }),
+      };
+    }
+    if (u.includes('/services?includeInactive=true')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { services: [{ id: 's1', title: 'Corporate Websites' }] },
+        }),
+      };
+    }
+    if (u.includes('/portfolio?includeDrafts=true')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { portfolio: [{ id: 'pr1', title: 'Craft Store', published: false }] },
+        }),
+      };
+    }
+    if (u.includes('/team?includeHidden=true')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { team: [{ id: 't1', fullName: 'Tariq', visible: false }] },
+        }),
+      };
+    }
+    if (u.endsWith('/settings')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { settings: { companyName: 'DreamTech Kashmir Solutions', contactEmail: 'support@dtks.studio' } },
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: {} }),
+    };
+  };
+
+  try {
+    const ordersRes = await orderService.listOrders();
+    assert.equal(ordersRes.success, true);
+    assert.equal(ordersRes.data.length, 1);
+    assert.equal(ordersRes.data[0].id, 'o1');
+
+    const submitRes = await orderService.submitOrder({ projectName: 'Test Site' });
+    assert.equal(submitRes.success, true);
+    assert.equal(submitRes.data.referenceId, 'DKS-2026-0002');
+
+    const inqRes = await inquiryService.listInquiries();
+    assert.equal(inqRes.success, true);
+    assert.equal(inqRes.data[0].id, 'i1');
+
+    const catRes = await packageService.fetchCatalog({ includeInactive: true });
+    assert.equal(catRes.success, true);
+    assert.equal(catRes.data.packages[0].id, 'p1');
+    assert.equal(catRes.data.maintenancePlans[0].id, 'm1');
+    assert.equal(catRes.data.addons[0].id, 'a1');
+
+    const svcRes = await packageService.listServices({ includeInactive: true });
+    assert.equal(svcRes.success, true);
+    assert.equal(svcRes.data[0].id, 's1');
+
+    const bulkSaveRes = await packageService.saveServicesAsync([]);
+    assert.equal(bulkSaveRes.success, false);
+    assert.equal(bulkSaveRes.statusCode, 405);
+
+    const portRes = await portfolioService.listPortfolio({ includeDrafts: true });
+    assert.equal(portRes.success, true);
+    assert.equal(portRes.data[0].id, 'pr1');
+
+    const teamRes = await teamService.listTeam({ includeHidden: true });
+    assert.equal(teamRes.success, true);
+    assert.equal(teamRes.data[0].id, 't1');
+
+    const setRes = await settingsService.getSettings();
+    assert.equal(setRes.success, true);
+    assert.equal(setRes.data.contactEmail, 'support@dtks.studio');
+
+    assert.ok(requestedUrls.some((c) => c.url.includes('/packages?includeInactive=true')));
+    assert.ok(requestedUrls.some((c) => c.url.includes('/services?includeInactive=true')));
+    assert.ok(requestedUrls.some((c) => c.url.includes('/portfolio?includeDrafts=true')));
+    assert.ok(requestedUrls.some((c) => c.url.includes('/team?includeHidden=true')));
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('mediaService sends authenticated apiRequest on upload/delete and resolves relative R2 URLs', async () => {
+  createMockLocalStorage();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  setAdminAuthSession({
+    accessToken: 'adm-media-tok',
+    csrfToken: 'adm-media-csrf',
+    admin: { id: 'adm-1', email: 'admin@dtks.studio', role: 'super_admin' },
+  });
+
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method || 'GET', headers: init.headers || {} });
+    if (String(url).includes('/portfolio/upload') && init.method === 'POST') {
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            asset: {
+              id: 'asset-1',
+              key: 'portfolio/hero.webp',
+              url: '/api/v1/uploads/portfolio/hero.webp',
+            },
+          },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: { deleted: true } }),
+    };
+  };
+
+  try {
+    const file = new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'image/webp' });
+    file.name = 'hero.webp';
+    const upRes = await mediaService.uploadImage(file, { entityType: 'portfolio', entityId: 'p-1' });
+    assert.equal(upRes.success, true);
+    assert.equal(upRes.data.key, 'portfolio/hero.webp');
+    assert.equal(upRes.data.reference, '/api/v1/uploads/portfolio/hero.webp');
+    assert.equal(
+      upRes.data.url,
+      'https://api.dreamtechkashmirsolutions.studio/api/v1/uploads/portfolio/hero.webp'
+    );
+
+    assert.equal(calls[0].headers.Authorization, 'Bearer adm-media-tok');
+    assert.equal(calls[0].headers['X-CSRF-Token'], 'adm-media-csrf');
+
+    assert.equal(
+      extractUploadedAssetKey('https://api.dreamtechkashmirsolutions.studio/api/v1/uploads/portfolio/hero.webp'),
+      'portfolio/hero.webp'
+    );
+    assert.equal(
+      resolveBackendAssetUrl('/api/v1/uploads/portfolio/hero.webp'),
+      'https://api.dreamtechkashmirsolutions.studio/api/v1/uploads/portfolio/hero.webp'
+    );
+
+    const delRes = await mediaService.deleteImage('/api/v1/uploads/portfolio/hero.webp');
+    assert.equal(delRes.success, true);
+    assert.equal(calls[1].method, 'DELETE');
+    assert.ok(calls[1].url.endsWith('/api/v1/portfolio/upload?key=portfolio%2Fhero.webp'));
+    assert.equal(calls[1].headers.Authorization, 'Bearer adm-media-tok');
+
+    // Static asset URLs should no-op without calling DELETE
+    const staticDelRes = await mediaService.deleteImage('/assets/images/logo.png');
+    assert.equal(staticDelRes.success, true);
+    assert.equal(staticDelRes.data.skipped, true);
+    assert.equal(calls.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('Cookie-only token refresh without accessToken retries 401 and production blocks localhost API URLs', async () => {
+  createMockLocalStorage();
+  clearAdminAuthSession();
+  clearClientAuthSession();
+
+  // 1. Localhost API URL blocked in production
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'http://localhost:8787',
+  });
+  const blockedAdminReq = await apiRequest('/api/v1/orders');
+  assert.equal(blockedAdminReq.success, false);
+  assert.equal(blockedAdminReq.errorCode, 'INVALID_API_BASE_URL');
+
+  const blockedClientReq = await clientApiRequest('/api/v1/client/orders');
+  assert.equal(blockedClientReq.success, false);
+  assert.equal(blockedClientReq.errorCode, 'INVALID_API_BASE_URL');
+
+  // 2. Cookie-only refresh (no accessToken returned in refresh JSON, only csrfToken / authenticated)
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  setClientAuthSession({
+    accessToken: '',
+    csrfToken: 'cli-csrf-initial',
+    client: { id: 'c1', email: 'client@dtks.studio' },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let clientOrdersCount = 0;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith('/client/auth/refresh')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'text/plain' },
+        text: async () => JSON.stringify({
+          success: true,
+          data: { authenticated: true, csrfToken: 'cli-csrf-rotated' },
+        }),
+      };
+    }
+    if (u.endsWith('/client/orders')) {
+      clientOrdersCount += 1;
+      if (clientOrdersCount === 1) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ success: false, error: { code: 'UNAUTHORIZED', message: 'Expired' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { orders: [{ id: 'co1', referenceId: 'DKS-2026-0099' }] } }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: {} }),
+    };
+  };
+
+  try {
+    const res = await clientApiRequest('/api/v1/client/orders');
+    assert.equal(res.success, true);
+    assert.equal(clientOrdersCount, 2);
+    assert.equal(getClientCsrfToken(), 'cli-csrf-rotated');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearClientAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('computeDashboardStats counts DTKS_BE status aliases and sanitizeSafeExternalUrl blocks XSS protocols', () => {
+  const stats = computeDashboardStats({
+    orders: [
+      { status: 'Pending' },
+      { status: 'Reviewed' },
+      { status: 'InProgress' },
+      { status: 'Completed' },
+    ],
+    inquiries: [{ status: 'New' }, { status: 'Replied' }],
+    portfolio: [{ published: true }, { published: false }],
+    team: [{ visible: true }],
+  });
+
+  assert.equal(stats.totalOrders, 4);
+  assert.equal(stats.ordersUnderReview, 2);
+  assert.equal(stats.activeProjects, 1);
+  assert.equal(stats.completedProjects, 1);
+  assert.equal(stats.pendingQuotations, 2);
+  assert.equal(stats.newInquiries, 1);
+  assert.equal(stats.portfolioProjects, 1);
+  assert.equal(stats.teamMembers, 1);
+
+  assert.equal(sanitizeSafeExternalUrl('https://dreamtechkashmirsolutions.studio/work'), 'https://dreamtechkashmirsolutions.studio/work');
+  assert.equal(sanitizeSafeExternalUrl('http://example.com/demo'), 'http://example.com/demo');
+  assert.equal(sanitizeSafeExternalUrl('javascript:alert(1)'), '');
+  assert.equal(sanitizeSafeExternalUrl('data:text/html,<script>alert(1)</script>'), '');
+  assert.equal(sanitizeSafeExternalUrl('vbscript:msgbox(1)'), '');
+  assert.equal(sanitizeSafeExternalUrl('/relative/path'), '');
+});
+

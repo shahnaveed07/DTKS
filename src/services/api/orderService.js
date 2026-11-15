@@ -94,14 +94,27 @@ export const orderService = {
    */
   async listOrders() {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.orders, { method: 'GET' });
+      const res = await apiRequest(API_ENDPOINTS.orders, { method: 'GET' });
+      if (!res.success) return res;
+      const list = Array.isArray(res.data?.orders)
+        ? res.data.orders
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
+      return createServiceResponse(list, res.message || 'Orders loaded.', true, {
+        pagination: res.data?.pagination || res.pagination || null,
+      });
     }
     return createServiceResponse(this.getAll(), 'Orders loaded from local storage.');
   },
 
   async getOrderById(id) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(`${API_ENDPOINTS.orders}/${encodeURIComponent(id)}`, { method: 'GET' });
+      const res = await apiRequest(`${API_ENDPOINTS.orders}/${encodeURIComponent(id)}`, {
+        method: 'GET',
+      });
+      if (!res.success) return res;
+      return createServiceResponse(res.data?.order || res.data, res.message || 'Order loaded.');
     }
     const found = this.getById(id);
     if (!found) {
@@ -112,7 +125,9 @@ export const orderService = {
 
   async submitOrder(payload) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.orders, { method: 'POST', body: payload });
+      const res = await apiRequest(API_ENDPOINTS.orders, { method: 'POST', body: payload });
+      if (!res.success) return res;
+      return createServiceResponse(res.data?.order || res.data, res.message || 'Order submitted.');
     }
     if (getSubmissionMode() === 'production_unconfigured') {
       return createServiceError(
@@ -135,10 +150,12 @@ export const orderService = {
 
   async updateOrder(id, patch) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(`${API_ENDPOINTS.orders}/${encodeURIComponent(id)}`, {
+      const res = await apiRequest(`${API_ENDPOINTS.orders}/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: patch,
       });
+      if (!res.success) return res;
+      return createServiceResponse(res.data?.order || res.data, res.message || 'Order updated.');
     }
     const updated = this.update(id, patch);
     if (updated?.__notFound) {

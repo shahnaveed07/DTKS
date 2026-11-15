@@ -16,6 +16,7 @@ import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
 import { buildProjectSchema } from '../../seo/structuredData.js';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import { sanitizeSafeExternalUrl } from '../../utils/orderUtils.js';
 
 export default function ProjectDetailPage() {
   const { slug } = useParams();
@@ -44,6 +45,9 @@ export default function ProjectDetailPage() {
       : [project.coverImage].filter(Boolean);
 
   const currentImage = gallery[activeImageIndex] || project.coverImage;
+  const safeLiveUrl = sanitizeSafeExternalUrl(project.liveUrl);
+  const safeGithubUrl = sanitizeSafeExternalUrl(project.githubUrl);
+  const safeDemoVideoUrl = sanitizeSafeExternalUrl(project.demoVideoUrl);
 
   const handlePrev = () => {
     setActiveImageIndex((prev) => (prev === 0 ? gallery.length - 1 : prev - 1));
@@ -217,14 +221,14 @@ export default function ProjectDetailPage() {
                   </p>
                 </div>
 
-                {(project.liveUrl || project.githubUrl || project.demoVideoUrl) && (
+                {(safeLiveUrl || safeGithubUrl || safeDemoVideoUrl) && (
                   <div className="pt-4 border-t border-[#E3EBE5] space-y-2.5">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64756B]">
                       Project Links
                     </h3>
-                    {project.liveUrl && (
+                    {safeLiveUrl && (
                       <a
-                        href={project.liveUrl}
+                        href={safeLiveUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 text-sm font-medium text-[#16834A] hover:text-[#116438] hover:underline"
@@ -233,9 +237,9 @@ export default function ProjectDetailPage() {
                         <span>Live Website</span>
                       </a>
                     )}
-                    {project.githubUrl && (
+                    {safeGithubUrl && (
                       <a
-                        href={project.githubUrl}
+                        href={safeGithubUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 text-sm font-medium text-[#16834A] hover:text-[#116438] hover:underline"
@@ -244,9 +248,9 @@ export default function ProjectDetailPage() {
                         <span>Public Repository</span>
                       </a>
                     )}
-                    {project.demoVideoUrl && (
+                    {safeDemoVideoUrl && (
                       <a
-                        href={project.demoVideoUrl}
+                        href={safeDemoVideoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 text-sm font-medium text-[#16834A] hover:text-[#116438] hover:underline"

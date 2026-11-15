@@ -36,14 +36,24 @@ export const settingsService = {
    */
   async getSettings() {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.settings, { method: 'GET' });
+      const res = await apiRequest(API_ENDPOINTS.settings, { method: 'GET' });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.settings || res.data,
+        res.message || 'Settings loaded.'
+      );
     }
     return createServiceResponse(this.get(), 'Settings loaded from local storage.');
   },
 
   async saveSettings(patch) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.settings, { method: 'PUT', body: patch });
+      const res = await apiRequest(API_ENDPOINTS.settings, { method: 'PUT', body: patch });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.settings || res.data,
+        res.message || 'Settings saved.'
+      );
     }
     const updated = this.update(patch);
     if (updated?.__writeError) {

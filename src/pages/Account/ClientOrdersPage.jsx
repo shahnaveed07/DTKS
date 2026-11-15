@@ -33,6 +33,17 @@ export default function ClientOrdersPage() {
     loadOrders();
   }, [loadOrders]);
 
+  useEffect(() => {
+    if (!selectedOrder) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSelectedOrder(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOrder]);
+
   const statuses = useMemo(() => {
     const unique = Array.from(new Set(orders.map((o) => o.status).filter(Boolean)));
     return ['All', ...unique];

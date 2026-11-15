@@ -112,6 +112,16 @@ export function buildApiUrl(endpoint = '') {
   return `${baseUrl}${normalizedEndpoint}`;
 }
 
+export function isLocalhostApiUrl(url = '') {
+  try {
+    const parsed = new URL(String(url || ''));
+    const host = parsed.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 export function resolveBackendAssetUrl(urlOrPath = '') {
   const str = String(urlOrPath || '').trim();
   if (!str) return '';
@@ -467,7 +477,23 @@ async function attemptTokenRefresh() {
       });
 
       const contentType = response.headers?.get?.('content-type') || '';
-      const payload = contentType.includes('application/json') ? await response.json() : null;
+      let payload = null;
+      if (contentType.includes('application/json')) {
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+      } else {
+        try {
+          const text = await response.text();
+          if (text && text.trim().startsWith('{')) {
+            payload = JSON.parse(text);
+          }
+        } catch {
+          payload = null;
+        }
+      }
 
       if (!response.ok || !payload?.success) {
         clearAdminAuthSession();
@@ -475,10 +501,13 @@ async function attemptTokenRefresh() {
       }
 
       const tokenData = payload.data || payload;
-      const newAccess = tokenData.accessToken || tokenData.access_token;
+      const newAccess = tokenData.accessToken || tokenData.access_token || '';
       const newRefresh = tokenData.refreshToken || tokenData.refresh_token || refreshToken;
       const newCsrf = tokenData.csrfToken || tokenData.csrf_token || csrfToken;
-      if (!newAccess) {
+      const cookieOnlyAuthenticated = Boolean(
+        !newAccess && (newCsrf || tokenData.authenticated !== false)
+      );
+      if (!newAccess && !cookieOnlyAuthenticated) {
         clearAdminAuthSession();
         return null;
       }
@@ -510,6 +539,19 @@ export async function apiRequest(endpoint, options = {}) {
     ? String(endpoint)
     : `/${endpoint}`;
   const url = buildApiUrl(normalizedEndpoint);
+
+  if (isProductionEnvironment() && isLocalhostApiUrl(url)) {
+    return createServiceError(
+      'Production API base URL is misconfigured to localhost.',
+      null,
+      {
+        errorType: 'BackendNotConfiguredError',
+        errorCode: 'INVALID_API_BASE_URL',
+        statusCode: 503,
+      }
+    );
+  }
+
   const timeoutMs = options.timeoutMs ?? DEFAULT_API_TIMEOUT_MS;
 
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -599,10 +641,10 @@ export async function apiRequest(endpoint, options = {}) {
       hasRefreshableSession()
     ) {
       const refreshed = await attemptTokenRefresh();
-      if (refreshed?.accessToken) {
+      if (refreshed) {
         return apiRequest(endpoint, {
           ...options,
-          token: refreshed.accessToken,
+          token: refreshed.accessToken || '',
           _isRetry: true,
         });
       }

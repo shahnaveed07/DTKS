@@ -7,7 +7,8 @@ import StatusBadge from '../../components/common/StatusBadge.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
 export default function AdminInquiriesPage() {
-  const { inquiries, updateInquiry, deleteInquiry, requestConfirm } = useApp();
+  const { inquiries, updateInquiry, deleteInquiry, requestConfirm, dataAdapterMode } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
   const [statusFilter, setStatusFilter] = useState('All');
 
   const filtered = inquiries.filter(
@@ -17,7 +18,9 @@ export default function AdminInquiriesPage() {
   const handleDelete = (inq) => {
     requestConfirm({
       title: `Delete inquiry from ${inq.name}?`,
-      message: 'This permanently deletes the contact inquiry from local storage.',
+      message: isApiMode
+        ? 'This permanently deletes the contact inquiry from the backend database.'
+        : 'This permanently deletes the contact inquiry from local storage.',
       confirmLabel: 'Delete Inquiry',
       variant: 'danger',
       onConfirm: () => deleteInquiry(inq.id),

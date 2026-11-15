@@ -9,6 +9,7 @@ import RequireAdmin from './components/auth/RequireAdmin.jsx';
 import RequireClient from './components/auth/RequireClient.jsx';
 import ToastContainer from './components/common/ToastContainer.jsx';
 import ConfirmDialog from './components/common/ConfirmDialog.jsx';
+import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 
 import HomePage from './pages/Home/HomePage.jsx';
 import ServicesPage from './pages/Services/ServicesPage.jsx';
@@ -171,7 +172,9 @@ export default function App() {
     <AppProvider>
       <ClientAuthProvider>
         <BrowserRouter>
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
         </BrowserRouter>
       </ClientAuthProvider>
     </AppProvider>

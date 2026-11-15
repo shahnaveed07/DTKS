@@ -1,5 +1,6 @@
 import { SITE_CONFIG, buildCanonicalUrl, getSiteUrl } from './seoConfig.js';
 import { buildWhatsAppUrl } from '../utils/orderUtils.js';
+import { resolveBackendAssetUrl } from '../services/api/apiClient.js';
 
 function isPlaceholderValue(value) {
   if (!value || typeof value !== 'string') return true;
@@ -265,10 +266,11 @@ export function buildPortfolioSchema(projects = []) {
 export function buildProjectSchema(project) {
   if (!project) return null;
   const siteUrl = getSiteUrl();
-  const imageUrl = project.coverImage
-    ? project.coverImage.startsWith('http')
-      ? project.coverImage
-      : `${siteUrl}${project.coverImage}`
+  const resolvedCover = resolveBackendAssetUrl(project.coverImage || '');
+  const imageUrl = resolvedCover
+    ? resolvedCover.startsWith('http')
+      ? resolvedCover
+      : `${siteUrl}${resolvedCover.startsWith('/') ? resolvedCover : `/${resolvedCover}`}`
     : `${siteUrl}${SITE_CONFIG.ogImagePath}`;
 
   return {

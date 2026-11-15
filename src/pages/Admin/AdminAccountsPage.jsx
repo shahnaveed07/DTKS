@@ -108,6 +108,23 @@ export default function AdminAccountsPage() {
   const [viewingAdmin, setViewingAdmin] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
 
+  useEffect(() => {
+    if (!viewingAdmin && !editingAdmin && !showCreateModal) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        if (viewingAdmin) {
+          setViewingAdmin(null);
+        } else if (editingAdmin) {
+          setEditingAdmin(null);
+        } else if (showCreateModal) {
+          setShowCreateModal(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewingAdmin, editingAdmin, showCreateModal]);
+
   // Form state (invitation creation has name, email, role ONLY — no initial password)
   const [formValues, setFormValues] = useState({
     name: '',

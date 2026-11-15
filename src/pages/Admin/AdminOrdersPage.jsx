@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Eye, Trash2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { ORDER_STATUSES, WEBSITE_CATEGORIES } from '../../data/seedData.js';
@@ -8,7 +8,8 @@ import EmptyState from '../../components/common/EmptyState.jsx';
 import { filterOrders, formatCurrency } from '../../utils/orderUtils.js';
 
 export default function AdminOrdersPage() {
-  const { orders, updateOrder, deleteOrder, requestConfirm } = useApp();
+  const { orders, updateOrder, deleteOrder, requestConfirm, dataAdapterMode } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [serviceFilter, setServiceFilter] = useState('All');
@@ -30,6 +31,18 @@ export default function AdminOrdersPage() {
   const selectedOrder = orders.find((o) => o.id === selectedOrderId) || null;
 
   const [editDraft, setEditDraft] = useState(null);
+
+  useEffect(() => {
+    if (!selectedOrder || !editDraft) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSelectedOrderId(null);
+        setEditDraft(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOrder, editDraft]);
 
   const openEditor = (order) => {
     setSelectedOrderId(order.id);
@@ -80,7 +93,9 @@ export default function AdminOrdersPage() {
   const handleDelete = (order) => {
     requestConfirm({
       title: `Delete website order ${order.referenceId}?`,
-      message: `This permanently removes "${order.projectName}" from local storage.`,
+      message: isApiMode
+        ? `This permanently removes "${order.projectName}" from the backend database.`
+        : `This permanently removes "${order.projectName}" from local storage.`,
       confirmLabel: 'Delete Order',
       variant: 'danger',
       onConfirm: () => {

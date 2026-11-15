@@ -2,8 +2,9 @@ import SEO from '../../components/common/SEO.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 
 export default function LegalPage({ type = 'privacy' }) {
-  const { settings } = useApp();
+  const { settings, submissionMode } = useApp();
   const isPrivacy = type === 'privacy';
+  const isLocalPreview = submissionMode === 'local_demo';
 
   return (
     <>
@@ -22,17 +23,32 @@ export default function LegalPage({ type = 'privacy' }) {
             </div>
 
             {isPrivacy ? (
-              <div className="space-y-4 text-sm text-[#64756B] leading-relaxed">
-                <p>
-                  This frontend prototype for <strong className="text-[#17231C]">{settings.companyName}</strong> stores submitted project quote requests, contact inquiries, and admin edits strictly inside your local browser&apos;s LocalStorage.
-                </p>
-                <p>
-                  No personal details entered into this demonstration interface are transmitted to an external backend server, third-party payment processor, or marketing network.
-                </p>
-                <p>
-                  You may clear all locally persisted data at any time using the &ldquo;Reset Demo Data&rdquo; control in the Admin Prototype sidebar or by clearing your browser site storage.
-                </p>
-              </div>
+              isLocalPreview ? (
+                <div className="space-y-4 text-sm text-[#64756B] leading-relaxed">
+                  <p>
+                    In local preview mode for <strong className="text-[#17231C]">{settings.companyName}</strong>, submitted project quote requests, contact inquiries, and admin edits are stored inside your current browser&apos;s LocalStorage for offline development testing.
+                  </p>
+                  <p>
+                    No data entered during local preview mode is transmitted to third-party marketing networks or external payment processors.
+                  </p>
+                  <p>
+                    You may clear locally stored preview records at any time using the browser site storage settings or administrative local controls.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4 text-sm text-[#64756B] leading-relaxed">
+                  <p>
+                    <strong className="text-[#17231C]">{settings.companyName} (DTKS)</strong> on{' '}
+                    <span className="text-[#17231C] font-medium">dreamtechkashmirsolutions.studio</span> collects only the contact, account, and website project details you voluntarily submit through our quote request, inquiry, and client portal workflows.
+                  </p>
+                  <p>
+                    Submitted information (such as your name, email address, phone number, business name, and project scope) is used strictly to prepare quotations, track active website orders, coordinate domain/hosting arrangements, and provide customer support.
+                  </p>
+                  <p>
+                    Client portal authentication uses secure session cookies and verified email checks. We do not sell, rent, or distribute client contact records or project briefs to third-party advertising networks.
+                  </p>
+                </div>
+              )
             ) : (
               <div className="space-y-4 text-sm text-[#64756B] leading-relaxed">
                 <p>

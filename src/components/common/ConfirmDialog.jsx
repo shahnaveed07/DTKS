@@ -1,8 +1,20 @@
+import { useEffect } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 
 export default function ConfirmDialog() {
   const { confirmState, closeConfirm } = useApp();
+
+  useEffect(() => {
+    if (!confirmState) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeConfirm();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [confirmState, closeConfirm]);
 
   if (!confirmState) return null;
 

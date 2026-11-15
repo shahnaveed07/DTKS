@@ -192,16 +192,42 @@ export function findTrackedOrder(orders = [], referenceId = '', email = '') {
   );
 }
 
+export function sanitizeSafeExternalUrl(rawUrl = '') {
+  if (typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch {
+    return '';
+  }
+  return '';
+}
+
 export function computeDashboardStats({ orders = [], inquiries = [], portfolio = [], team = [] }) {
   const activeStatuses = new Set([
     'Confirmed',
     'Approved',
     'In Progress',
+    'InProgress',
     'Ready for Review',
     'Under Testing',
   ]);
-  const reviewStatuses = new Set(['New Request', 'Under Review', 'Requirements Clarification']);
+  const reviewStatuses = new Set([
+    'Pending',
+    'Reviewed',
+    'In Review',
+    'New Request',
+    'Under Review',
+    'Requirements Clarification',
+  ]);
   const pendingQuoteStatuses = new Set([
+    'Pending',
+    'Reviewed',
+    'In Review',
     'New Request',
     'Under Review',
     'Requirements Clarification',

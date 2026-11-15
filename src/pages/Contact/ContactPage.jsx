@@ -20,6 +20,7 @@ import {
   validateContactForm,
   buildWhatsAppUrl,
   buildMailtoUrl,
+  sanitizeSafeExternalUrl,
 } from '../../utils/orderUtils.js';
 
 const EMPTY_FORM = {
@@ -88,13 +89,14 @@ export default function ContactPage() {
   const hasLocation = Boolean(settings.businessLocation && settings.businessLocation.trim());
   const hasHours = Boolean(settings.workingHours && settings.workingHours.trim());
   const serviceArea = settings.serviceArea || 'Srinagar, Kashmir, Jammu & Kashmir, India';
-  const officialDomain = settings.officialDomain || 'https://dreamtechkashmirsolutions.studio/';
+  const officialDomain =
+    sanitizeSafeExternalUrl(settings.officialDomain) || 'https://dreamtechkashmirsolutions.studio/';
   const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
   const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
 
-  const socialEntries = Object.entries(settings.socialLinks || {}).filter(
-    ([, url]) => typeof url === 'string' && url.trim().length > 0
-  );
+  const socialEntries = Object.entries(settings.socialLinks || {})
+    .map(([platform, url]) => [platform, sanitizeSafeExternalUrl(url)])
+    .filter(([, safeUrl]) => Boolean(safeUrl));
 
   return (
     <>

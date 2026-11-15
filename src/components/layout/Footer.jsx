@@ -3,7 +3,11 @@ import { Mail, Phone, MapPin, Globe } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
 import WhatsAppIcon from '../common/WhatsAppIcon.jsx';
-import { buildWhatsAppUrl, buildMailtoUrl } from '../../utils/orderUtils.js';
+import {
+  buildWhatsAppUrl,
+  buildMailtoUrl,
+  sanitizeSafeExternalUrl,
+} from '../../utils/orderUtils.js';
 
 export default function Footer() {
   const { settings, services, adminAccessPolicy } = useApp();
@@ -17,9 +21,9 @@ export default function Footer() {
   const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
   const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
 
-  const socialEntries = Object.entries(settings.socialLinks || {}).filter(
-    ([, url]) => typeof url === 'string' && url.trim().length > 0
-  );
+  const socialEntries = Object.entries(settings.socialLinks || {})
+    .map(([platform, url]) => [platform, sanitizeSafeExternalUrl(url)])
+    .filter(([, safeUrl]) => Boolean(safeUrl));
 
   return (
     <footer className="border-t border-[#0E532E] bg-[#116438] text-white">

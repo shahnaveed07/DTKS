@@ -6,6 +6,7 @@ import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
 import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
+import { sanitizeSafeExternalUrl } from '../../utils/orderUtils.js';
 
 export default function TeamPage() {
   const { team, settings } = useApp();
@@ -48,7 +49,11 @@ export default function TeamPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {visibleMembers.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {visibleMembers.map((member) => (
+              {visibleMembers.map((member) => {
+                const safeLinkedin = sanitizeSafeExternalUrl(member.linkedinUrl);
+                const safeGithub = sanitizeSafeExternalUrl(member.githubUrl);
+                const safeWebsite = sanitizeSafeExternalUrl(member.websiteUrl);
+                return (
                 <article
                   key={member.id}
                   className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6 flex flex-col justify-between"
@@ -114,11 +119,11 @@ export default function TeamPage() {
                     )}
                   </div>
 
-                  {(member.linkedinUrl || member.githubUrl || member.websiteUrl) && (
+                  {(safeLinkedin || safeGithub || safeWebsite) && (
                     <div className="mt-5 pt-4 border-t border-[#E3EBE5] flex items-center gap-3">
-                      {member.linkedinUrl && (
+                      {safeLinkedin && (
                         <a
-                          href={member.linkedinUrl}
+                          href={safeLinkedin}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`${member.fullName} LinkedIn`}
@@ -127,9 +132,9 @@ export default function TeamPage() {
                           <Linkedin className="w-4 h-4" />
                         </a>
                       )}
-                      {member.githubUrl && (
+                      {safeGithub && (
                         <a
-                          href={member.githubUrl}
+                          href={safeGithub}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`${member.fullName} GitHub`}
@@ -138,9 +143,9 @@ export default function TeamPage() {
                           <Github className="w-4 h-4" />
                         </a>
                       )}
-                      {member.websiteUrl && (
+                      {safeWebsite && (
                         <a
-                          href={member.websiteUrl}
+                          href={safeWebsite}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`${member.fullName} Website`}
@@ -152,7 +157,8 @@ export default function TeamPage() {
                     </div>
                   )}
                 </article>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <EmptyState

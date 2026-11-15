@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus,
   Edit3,
@@ -44,13 +44,26 @@ export default function AdminTeamPage() {
     reorderTeamMember,
     requestConfirm,
     addToast,
+    dataAdapterMode,
   } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_MEMBER);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen]);
 
   const openCreate = () => {
     setEditing(null);
@@ -90,11 +103,19 @@ export default function AdminTeamPage() {
         return;
       }
       const prevAvatar = form.avatarUrl;
-      if (prevAvatar && prevAvatar.startsWith('idb://') && prevAvatar !== result.data.reference) {
+      if (
+        prevAvatar &&
+        prevAvatar !== result.data.reference &&
+        (prevAvatar.startsWith('idb://') || prevAvatar.includes('/api/v1/uploads/'))
+      ) {
         await mediaService.deleteImage(prevAvatar);
       }
       setForm((f) => ({ ...f, avatarUrl: result.data.reference }));
-      addToast('Photograph stored in browser media storage.');
+      addToast(
+        isApiMode
+          ? 'Photograph uploaded to R2 media storage.'
+          : 'Photograph stored in browser media storage.'
+      );
     } finally {
       setUploadingPhoto(false);
       e.target.value = '';
@@ -148,11 +169,16 @@ export default function AdminTeamPage() {
   const handleDelete = (member) => {
     requestConfirm({
       title: `Remove "${member.fullName}"?`,
-      message: 'This deletes the team profile from local storage.',
+      message: isApiMode
+        ? 'This deletes the team profile from the backend database.'
+        : 'This deletes the team profile from local storage.',
       confirmLabel: 'Remove Member',
       variant: 'danger',
       onConfirm: async () => {
-        if (member.avatarUrl && member.avatarUrl.startsWith('idb://')) {
+        if (
+          member.avatarUrl &&
+          (member.avatarUrl.startsWith('idb://') || member.avatarUrl.includes('/api/v1/uploads/'))
+        ) {
           await mediaService.deleteImage(member.avatarUrl);
         }
         await deleteTeamMember(member.id);

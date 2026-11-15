@@ -2,6 +2,12 @@ User-agent: *
 Allow: /
 
 Disallow: /admin/
+Disallow: /account/
+Disallow: /login
+Disallow: /register
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
 Disallow: /track-order
 Disallow: /order-success
 

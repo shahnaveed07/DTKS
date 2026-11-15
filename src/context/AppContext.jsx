@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   ensureSeededStorage,
   exportLocalDataSnapshot,
@@ -41,17 +41,35 @@ export function AppProvider({ children }) {
   const [error, setError] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const toastTimersRef = useRef(new Map());
+
+  const dismissToast = useCallback((id) => {
+    const timer = toastTimersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const addToast = useCallback((message, type = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      toastTimersRef.current.delete(id);
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4500);
+    toastTimersRef.current.set(id, timer);
   }, []);
 
-  const dismissToast = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+  useEffect(() => {
+    const timers = toastTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
   }, []);
 
   const requestConfirm = useCallback((config) => {
@@ -88,15 +106,17 @@ export function AppProvider({ children }) {
     try {
       const [
         catalogRes,
+        servicesRes,
         portfolioRes,
         teamRes,
         ordersRes,
         inquiriesRes,
         settingsRes,
       ] = await Promise.all([
-        packageService.fetchCatalog(),
-        portfolioService.listPortfolio(),
-        teamService.listTeam(),
+        packageService.fetchCatalog({ includeInactive: shouldLoadAdmin }),
+        packageService.listServices({ includeInactive: shouldLoadAdmin }),
+        portfolioService.listPortfolio({ includeDrafts: shouldLoadAdmin }),
+        teamService.listTeam({ includeHidden: shouldLoadAdmin }),
         shouldLoadAdmin
           ? orderService.listOrders()
           : Promise.resolve({ success: true, data: null }),
@@ -117,6 +137,9 @@ export function AppProvider({ children }) {
         setError(catalogRes.message);
       }
 
+      if (servicesRes.success && Array.isArray(servicesRes.data)) {
+        setServices(servicesRes.data);
+      }
       if (portfolioRes.success && Array.isArray(portfolioRes.data)) {
         setPortfolio(portfolioRes.data);
       }
@@ -129,7 +152,7 @@ export function AppProvider({ children }) {
       if (inquiriesRes.success && Array.isArray(inquiriesRes.data)) {
         setInquiries(inquiriesRes.data);
       }
-      if (settingsRes.success && settingsRes.data) {
+      if (settingsRes.success && settingsRes.data && typeof settingsRes.data === 'object') {
         setSettings(settingsRes.data);
       }
     } catch (err) {

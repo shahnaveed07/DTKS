@@ -4,7 +4,15 @@ import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
 
 export default function AdminSettingsPage() {
-  const { settings, updateSettings, exportLocalData, restoreFromBackup, isMutating } = useApp();
+  const {
+    settings,
+    updateSettings,
+    exportLocalData,
+    restoreFromBackup,
+    isMutating,
+    dataAdapterMode,
+  } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
   const [form, setForm] = useState(settings);
 
   useEffect(() => {
@@ -63,23 +71,27 @@ export default function AdminSettingsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={restoreFromBackup}
-              className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] bg-white hover:bg-[#F7FAF7] text-[#17231C] transition-colors whitespace-nowrap"
-              title="Restore browser records from dks_v2_backup_pre_cleanup snapshot"
-            >
-              <RotateCcw className="w-4 h-4 text-[#16834A]" />
-              <span>Restore Pre-Cleanup Backup</span>
-            </button>
-            <button
-              type="button"
-              onClick={exportLocalData}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] bg-white hover:bg-[#F7FAF7] text-[#17231C] transition-colors whitespace-nowrap"
-            >
-              <Download className="w-4 h-4 text-[#16834A]" />
-              <span>Export Local Data Backup</span>
-            </button>
+            {!isApiMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={restoreFromBackup}
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] bg-white hover:bg-[#F7FAF7] text-[#17231C] transition-colors whitespace-nowrap"
+                  title="Restore browser records from dks_v2_backup_pre_cleanup snapshot"
+                >
+                  <RotateCcw className="w-4 h-4 text-[#16834A]" />
+                  <span>Restore Pre-Cleanup Backup</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={exportLocalData}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] bg-white hover:bg-[#F7FAF7] text-[#17231C] transition-colors whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4 text-[#16834A]" />
+                  <span>Export Local Data Backup</span>
+                </button>
+              </>
+            )}
             <button
               type="submit"
               disabled={isMutating}

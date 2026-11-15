@@ -76,14 +76,30 @@ export const inquiryService = {
    */
   async listInquiries() {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.inquiries, { method: 'GET' });
+      const res = await apiRequest(API_ENDPOINTS.inquiries, { method: 'GET' });
+      if (!res.success) return res;
+      const list = Array.isArray(res.data?.inquiries)
+        ? res.data.inquiries
+        : Array.isArray(res.data?.messages)
+        ? res.data.messages
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
+      return createServiceResponse(list, res.message || 'Inquiries loaded.', true, {
+        pagination: res.data?.pagination || res.pagination || null,
+      });
     }
     return createServiceResponse(this.getAll(), 'Inquiries loaded from local storage.');
   },
 
   async submitInquiry(payload) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.inquiries, { method: 'POST', body: payload });
+      const res = await apiRequest(API_ENDPOINTS.inquiries, { method: 'POST', body: payload });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.inquiry || res.data?.message || res.data,
+        res.message || 'Inquiry recorded.'
+      );
     }
     if (getSubmissionMode() === 'production_unconfigured') {
       return createServiceError(
@@ -103,10 +119,15 @@ export const inquiryService = {
 
   async updateInquiry(id, patch) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(`${API_ENDPOINTS.inquiries}/${encodeURIComponent(id)}`, {
+      const res = await apiRequest(`${API_ENDPOINTS.inquiries}/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: patch,
       });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.inquiry || res.data?.message || res.data,
+        res.message || 'Inquiry updated.'
+      );
     }
     const updated = this.update(id, patch);
     if (updated?.__notFound) {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Edit3, Trash2, X, Eye, EyeOff, Star, Upload } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { PORTFOLIO_CATEGORIES } from '../../data/seedData.js';
@@ -31,12 +31,32 @@ const EMPTY_PROJECT = {
 };
 
 export default function AdminPortfolioPage() {
-  const { portfolio, createProject, updateProject, deleteProject, requestConfirm, addToast } = useApp();
+  const {
+    portfolio,
+    createProject,
+    updateProject,
+    deleteProject,
+    requestConfirm,
+    addToast,
+    dataAdapterMode,
+  } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_PROJECT);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen]);
 
   const openCreate = () => {
     setEditing(null);
@@ -75,11 +95,19 @@ export default function AdminPortfolioPage() {
         return;
       }
       const prevCover = form.coverImage;
-      if (prevCover && prevCover.startsWith('idb://') && prevCover !== result.data.reference) {
+      if (
+        prevCover &&
+        prevCover !== result.data.reference &&
+        (prevCover.startsWith('idb://') || prevCover.includes('/api/v1/uploads/'))
+      ) {
         await mediaService.deleteImage(prevCover);
       }
       setForm((f) => ({ ...f, coverImage: result.data.reference }));
-      addToast('Screenshot stored in browser media storage.');
+      addToast(
+        isApiMode
+          ? 'Screenshot uploaded to R2 media storage.'
+          : 'Screenshot stored in browser media storage.'
+      );
     } finally {
       setUploadingImage(false);
       e.target.value = '';
@@ -142,11 +170,16 @@ export default function AdminPortfolioPage() {
   const handleDelete = (proj) => {
     requestConfirm({
       title: `Delete "${proj.title}"?`,
-      message: 'This removes the portfolio record from local browser storage.',
+      message: isApiMode
+        ? 'This removes the portfolio record from the backend database.'
+        : 'This removes the portfolio record from local browser storage.',
       confirmLabel: 'Delete Project',
       variant: 'danger',
       onConfirm: async () => {
-        if (proj.coverImage && proj.coverImage.startsWith('idb://')) {
+        if (
+          proj.coverImage &&
+          (proj.coverImage.startsWith('idb://') || proj.coverImage.includes('/api/v1/uploads/'))
+        ) {
           await mediaService.deleteImage(proj.coverImage);
         }
         await deleteProject(proj.id);

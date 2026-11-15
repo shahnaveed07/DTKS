@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Edit3, Trash2, X, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { WEBSITE_CATEGORIES } from '../../data/seedData.js';
@@ -40,6 +40,17 @@ export default function AdminPackagesPage() {
   const [editingPkg, setEditingPkg] = useState(null);
   const [pkgForm, setPkgForm] = useState(EMPTY_PACKAGE);
   const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen]);
 
   const openCreate = () => {
     setEditingPkg(null);

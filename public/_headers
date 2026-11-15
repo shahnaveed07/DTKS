@@ -4,6 +4,27 @@
 /admin/*
   X-Robots-Tag: noindex, nofollow
 
+/account
+  X-Robots-Tag: noindex, nofollow
+
+/account/*
+  X-Robots-Tag: noindex, nofollow
+
+/login
+  X-Robots-Tag: noindex, nofollow
+
+/register
+  X-Robots-Tag: noindex, nofollow
+
+/verify-email
+  X-Robots-Tag: noindex, nofollow
+
+/forgot-password
+  X-Robots-Tag: noindex, nofollow
+
+/reset-password
+  X-Robots-Tag: noindex, nofollow
+
 /track-order
   X-Robots-Tag: noindex, nofollow
 
@@ -21,4 +42,6 @@
 
 /*
   X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

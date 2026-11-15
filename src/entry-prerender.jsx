@@ -135,7 +135,7 @@ function resolveRouteSeo(url) {
       pathname: url,
       noindex: true,
       fullTitle: 'Admin | DTKS',
-      description: 'Administrative prototype interface for DreamTech Kashmir Solutions (DTKS).',
+      description: 'Administrative console for DreamTech Kashmir Solutions (DTKS).',
       settings,
     });
   }

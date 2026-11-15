@@ -1,9 +1,10 @@
 import { API_ENDPOINTS } from '../models/backendModels.js';
 import {
+  apiRequest,
   createServiceError,
   createServiceResponse,
-  getApiBaseUrl,
   getDataAdapterMode,
+  resolveBackendAssetUrl,
 } from '../api/apiClient.js';
 
 export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB max per image
@@ -183,6 +184,22 @@ export function extractMediaId(refOrId = '') {
   return str;
 }
 
+export function extractUploadedAssetKey(refOrUrl = '') {
+  const str = String(refOrUrl || '').trim();
+  if (!str || str.startsWith('idb://') || str.startsWith('data:') || str.startsWith('blob:')) {
+    return '';
+  }
+  const uploadsMarker = '/api/v1/uploads/';
+  const markerIndex = str.indexOf(uploadsMarker);
+  if (markerIndex !== -1) {
+    return decodeURIComponent(str.slice(markerIndex + uploadsMarker.length).split('?')[0]);
+  }
+  if (!str.startsWith('/') && !/^https?:\/\//i.test(str)) {
+    return str;
+  }
+  return '';
+}
+
 /**
  * Validates an uploaded image file against MIME type, extension, and size limits.
  */
@@ -259,54 +276,48 @@ export async function uploadImage(file, options = {}) {
   }
 
   if (getDataAdapterMode() === 'api') {
-    const baseUrl = getApiBaseUrl();
-    const url = `${baseUrl}${API_ENDPOINTS.fileUploads}`;
-    try {
-      const formData = new FormData();
-      if (file instanceof Blob) {
-        formData.append('file', file, validation.name);
-      }
-      if (options.entityType) {
-        formData.append('entityType', String(options.entityType));
-      }
-      if (options.entityId) {
-        formData.append('entityId', String(options.entityId));
-      }
-
-      const response = await fetch(url, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      const contentType = response.headers?.get?.('content-type') || '';
-      const payload = contentType.includes('application/json') ? await response.json() : null;
-
-      if (!response.ok) {
-        return createServiceError(
-          payload?.message || `Image upload failed with status ${response.status}.`,
-          payload?.data ?? null
-        );
-      }
-
-      const uploadedData = payload?.data || payload;
-      return createServiceResponse(
-        {
-          id: uploadedData?.id || `media-${Date.now()}`,
-          reference: uploadedData?.publicUrl || uploadedData?.url || '',
-          url: uploadedData?.publicUrl || uploadedData?.url || '',
-          mimeType: validation.mimeType,
-          sizeBytes: validation.sizeBytes,
-          name: validation.name,
-        },
-        payload?.message || 'Image uploaded to storage.'
-      );
-    } catch (err) {
-      return createServiceError(
-        err?.message || 'Network error while uploading image to backend storage.',
-        null
-      );
+    if (typeof FormData === 'undefined') {
+      return createServiceError('Multipart upload requires FormData support.');
     }
+    const formData = new FormData();
+    if (file instanceof Blob) {
+      formData.append('file', file, validation.name);
+    } else {
+      const blob = new Blob([file.buffer || file.content || ''], { type: validation.mimeType });
+      formData.append('file', blob, validation.name);
+    }
+    if (options.entityType) {
+      formData.append('entityType', String(options.entityType));
+    }
+    if (options.entityId) {
+      formData.append('entityId', String(options.entityId));
+    }
+
+    const res = await apiRequest(API_ENDPOINTS.portfolioUpload, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.success) {
+      return res;
+    }
+
+    const uploadedData = res.data?.asset || res.data || {};
+    const rawRef = uploadedData.url || uploadedData.publicUrl || '';
+    const resolvedUrl = resolveBackendAssetUrl(rawRef);
+    const key = uploadedData.key || extractUploadedAssetKey(rawRef);
+
+    return createServiceResponse(
+      {
+        id: uploadedData.id || key || `media-${Date.now()}`,
+        key,
+        reference: rawRef || key,
+        url: resolvedUrl || rawRef,
+        mimeType: validation.mimeType,
+        sizeBytes: validation.sizeBytes,
+        name: validation.name,
+      },
+      res.message || 'Image uploaded to R2 media storage.'
+    );
   }
 
   // Local mode: store binary Blob in IndexedDB + memory cache (never store Base64 in LocalStorage)
@@ -385,20 +396,21 @@ export async function deleteImage(mediaRefOrId) {
   const id = extractMediaId(mediaRefOrId);
 
   if (getDataAdapterMode() === 'api') {
-    const baseUrl = getApiBaseUrl();
-    const url = `${baseUrl}${API_ENDPOINTS.fileUploads}/${encodeURIComponent(id)}`;
-    try {
-      const response = await fetch(url, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        return createServiceError(`Failed deleting media "${id}" (status ${response.status}).`);
-      }
-      return createServiceResponse({ id }, 'Image deleted from backend storage.');
-    } catch (err) {
-      return createServiceError(err?.message || 'Network error while deleting image.');
+    const key = extractUploadedAssetKey(mediaRefOrId);
+    if (!key) {
+      return createServiceResponse(
+        { id, skipped: true },
+        'External or static asset URL left unchanged.'
+      );
     }
+    const res = await apiRequest(
+      `${API_ENDPOINTS.portfolioUpload}?key=${encodeURIComponent(key)}`,
+      { method: 'DELETE' }
+    );
+    if (!res.success) {
+      return res;
+    }
+    return createServiceResponse({ id, key }, res.message || 'Image deleted from R2 media storage.');
   }
 
   memoryBlobStore.delete(id);
@@ -434,7 +446,7 @@ export async function deleteImage(mediaRefOrId) {
 
 /**
  * Synchronously returns a renderable URL if already cached or if `mediaRef` is a standard URL
- * (`/assets/...`, `https://...`, `blob:...`, or legacy `data:image/...`).
+ * (`/assets/...`, `/api/v1/uploads/...`, `https://...`, `blob:...`, or legacy `data:image/...`).
  */
 export function getCachedImageUrl(mediaRef) {
   if (!mediaRef || typeof mediaRef !== 'string') return '';
@@ -442,7 +454,7 @@ export function getCachedImageUrl(mediaRef) {
   if (!trimmed) return '';
 
   if (!trimmed.startsWith('idb://')) {
-    return trimmed;
+    return resolveBackendAssetUrl(trimmed);
   }
 
   const id = extractMediaId(trimmed);
@@ -461,7 +473,7 @@ export function getCachedImageUrl(mediaRef) {
 }
 
 /**
- * Asynchronously resolves any image reference (`idb://media-...`, `/assets/...`, `https://...`, `data:image/...`)
+ * Asynchronously resolves any image reference (`idb://media-...`, `/assets/...`, `/api/v1/uploads/...`, `https://...`)
  * to a renderable browser URL.
  */
 export async function getImageUrl(mediaRef) {
@@ -470,7 +482,7 @@ export async function getImageUrl(mediaRef) {
   if (!trimmed) return '';
 
   if (!trimmed.startsWith('idb://')) {
-    return trimmed;
+    return resolveBackendAssetUrl(trimmed);
   }
 
   const cached = getCachedImageUrl(trimmed);

@@ -5,6 +5,7 @@ import { clientAccountService } from '../../services/api/clientAccountService.js
 import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import { sanitizeSafeExternalUrl } from '../../utils/orderUtils.js';
 
 export default function ClientProjectsPage() {
   const navigate = useNavigate();
@@ -77,7 +78,10 @@ export default function ClientProjectsPage() {
           </div>
         ) : projects.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {projects.map((project) => (
+            {projects.map((project) => {
+              const safeStagingUrl = sanitizeSafeExternalUrl(project.stagingUrl);
+              const safeProductionUrl = sanitizeSafeExternalUrl(project.productionUrl);
+              return (
               <article
                 key={project.id || project.referenceId}
                 className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-5 flex flex-col justify-between gap-4"
@@ -107,9 +111,9 @@ export default function ClientProjectsPage() {
                 </div>
 
                 <div className="pt-4 border-t border-[#E3EBE5] flex flex-wrap items-center gap-3">
-                  {project.stagingUrl && (
+                  {safeStagingUrl && (
                     <a
-                      href={project.stagingUrl}
+                      href={safeStagingUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A] transition-colors whitespace-nowrap"
@@ -118,9 +122,9 @@ export default function ClientProjectsPage() {
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   )}
-                  {project.productionUrl && (
+                  {safeProductionUrl && (
                     <a
-                      href={project.productionUrl}
+                      href={safeProductionUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
@@ -129,14 +133,15 @@ export default function ClientProjectsPage() {
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   )}
-                  {!project.stagingUrl && !project.productionUrl && (
+                  {!safeStagingUrl && !safeProductionUrl && (
                     <span className="text-xs text-[#64756B]">
                       Preview link will appear once staging deployment is ready.
                     </span>
                   )}
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <EmptyState

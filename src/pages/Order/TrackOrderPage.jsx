@@ -2,10 +2,38 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, Info, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
-import { ORDER_STATUSES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { findTrackedOrder, formatCurrency } from '../../utils/orderUtils.js';
+
+const CANONICAL_TRACKING_STAGES = [
+  'New Request',
+  'Under Review',
+  'Quotation Sent',
+  'Confirmed',
+  'In Progress',
+  'Under Testing',
+  'Completed',
+];
+
+const TRACKING_STAGE_ALIASES = {
+  Pending: 'New Request',
+  'New Request': 'New Request',
+  Reviewed: 'Under Review',
+  'In Review': 'Under Review',
+  'Under Review': 'Under Review',
+  'Requirements Clarification': 'Under Review',
+  'Quotation Sent': 'Quotation Sent',
+  'Awaiting Confirmation': 'Quotation Sent',
+  'Awaiting Customer Approval': 'Quotation Sent',
+  Confirmed: 'Confirmed',
+  Approved: 'Confirmed',
+  InProgress: 'In Progress',
+  'In Progress': 'In Progress',
+  'Ready for Review': 'Under Testing',
+  'Under Testing': 'Under Testing',
+  Completed: 'Completed',
+};
 
 export default function TrackOrderPage() {
   const [searchParams] = useSearchParams();
@@ -60,8 +88,13 @@ export default function TrackOrderPage() {
     setSearched(true);
   };
 
-  const activeStepIndex = matchedOrder
-    ? ORDER_STATUSES.indexOf(matchedOrder.status)
+  const isClosedStatus =
+    matchedOrder?.status === 'Cancelled' || matchedOrder?.status === 'Rejected';
+  const normalizedStage = matchedOrder
+    ? TRACKING_STAGE_ALIASES[matchedOrder.status] || matchedOrder.status
+    : '';
+  const activeStepIndex = normalizedStage
+    ? CANONICAL_TRACKING_STAGES.indexOf(normalizedStage)
     : -1;
 
   return (
@@ -250,26 +283,32 @@ export default function TrackOrderPage() {
                 <p className="text-xs font-semibold text-[#64756B] mb-3">
                   Order Lifecycle Stages
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  {ORDER_STATUSES.slice(0, 9).map((st, idx) => {
-                    const isCurrent = st === matchedOrder.status;
-                    const isPast = activeStepIndex > idx && matchedOrder.status !== 'Cancelled';
-                    return (
-                      <div
-                        key={st}
-                        className={`px-3 py-2 rounded-lg border text-xs ${
-                          isCurrent
-                            ? 'border-[#16834A] bg-[#E8F5EC] font-semibold text-[#116438]'
-                            : isPast
-                            ? 'border-[#16A34A]/30 bg-[#F7FAF7] text-[#16834A]'
-                            : 'border-[#E3EBE5] text-[#64756B]'
-                        }`}
-                      >
-                        {st}
-                      </div>
-                    );
-                  })}
-                </div>
+                {isClosedStatus ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+                    This project request is currently marked as <strong>{matchedOrder.status}</strong>.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                    {CANONICAL_TRACKING_STAGES.map((st, idx) => {
+                      const isCurrent = idx === activeStepIndex;
+                      const isPast = activeStepIndex > idx;
+                      return (
+                        <div
+                          key={st}
+                          className={`px-3 py-2 rounded-lg border text-xs ${
+                            isCurrent
+                              ? 'border-[#16834A] bg-[#E8F5EC] font-semibold text-[#116438]'
+                              : isPast
+                              ? 'border-[#16A34A]/30 bg-[#F7FAF7] text-[#16834A]'
+                              : 'border-[#E3EBE5] text-[#64756B]'
+                          }`}
+                        >
+                          {st}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

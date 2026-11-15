@@ -19,7 +19,18 @@ const DISALLOWED_PATTERNS = [
   /https?:\/\/www\.dreamtechkashmirsolutions\.studio/i,
 ];
 
-const EXCLUDED_PATH_PREFIXES = ['/admin', '/track-order', '/order-success', '/404'];
+const EXCLUDED_PATH_PREFIXES = [
+  '/admin',
+  '/account',
+  '/login',
+  '/register',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/track-order',
+  '/order-success',
+  '/404',
+];
 
 function assertNoDisallowedReferences(content, label, errors) {
   for (const pattern of DISALLOWED_PATTERNS) {
@@ -205,6 +216,12 @@ async function main() {
     'User-agent: *',
     'Allow: /',
     'Disallow: /admin/',
+    'Disallow: /account/',
+    'Disallow: /login',
+    'Disallow: /register',
+    'Disallow: /verify-email',
+    'Disallow: /forgot-password',
+    'Disallow: /reset-password',
     'Disallow: /track-order',
     'Disallow: /order-success',
     `Sitemap: ${OFFICIAL_ORIGIN}/sitemap.xml`,

@@ -90,18 +90,33 @@ export const portfolioService = {
   /**
    * Async Repository Interface (Backend-Ready Envelope: { success, data, message })
    */
-  async listPortfolio() {
+  async listPortfolio({ includeDrafts = false } = {}) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.portfolio, { method: 'GET' });
+      const endpoint = includeDrafts
+        ? `${API_ENDPOINTS.portfolio}?includeDrafts=true`
+        : API_ENDPOINTS.portfolio;
+      const res = await apiRequest(endpoint, { method: 'GET' });
+      if (!res.success) return res;
+      const list = Array.isArray(res.data?.portfolio)
+        ? res.data.portfolio
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
+      return createServiceResponse(list, res.message || 'Portfolio loaded.');
     }
     return createServiceResponse(this.getAll(), 'Portfolio items loaded from local storage.');
   },
 
   async getProjectBySlug(slug) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(`${API_ENDPOINTS.portfolio}/${encodeURIComponent(slug)}`, {
+      const res = await apiRequest(`${API_ENDPOINTS.portfolio}/${encodeURIComponent(slug)}`, {
         method: 'GET',
       });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.project || res.data?.item || res.data,
+        res.message || 'Project retrieved.'
+      );
     }
     const found = this.getBySlug(slug);
     if (!found) {
@@ -112,7 +127,12 @@ export const portfolioService = {
 
   async createProject(payload) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(API_ENDPOINTS.portfolio, { method: 'POST', body: payload });
+      const res = await apiRequest(API_ENDPOINTS.portfolio, { method: 'POST', body: payload });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.project || res.data?.item || res.data,
+        res.message || 'Portfolio project added.'
+      );
     }
     const created = this.create(payload);
     if (created?.__writeError) {
@@ -125,10 +145,15 @@ export const portfolioService = {
 
   async updateProject(id, patch) {
     if (getDataAdapterMode() === 'api') {
-      return apiRequest(`${API_ENDPOINTS.portfolio}/${encodeURIComponent(id)}`, {
+      const res = await apiRequest(`${API_ENDPOINTS.portfolio}/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: patch,
       });
+      if (!res.success) return res;
+      return createServiceResponse(
+        res.data?.project || res.data?.item || res.data,
+        res.message || 'Portfolio project updated.'
+      );
     }
     const updated = this.update(id, patch);
     if (updated?.__notFound) {
