@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
-import { ShieldAlert, ArrowLeft, Lock } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, Lock, RefreshCw } from 'lucide-react';
 import {
   getAdminAccessPolicy,
   subscribeAdminAuth,
   verifyAdminSession,
 } from '../../services/api/apiClient.js';
-import { canAccessAdminPath } from '../../utils/authValidation.js';
+import { canAccessAdminPath, isValidAdminRole } from '../../utils/authValidation.js';
 import SEO from '../common/SEO.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
 
@@ -16,7 +16,7 @@ import BrandLogo from '../common/BrandLogo.jsx';
  * - In production LocalStorage mode (`blocked_production_local`): Blocks access with restricted notice.
  * - In API mode (`session_required`): Verifies server-side session via `GET /api/v1/auth/me`
  *   and redirects unauthenticated requests to `/admin/login` while preserving the destination route.
- *   Never exposes admin UI while verification is pending or when role lacks permission.
+ *   Never exposes admin UI while verification is pending, on network errors, or when role lacks permission.
  */
 export default function RequireAdmin({ children, allowedRoles = null }) {
   const location = useLocation();
@@ -33,68 +33,100 @@ export default function RequireAdmin({ children, allowedRoles = null }) {
           role: 'super_admin',
         },
         expired: false,
+        errorMessage: '',
       };
     }
     if (policy === 'blocked_production_local') {
-      return { status: 'blocked', admin: null, expired: false };
+      return { status: 'blocked', admin: null, expired: false, errorMessage: '' };
     }
-    return { status: 'checking', admin: null, expired: false };
+    return { status: 'checking', admin: null, expired: false, errorMessage: '' };
   });
 
-  useEffect(() => {
+  const runVerification = useCallback(async (isActiveRef = { current: true }) => {
     const currentPolicy = getAdminAccessPolicy();
     if (currentPolicy === 'allowed_dev') {
-      setAuthState({
-        status: 'authorized',
-        admin: {
-          id: 'adm-local-super',
-          name: 'Local Development Admin',
-          email: 'support@dreamtechkashmirsolutions.studio',
-          role: 'super_admin',
-        },
-        expired: false,
-      });
+      if (isActiveRef.current) {
+        setAuthState({
+          status: 'authorized',
+          admin: {
+            id: 'adm-local-super',
+            name: 'Local Development Admin',
+            email: 'support@dreamtechkashmirsolutions.studio',
+            role: 'super_admin',
+          },
+          expired: false,
+          errorMessage: '',
+        });
+      }
       return;
     }
     if (currentPolicy === 'blocked_production_local') {
-      setAuthState({ status: 'blocked', admin: null, expired: false });
+      if (isActiveRef.current) {
+        setAuthState({ status: 'blocked', admin: null, expired: false, errorMessage: '' });
+      }
       return;
     }
 
-    let active = true;
-    setAuthState((prev) => ({ ...prev, status: 'checking' }));
+    if (isActiveRef.current) {
+      setAuthState((prev) => ({ ...prev, status: 'checking', errorMessage: '' }));
+    }
 
-    verifyAdminSession()
-      .then((res) => {
-        if (!active) return;
-        if (res && res.authenticated && res.admin) {
-          setAuthState({ status: 'authorized', admin: res.admin, expired: false });
-        } else {
-          const isExpired =
-            res?.errorCode === 'TOKEN_EXPIRED' ||
-            res?.errorCode === 'REFRESH_TOKEN_EXPIRED' ||
-            res?.errorCode === 'SESSION_REVOKED';
-          setAuthState({ status: 'unauthorized', admin: null, expired: isExpired });
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setAuthState({ status: 'unauthorized', admin: null, expired: false });
-        }
+    try {
+      const res = await verifyAdminSession();
+      if (!isActiveRef.current) return;
+      if (res && res.authenticated && res.admin && isValidAdminRole(res.admin.role)) {
+        setAuthState({ status: 'authorized', admin: res.admin, expired: false, errorMessage: '' });
+        return;
+      }
+      if (res?.networkError) {
+        setAuthState({
+          status: 'network_error',
+          admin: null,
+          expired: false,
+          errorMessage:
+            res.message ||
+            'Unable to verify your administrator session due to a temporary network error.',
+        });
+        return;
+      }
+      const isExpired =
+        res?.errorCode === 'TOKEN_EXPIRED' ||
+        res?.errorCode === 'REFRESH_TOKEN_EXPIRED' ||
+        res?.errorCode === 'SESSION_REVOKED';
+      setAuthState({
+        status: 'unauthorized',
+        admin: null,
+        expired: isExpired,
+        errorMessage: res?.message || '',
       });
+    } catch (err) {
+      if (isActiveRef.current) {
+        setAuthState({
+          status: 'network_error',
+          admin: null,
+          expired: false,
+          errorMessage: err?.message || 'Unable to verify your administrator session right now.',
+        });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const activeRef = { current: true };
+    runVerification(activeRef);
 
     const unsubscribe = subscribeAdminAuth((session) => {
-      if (!active) return;
+      if (!activeRef.current) return;
       if (!session && getAdminAccessPolicy() === 'session_required') {
-        setAuthState({ status: 'unauthorized', admin: null, expired: true });
+        setAuthState({ status: 'unauthorized', admin: null, expired: true, errorMessage: '' });
       }
     });
 
     return () => {
-      active = false;
+      activeRef.current = false;
       unsubscribe();
     };
-  }, [policy, location.pathname]);
+  }, [policy, location.pathname, runVerification]);
 
   if (authState.status === 'checking') {
     return (
@@ -115,7 +147,53 @@ export default function RequireAdmin({ children, allowedRoles = null }) {
     );
   }
 
+  if (authState.status === 'network_error') {
+    const requestedPath = `${location.pathname}${location.search}`;
+    return (
+      <div className="min-h-screen bg-[#F7FAF7] flex flex-col justify-center items-center p-6">
+        <SEO noindex fullTitle="Connection Error | Admin | DTKS" />
+        <div className="max-w-lg w-full rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-5">
+          <div className="flex items-center justify-between">
+            <BrandLogo variant="header" />
+            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-amber-700">Session Verification Unavailable</p>
+            <h1 className="font-display text-2xl font-bold text-[#17231C]">
+              Unable to Verify Administrator Session
+            </h1>
+            <p className="text-sm text-[#64756B] leading-relaxed">
+              {authState.errorMessage}
+            </p>
+          </div>
+          <div className="pt-2 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => runVerification({ current: true })}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Retry Verification</span>
+            </button>
+            <Link
+              to="/admin/login"
+              state={{ from: requestedPath }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7] transition-colors"
+            >
+              <span>Go to Admin Sign In</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (authState.status === 'unauthorized') {
+    if (location.pathname === '/admin/login') {
+      return null;
+    }
     const requestedPath = `${location.pathname}${location.search}`;
     return (
       <Navigate

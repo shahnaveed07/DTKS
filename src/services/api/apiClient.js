@@ -729,28 +729,74 @@ export async function verifyAdminSession() {
   const rawAdmin =
     res.data?.admin ||
     (res.data && typeof res.data === 'object' && res.data.email ? res.data : null);
-  const authenticated = Boolean(
-    res.success && (rawAdmin || res.data?.authenticated === true)
-  );
 
-  if (authenticated && rawAdmin) {
-    const existing = getAdminAuthSession();
-    if (existing) {
-      setAdminAuthSession({ ...existing, admin: rawAdmin });
+  if (!res.success) {
+    const isNetworkIssue = res.errorCode === 'NETWORK_ERROR' || res.errorCode === 'TIMEOUT_ERROR';
+    if (!isNetworkIssue && (res.statusCode === 401 || res.statusCode === 403 || res.errorCode === 'SESSION_REVOKED' || res.errorCode === 'TOKEN_EXPIRED' || res.errorCode === 'REFRESH_TOKEN_EXPIRED')) {
+      clearAdminAuthSession();
     }
-  } else if (res.statusCode === 401 || res.statusCode === 403) {
-    clearAdminAuthSession();
+    return {
+      authenticated: false,
+      admin: null,
+      policy,
+      networkError: isNetworkIssue,
+      statusCode: res.statusCode ?? null,
+      errorCode: res.errorCode ?? null,
+      message: res.message || 'Authentication required. Please sign in as an administrator.',
+    };
   }
 
+  const hasValidAdminProfile = Boolean(rawAdmin && typeof rawAdmin === 'object' && rawAdmin.email);
+  const isDeactivated = Boolean(
+    hasValidAdminProfile && (rawAdmin.isActive === false || rawAdmin.is_active === false)
+  );
+  if (isDeactivated) {
+    clearAdminAuthSession();
+    return {
+      authenticated: false,
+      admin: null,
+      policy,
+      statusCode: 403,
+      errorCode: 'ACCOUNT_DISABLED',
+      message: 'Administrator access for this account has been disabled. Contact a Super Admin for assistance.',
+    };
+  }
+
+  const hasValidRole = Boolean(
+    hasValidAdminProfile && ['super_admin', 'admin', 'editor'].includes(rawAdmin.role)
+  );
+
+  if (!hasValidAdminProfile || !hasValidRole) {
+    clearAdminAuthSession();
+    return {
+      authenticated: false,
+      admin: null,
+      policy,
+      statusCode: rawAdmin ? 403 : 502,
+      errorCode: rawAdmin ? 'INSUFFICIENT_PERMISSIONS' : 'INVALID_SESSION_RESPONSE',
+      message: rawAdmin
+        ? 'Your account does not have administrator permissions.'
+        : 'Server session verification did not return a valid administrator profile.',
+    };
+  }
+
+  const existing = getAdminAuthSession();
+  setAdminAuthSession({
+    accessToken: existing?.accessToken || '',
+    refreshToken: existing?.refreshToken || '',
+    csrfToken: res.data?.csrfToken || res.data?.csrf_token || existing?.csrfToken || '',
+    expiresIn: existing?.expiresIn || 900,
+    expiresAt: existing?.expiresAt,
+    admin: rawAdmin,
+  });
+
   return {
-    authenticated,
-    admin: rawAdmin || null,
+    authenticated: true,
+    admin: rawAdmin,
     policy,
-    statusCode: res.statusCode ?? null,
-    errorCode: res.errorCode ?? null,
-    message: authenticated
-      ? 'Authenticated administrator profile.'
-      : res.message || 'Authentication required. Please sign in as an administrator.',
+    statusCode: res.statusCode ?? 200,
+    errorCode: null,
+    message: 'Authenticated administrator profile.',
   };
 }
 
@@ -758,7 +804,19 @@ export async function verifyAdminSession() {
  * Authenticates an administrator against POST /api/v1/auth/login.
  */
 export async function loginAdmin({ email, password } = {}) {
-  const cleanEmail = String(email || '').trim();
+  if (getAdminAccessPolicy() === 'blocked_production_local') {
+    return createServiceError(
+      'Secure Admin access will be enabled after backend authentication is configured.',
+      null,
+      {
+        errorType: 'BackendNotConfiguredError',
+        errorCode: 'ADMIN_AUTH_UNCONFIGURED',
+        statusCode: 503,
+      }
+    );
+  }
+
+  const cleanEmail = String(email || '').trim().toLowerCase();
   const rawPassword = String(password || '');
 
   if (!cleanEmail || !rawPassword) {
@@ -779,12 +837,67 @@ export async function loginAdmin({ email, password } = {}) {
     return res;
   }
 
-  const payloadData = res.data || {};
-  const accessToken = payloadData.accessToken || payloadData.access_token || '';
-  const refreshToken = payloadData.refreshToken || payloadData.refresh_token || '';
-  const csrfToken = payloadData.csrfToken || payloadData.csrf_token || '';
-  const expiresIn = Number(payloadData.expiresIn ?? payloadData.expires_in ?? 900);
-  const admin = payloadData.admin || null;
+  const payloadData = res.data && typeof res.data === 'object' ? res.data : {};
+  const accessToken = String(payloadData.accessToken || payloadData.access_token || '').trim();
+  const refreshToken = String(payloadData.refreshToken || payloadData.refresh_token || '').trim();
+  const csrfToken = String(payloadData.csrfToken || payloadData.csrf_token || '').trim();
+  const rawExpiresIn = payloadData.expiresIn ?? payloadData.expires_in;
+  const expiresIn =
+    rawExpiresIn === undefined || rawExpiresIn === null || rawExpiresIn === ''
+      ? 900
+      : Number(rawExpiresIn);
+  const admin =
+    payloadData.admin && typeof payloadData.admin === 'object'
+      ? payloadData.admin
+      : payloadData.email && payloadData.role
+      ? payloadData
+      : null;
+
+  if (
+    !admin ||
+    !admin.email ||
+    !admin.role ||
+    (!accessToken && !csrfToken && !refreshToken) ||
+    !Number.isFinite(expiresIn) ||
+    expiresIn <= 0
+  ) {
+    clearAdminAuthSession();
+    return createServiceError(
+      'Received an incomplete or invalid authentication response from the server.',
+      null,
+      {
+        errorType: 'InvalidResponseError',
+        errorCode: 'INVALID_LOGIN_RESPONSE',
+        statusCode: 502,
+      }
+    );
+  }
+
+  if (admin.isActive === false || admin.is_active === false) {
+    clearAdminAuthSession();
+    return createServiceError(
+      'Administrator access for this account has been disabled. Contact a Super Admin for assistance.',
+      null,
+      {
+        errorType: 'ForbiddenError',
+        errorCode: 'ACCOUNT_DISABLED',
+        statusCode: 403,
+      }
+    );
+  }
+
+  if (!['super_admin', 'admin', 'editor'].includes(admin.role)) {
+    clearAdminAuthSession();
+    return createServiceError(
+      'You do not have sufficient administrator permissions to sign in.',
+      null,
+      {
+        errorType: 'ForbiddenError',
+        errorCode: 'INSUFFICIENT_PERMISSIONS',
+        statusCode: 403,
+      }
+    );
+  }
 
   const session = setAdminAuthSession({
     accessToken,

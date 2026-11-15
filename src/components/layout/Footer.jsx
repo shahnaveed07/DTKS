@@ -44,10 +44,10 @@ export default function Footer() {
             {adminAccessPolicy !== 'blocked_production_local' && (
               <div className="mt-5 flex items-center gap-3">
                 <Link
-                  to="/admin"
+                  to="/admin/login"
                   className="px-3.5 py-2 text-xs font-medium rounded-lg border border-white/25 text-white hover:bg-white/10 transition-colors whitespace-nowrap"
                 >
-                  Admin Panel
+                  Admin Login
                 </Link>
               </div>
             )}

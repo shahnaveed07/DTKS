@@ -13,6 +13,8 @@ import {
   canAccessAdminPath,
   filterAdminNavByRole,
   sanitizeInternalRedirect,
+  isValidAdminRole,
+  formatAdminAuthError,
 } from './authValidation.js';
 
 test('evaluatePasswordStrength scores empty, weak, fair, good, and strong passwords accurately', () => {
@@ -186,4 +188,45 @@ test('sanitizeInternalRedirect prevents open redirects and login self-loops', ()
   assert.equal(sanitizeInternalRedirect('/account', '/admin', '/admin'), '/admin');
   assert.equal(sanitizeInternalRedirect('/admin/orders?page=2', '/admin', '/admin'), '/admin/orders?page=2');
   assert.equal(sanitizeInternalRedirect('/account/orders', '/account', '/account'), '/account/orders');
+});
+
+test('isValidAdminRole and formatAdminAuthError handle roles and all backend error states safely', () => {
+  assert.equal(isValidAdminRole('super_admin'), true);
+  assert.equal(isValidAdminRole('admin'), true);
+  assert.equal(isValidAdminRole('editor'), true);
+  assert.equal(isValidAdminRole('client'), false);
+  assert.equal(isValidAdminRole(''), false);
+
+  assert.equal(
+    formatAdminAuthError({ errorCode: 'INVALID_CREDENTIALS', statusCode: 401 }),
+    'Invalid email or password.'
+  );
+  assert.match(
+    formatAdminAuthError({ errorCode: 'INVITE_PENDING', statusCode: 403 }),
+    /invitation setup is still pending/i
+  );
+  assert.match(
+    formatAdminAuthError({ errorCode: 'ACCOUNT_DISABLED', statusCode: 403 }),
+    /disabled/i
+  );
+  assert.match(
+    formatAdminAuthError({ errorCode: 'RATE_LIMITED', statusCode: 429 }),
+    /Too many sign-in attempts/i
+  );
+  assert.match(
+    formatAdminAuthError({ errorCode: 'NETWORK_ERROR' }),
+    /connectivity issue/i
+  );
+  assert.match(
+    formatAdminAuthError({ statusCode: 500, message: 'SQLITE_ERROR: stack trace' }),
+    /temporarily unavailable/i
+  );
+  assert.match(
+    formatAdminAuthError({ errorCode: 'TOKEN_EXPIRED', statusCode: 401 }),
+    /session expired/i
+  );
+  assert.match(
+    formatAdminAuthError({ errorCode: 'INSUFFICIENT_PERMISSIONS', statusCode: 403 }),
+    /permissions/i
+  );
 });

@@ -21,11 +21,18 @@ VITE_BING_SITE_VERIFICATION=
 
 ## Build Command & Output
 
+- **Install dependencies**: `npm ci` (uses synchronized `package.json` and `package-lock.json`)
 - **Build command**: `npm run build`
   1. Compiles the production bundle into `dist/` (`vite build`).
   2. Prerenders static HTML routes, `sitemap.xml`, and `robots.txt` (`node scripts/prerender-seo.mjs`).
   3. Validates canonical tags, OpenGraph metadata, JSON-LD, sitemap exclusions, and security rules (`node scripts/validate-sitemap.mjs`).
 - **Publish directory**: `dist`
+
+## Admin Authentication Prerequisites
+
+- Ensure `VITE_DATA_ADAPTER=api` and `VITE_API_BASE_URL=https://api.dreamtechkashmirsolutions.studio/api/v1` are configured in Cloudflare Pages before building.
+- Never set `VITE_ENABLE_LOCAL_ADMIN=true` in production; `RequireAdmin` and `AdminLoginPage` enforce `session_required` (`POST /api/v1/auth/login` followed by `GET /api/v1/auth/me`).
+- Administrators access sign-in at `/admin/login` (linked discreetly in the Footer as **Admin Login**). New administrators activate via `/admin/accept-invite?token=...`.
 
 ## HTTP Security & Indexing Headers (`public/_headers`)
 

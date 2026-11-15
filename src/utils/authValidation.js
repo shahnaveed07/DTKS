@@ -327,3 +327,94 @@ export function sanitizeInternalRedirect(candidate, fallback = '/', requiredPref
   if (trimmed === '/admin/login' || trimmed === '/login') return fallback;
   return trimmed;
 }
+
+export function isValidAdminRole(role) {
+  return ['super_admin', 'admin', 'editor'].includes(role);
+}
+
+/**
+ * Maps backend auth/session error codes and HTTP statuses to clear, safe messages
+ * without exposing stack traces, SQL errors, tokens, or passwords.
+ */
+export function formatAdminAuthError(errorOrRes) {
+  if (!errorOrRes) {
+    return 'Unable to sign in right now. Please try again.';
+  }
+  if (typeof errorOrRes === 'string') {
+    return errorOrRes.trim() || 'Unable to sign in right now. Please try again.';
+  }
+
+  const code = String(errorOrRes.errorCode || errorOrRes.code || '').toUpperCase();
+  const status = Number(errorOrRes.statusCode || 0);
+  const rawMessage = String(errorOrRes.message || '').trim();
+  const lower = rawMessage.toLowerCase();
+
+  if (
+    code === 'INVITE_PENDING' ||
+    code === 'PENDING_INVITATION' ||
+    code === 'INVITATION_PENDING' ||
+    (lower.includes('invite') && lower.includes('pending')) ||
+    lower.includes('accept-invite') ||
+    lower.includes('accept your invitation')
+  ) {
+    return 'Your administrator invitation setup is still pending. Please open the invitation link sent to your email to set your password first.';
+  }
+
+  if (
+    code === 'ACCOUNT_DISABLED' ||
+    code === 'ACCOUNT_INACTIVE' ||
+    code === 'ADMIN_DEACTIVATED' ||
+    code === 'ACCOUNT_DEACTIVATED' ||
+    (status === 403 && (lower.includes('deactivat') || lower.includes('disabl') || lower.includes('inactive')))
+  ) {
+    return 'Administrator access for this account has been disabled. Contact a Super Admin for assistance.';
+  }
+
+  if (code === 'INSUFFICIENT_PERMISSIONS' || code === 'FORBIDDEN' || status === 403) {
+    return 'You do not have sufficient administrator permissions to sign in to this section.';
+  }
+
+  if (code === 'RATE_LIMITED' || code === 'TOO_MANY_REQUESTS' || status === 429) {
+    return 'Too many sign-in attempts. Please wait a few minutes before trying again.';
+  }
+
+  if (
+    code === 'TOKEN_EXPIRED' ||
+    code === 'REFRESH_TOKEN_EXPIRED' ||
+    code === 'SESSION_REVOKED'
+  ) {
+    return 'Your administrator session expired. Please sign in again.';
+  }
+
+  if (code === 'INVALID_CREDENTIALS' || code === 'UNAUTHORIZED' || status === 401) {
+    return 'Invalid email or password.';
+  }
+
+  if (code === 'INVALID_LOGIN_RESPONSE' || code === 'INVALID_SESSION_RESPONSE') {
+    return 'The authentication server returned an incomplete response. Please try again.';
+  }
+
+  if (code === 'NETWORK_ERROR' || code === 'TIMEOUT_ERROR') {
+    return 'Temporary network connectivity issue while contacting the authentication server. Please check your connection and try again.';
+  }
+
+  if (
+    code === 'INVALID_API_BASE_URL' ||
+    code === 'ADMIN_AUTH_UNCONFIGURED' ||
+    code === 'SERVICE_UNAVAILABLE' ||
+    status >= 500
+  ) {
+    return 'Authentication service is temporarily unavailable. Please try again shortly.';
+  }
+
+  if (
+    lower.includes('sql') ||
+    lower.includes('stack') ||
+    lower.includes('exception') ||
+    lower.includes('syntaxerror')
+  ) {
+    return 'Authentication service encountered an unexpected error. Please try again shortly.';
+  }
+
+  return rawMessage || 'Unable to sign in right now. Please try again.';
+}

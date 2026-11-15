@@ -2407,4 +2407,500 @@ test('dashboardService queries backend dashboard endpoints and handles partial e
   }
 });
 
+// ============================================================================
+// SUITE 8: ADMIN LOGIN, VERIFICATION, REFRESH ROTATION & ANALYTICS NORMALIZATION
+// ============================================================================
+
+test('Admin login workflow enforces validation, rejects malformed payloads, verifies /auth/me, and handles all failure states safely', async () => {
+  createMockLocalStorage();
+  const sessionStore = new Map();
+  globalThis.window.sessionStorage = {
+    getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
+    setItem: (k, v) => sessionStore.set(k, String(v)),
+    removeItem: (k) => sessionStore.delete(k),
+  };
+  clearAdminAuthSession();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+
+  const originalFetch = globalThis.fetch;
+  let scenario = 'valid';
+  const calls = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    const body = init.body && typeof init.body === 'string' ? JSON.parse(init.body) : null;
+    calls.push({ url: u, method: init.method || 'GET', headers: init.headers || {}, body });
+
+    if (u.endsWith('/auth/login')) {
+      if (scenario === 'invalid_credentials') {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
+          }),
+        };
+      }
+      if (scenario === 'invite_pending') {
+        return {
+          ok: false,
+          status: 403,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'INVITE_PENDING', message: 'Administrator invitation pending.' },
+          }),
+        };
+      }
+      if (scenario === 'account_disabled') {
+        return {
+          ok: false,
+          status: 403,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'ACCOUNT_DISABLED', message: 'Account deactivated.' },
+          }),
+        };
+      }
+      if (scenario === 'rate_limited') {
+        return {
+          ok: false,
+          status: 429,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'RATE_LIMITED', message: 'Too many requests.' },
+          }),
+        };
+      }
+      if (scenario === 'server_error') {
+        return {
+          ok: false,
+          status: 500,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'INTERNAL_ERROR', message: 'SQLITE_ERROR near users' },
+          }),
+        };
+      }
+      if (scenario === 'network_timeout') {
+        throw new Error('Network connection dropped');
+      }
+      if (scenario === 'malformed_empty') {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ success: true, data: {} }),
+        };
+      }
+      if (scenario === 'malformed_no_role') {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: true,
+            data: {
+              accessToken: 'tok-no-role',
+              expiresIn: 900,
+              admin: { id: 'adm-x', email: 'user@dtks.studio' },
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            accessToken: 'adm-access-valid',
+            refreshToken: 'adm-refresh-valid',
+            csrfToken: 'adm-csrf-valid',
+            expiresIn: 900,
+            admin: {
+              id: 'adm-super',
+              name: 'Super Admin',
+              email: 'admin@dreamtechkashmirsolutions.studio',
+              role: 'super_admin',
+              isActive: true,
+            },
+          },
+        }),
+      };
+    }
+
+    if (u.endsWith('/auth/me')) {
+      if (scenario === 'me_deactivated') {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: true,
+            data: {
+              admin: {
+                id: 'adm-super',
+                email: 'admin@dreamtechkashmirsolutions.studio',
+                role: 'super_admin',
+                isActive: false,
+              },
+            },
+          }),
+        };
+      }
+      if (scenario === 'me_network_error') {
+        throw new Error('Failed to fetch /auth/me');
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            admin: {
+              id: 'adm-super',
+              name: 'Super Admin',
+              email: 'admin@dreamtechkashmirsolutions.studio',
+              role: 'super_admin',
+              isActive: true,
+            },
+          },
+        }),
+      };
+    }
+
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: false }),
+    };
+  };
+
+  try {
+    // 1. Valid login normalizes email and succeeds + verifies via /auth/me
+    const okLogin = await loginAdmin({
+      email: '  ADMIN@DreamTechKashmirSolutions.Studio ',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(okLogin.success, true);
+    assert.equal(calls[0].body.email, 'admin@dreamtechkashmirsolutions.studio');
+    assert.equal(getAdminAuthSession()?.admin?.role, 'super_admin');
+
+    const okVerify = await verifyAdminSession();
+    assert.equal(okVerify.authenticated, true);
+    assert.equal(okVerify.admin.role, 'super_admin');
+
+    // 2. Deactivated admin returned by /auth/me is rejected and session cleared
+    scenario = 'me_deactivated';
+    const disabledVerify = await verifyAdminSession();
+    assert.equal(disabledVerify.authenticated, false);
+    assert.equal(disabledVerify.errorCode, 'ACCOUNT_DISABLED');
+    assert.equal(getAdminAuthSession(), null);
+
+    // 3. Transient network error on /auth/me flags networkError without deleting existing session
+    scenario = 'valid';
+    await loginAdmin({ email: 'admin@dreamtechkashmirsolutions.studio', password: 'ValidPassword#2026' });
+    scenario = 'me_network_error';
+    const netVerify = await verifyAdminSession();
+    assert.equal(netVerify.authenticated, false);
+    assert.equal(netVerify.networkError, true);
+    assert.ok(getAdminAuthSession(), 'Transient network error must not discard valid session tokens');
+
+    // 4. Malformed login success payloads must be rejected
+    scenario = 'malformed_empty';
+    const malformedEmptyRes = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(malformedEmptyRes.success, false);
+    assert.equal(malformedEmptyRes.errorCode, 'INVALID_LOGIN_RESPONSE');
+    assert.equal(getAdminAuthSession(), null);
+
+    scenario = 'malformed_no_role';
+    const malformedNoRoleRes = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(malformedNoRoleRes.success, false);
+    assert.equal(malformedNoRoleRes.errorCode, 'INVALID_LOGIN_RESPONSE');
+
+    // 5. Invalid credentials, pending invite, disabled account, 429, 500, and network errors
+    for (const [mode, expectedStatus, expectedCode] of [
+      ['invalid_credentials', 401, 'INVALID_CREDENTIALS'],
+      ['invite_pending', 403, 'INVITE_PENDING'],
+      ['account_disabled', 403, 'ACCOUNT_DISABLED'],
+      ['rate_limited', 429, 'RATE_LIMITED'],
+      ['server_error', 500, 'INTERNAL_ERROR'],
+      ['network_timeout', null, 'NETWORK_ERROR'],
+    ]) {
+      scenario = mode;
+      const errRes = await loginAdmin({
+        email: 'admin@dreamtechkashmirsolutions.studio',
+        password: 'SomePassword1!',
+      });
+      assert.equal(errRes.success, false);
+      assert.equal(errRes.statusCode, expectedStatus);
+      assert.equal(errRes.errorCode, expectedCode);
+    }
+
+    // 6. Auth endpoints (/auth/login) never trigger token refresh even if 401 is returned
+    const refreshCalls = calls.filter((c) => c.url.endsWith('/auth/refresh'));
+    assert.equal(refreshCalls.length, 0);
+
+    // 7. Blocked production local mode rejects loginAdmin
+    setRuntimeEnvOverrides({ isProd: true, dataAdapter: 'local', apiBaseUrl: '' });
+    const blockedLogin = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(blockedLogin.success, false);
+    assert.equal(blockedLogin.errorCode, 'ADMIN_AUTH_UNCONFIGURED');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('Concurrent 401 responses share a single /auth/refresh flight, update tokens, and clear session when refresh fails', async () => {
+  createMockLocalStorage();
+  clearAdminAuthSession();
+  clearClientAuthSession();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+
+  setAdminAuthSession({
+    accessToken: 'expired-access',
+    refreshToken: 'refresh-tok-1',
+    csrfToken: 'csrf-tok-1',
+    admin: { id: 'adm-1', email: 'admin@dtks.studio', role: 'super_admin' },
+  });
+  setClientAuthSession({
+    accessToken: 'client-access-1',
+    csrfToken: 'client-csrf-1',
+    client: { id: 'cli-1', email: 'client@dtks.studio' },
+  });
+
+  let refreshCount = 0;
+  let refreshShouldFail = false;
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    if (u.endsWith('/auth/refresh')) {
+      refreshCount += 1;
+      await new Promise((r) => setTimeout(r, 15));
+      if (refreshShouldFail) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ success: false, error: { code: 'REFRESH_TOKEN_EXPIRED', message: 'Refresh expired' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            accessToken: 'rotated-access-2',
+            refreshToken: 'rotated-refresh-2',
+            csrfToken: 'rotated-csrf-2',
+            expiresIn: 900,
+          },
+        }),
+      };
+    }
+
+    if (init.headers?.Authorization === 'Bearer expired-access') {
+      return {
+        ok: false,
+        status: 401,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: { code: 'TOKEN_EXPIRED', message: 'Expired' } }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({
+        success: true,
+        data: { orders: [{ id: 'o1', referenceId: 'DKS-2026-0001' }] },
+      }),
+    };
+  };
+
+  try {
+    const [r1, r2] = await Promise.all([
+      apiRequest('/api/v1/orders'),
+      apiRequest('/api/v1/orders?page=2'),
+    ]);
+    assert.equal(r1.success, true);
+    assert.equal(r2.success, true);
+    assert.equal(refreshCount, 1, 'Concurrent 401s must deduplicate to a single /auth/refresh request');
+    assert.equal(getAdminAuthSession()?.accessToken, 'rotated-access-2');
+    assert.equal(getCsrfToken(), 'rotated-csrf-2');
+
+    // Client session must remain completely isolated from Admin token rotation
+    assert.equal(getClientAuthSession()?.accessToken, 'client-access-1');
+    assert.equal(getClientCsrfToken(), 'client-csrf-1');
+
+    // When refresh fails, admin session clears immediately while client session stays intact
+    setAdminAuthSession({
+      accessToken: 'expired-access',
+      refreshToken: 'bad-refresh',
+      csrfToken: 'csrf-tok-1',
+      admin: { id: 'adm-1', email: 'admin@dtks.studio', role: 'super_admin' },
+    });
+    refreshShouldFail = true;
+    const failedRes = await apiRequest('/api/v1/orders');
+    assert.equal(failedRes.success, false);
+    assert.equal(failedRes.statusCode, 401);
+    assert.equal(getAdminAuthSession(), null);
+    assert.equal(getClientAuthSession()?.accessToken, 'client-access-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    clearClientAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('dashboardService normalizes exact DTKS_BE analytics shape (byStatus, byService, byHosting, monthlyTrend) and handles empty/invalid/error records', async () => {
+  createMockLocalStorage();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  setAdminAuthSession({
+    accessToken: 'adm-tok',
+    csrfToken: 'adm-csrf',
+    admin: { id: 'adm-1', email: 'admin@dtks.studio', role: 'super_admin' },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let mockPayload = null;
+
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/admin/dashboard/order-analytics')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => mockPayload,
+      };
+    }
+    return {
+      ok: false,
+      status: 500,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: false, error: { message: 'Failed' } }),
+    };
+  };
+
+  try {
+    // 1. Canonical DTKS_BE analytics response with quotedValue, hostingPreference, month, orderCount, quotedTotal
+    mockPayload = {
+      success: true,
+      data: {
+        analytics: {
+          byStatus: [
+            { status: 'New Request', count: 4, quotedValue: 60000 },
+            { status: 'In Progress', count: 2, quotedValue: 75000 },
+          ],
+          byService: [
+            { service: 'Business & Corporate Websites', count: 4, quotedValue: 95000 },
+            { service: 'E-Commerce Websites', count: 2, quotedValue: 40000 },
+          ],
+          byHosting: [
+            { hostingPreference: 'DreamTech Managed Hosting', count: 5 },
+            { hostingPreference: 'Client Self-Managed Hosting', count: 1 },
+          ],
+          monthlyTrend: [
+            { month: '2026-03', orderCount: 1, quotedTotal: 25000 },
+            { month: '2026-04', orderCount: 5, quotedTotal: 110000 },
+            { month: 'invalid-no-count' },
+            null,
+          ],
+        },
+      },
+    };
+
+    const res = await dashboardService.getOrderAnalytics();
+    assert.equal(res.success, true);
+    assert.equal(res.data.byStatus.length, 2);
+    assert.equal(res.data.byStatus[0].label, 'New Request');
+    assert.equal(res.data.byStatus[0].count, 4);
+    assert.equal(res.data.byStatus[0].quotedValue, 60000);
+
+    assert.equal(res.data.byService.length, 2);
+    assert.equal(res.data.byService[0].label, 'Business & Corporate Websites');
+    assert.equal(res.data.byService[0].quotedValue, 95000);
+
+    assert.equal(res.data.byHosting.length, 2);
+    assert.equal(res.data.byHosting[0].label, 'DreamTech Managed Hosting');
+    assert.equal(res.data.byHosting[0].count, 5);
+    assert.equal(res.data.byHosting[0].quotedValue, null);
+
+    assert.equal(res.data.monthlyTrend.length, 2);
+    assert.equal(res.data.monthlyTrend[1].month, '2026-04');
+    assert.equal(res.data.monthlyTrend[1].orderCount, 5);
+    assert.equal(res.data.monthlyTrend[1].quotedTotal, 110000);
+    assert.equal(res.data.timeline.length, 2);
+    assert.equal(res.data.totalAnalyzed, 6);
+
+    // 2. Valid empty analytics dataset
+    mockPayload = {
+      success: true,
+      data: {
+        analytics: {
+          byStatus: [],
+          byService: [],
+          byHosting: [],
+          monthlyTrend: [],
+        },
+      },
+    };
+    const emptyRes = await dashboardService.getOrderAnalytics();
+    assert.equal(emptyRes.success, true);
+    assert.deepEqual(emptyRes.data.byStatus, []);
+    assert.deepEqual(emptyRes.data.byService, []);
+    assert.deepEqual(emptyRes.data.byHosting, []);
+    assert.deepEqual(emptyRes.data.monthlyTrend, []);
+    assert.equal(emptyRes.data.totalAnalyzed, 0);
+
+    // 3. Full dashboard overview error propagation when all widgets fail
+    const failedOverview = await dashboardService.fetchOverview();
+    assert.equal(failedOverview.stats.status, 'error');
+    assert.equal(failedOverview.recentOrders.status, 'error');
+    assert.equal(failedOverview.recentMessages.status, 'error');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+
 

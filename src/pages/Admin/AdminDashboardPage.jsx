@@ -241,6 +241,8 @@ export default function AdminDashboardPage() {
               ) : analytics &&
                 (analytics.byStatus.length > 0 ||
                   analytics.byService.length > 0 ||
+                  (analytics.byHosting?.length > 0) ||
+                  (analytics.monthlyTrend?.length > 0) ||
                   analytics.timeline.length > 0) ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {analytics.byStatus.length > 0 && (
@@ -252,12 +254,17 @@ export default function AdminDashboardPage() {
                         {analytics.byStatus.map((item) => (
                           <div
                             key={item.label}
-                            className="flex items-center justify-between text-xs rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2"
+                            className="flex items-center justify-between gap-3 text-xs rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2"
                           >
-                            <span className="font-medium text-[#17231C]">{item.label}</span>
-                            <span className="font-mono-tabular font-semibold text-[#116438]">
-                              {item.count}
-                            </span>
+                            <span className="font-medium text-[#17231C] truncate">{item.label}</span>
+                            <div className="flex items-center gap-3 shrink-0 font-mono-tabular">
+                              {item.quotedValue !== null && item.quotedValue !== undefined && (
+                                <span className="text-[#64756B]">
+                                  {formatCurrency(item.quotedValue, 'INR')}
+                                </span>
+                              )}
+                              <span className="font-semibold text-[#116438]">{item.count}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -273,11 +280,37 @@ export default function AdminDashboardPage() {
                         {analytics.byService.map((item) => (
                           <div
                             key={item.label}
-                            className="flex items-center justify-between text-xs rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2"
+                            className="flex items-center justify-between gap-3 text-xs rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2"
                           >
-                            <span className="font-medium text-[#17231C] truncate pr-3">
+                            <span className="font-medium text-[#17231C] truncate">
                               {item.label}
                             </span>
+                            <div className="flex items-center gap-3 shrink-0 font-mono-tabular">
+                              {item.quotedValue !== null && item.quotedValue !== undefined && (
+                                <span className="text-[#64756B]">
+                                  {formatCurrency(item.quotedValue, 'INR')}
+                                </span>
+                              )}
+                              <span className="font-semibold text-[#116438]">{item.count}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {Array.isArray(analytics.byHosting) && analytics.byHosting.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64756B] mb-3">
+                        Orders by Hosting Preference
+                      </h3>
+                      <div className="space-y-2">
+                        {analytics.byHosting.map((item) => (
+                          <div
+                            key={item.label}
+                            className="flex items-center justify-between gap-3 text-xs rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3.5 py-2"
+                          >
+                            <span className="font-medium text-[#17231C] truncate">{item.label}</span>
                             <span className="font-mono-tabular font-semibold text-[#116438] shrink-0">
                               {item.count}
                             </span>
@@ -287,21 +320,31 @@ export default function AdminDashboardPage() {
                     </div>
                   )}
 
-                  {analytics.timeline.length > 0 && (
-                    <div className="lg:col-span-2">
+                  {(analytics.monthlyTrend?.length > 0 || analytics.timeline?.length > 0) && (
+                    <div className={analytics.byHosting?.length > 0 ? '' : 'lg:col-span-2'}>
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64756B] mb-3">
-                        Order Volume Over Time
+                        Monthly Order Volume
                       </h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                        {analytics.timeline.map((point) => (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                        {(analytics.monthlyTrend?.length > 0
+                          ? analytics.monthlyTrend
+                          : analytics.timeline
+                        ).map((point) => (
                           <div
-                            key={point.label}
-                            className="rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3 py-2 text-center"
+                            key={point.month || point.label}
+                            className="rounded-lg border border-[#E3EBE5] bg-[#F7FAF7] px-3 py-2.5 text-center"
                           >
-                            <p className="text-[11px] text-[#64756B] truncate">{point.label}</p>
-                            <p className="mt-1 font-display text-lg font-bold text-[#116438] tabular-nums">
-                              {point.count}
+                            <p className="text-[11px] font-medium text-[#64756B] truncate">
+                              {point.month || point.label}
                             </p>
+                            <p className="mt-1 font-display text-lg font-bold text-[#116438] tabular-nums">
+                              {point.orderCount ?? point.count}
+                            </p>
+                            {point.quotedTotal !== null && point.quotedTotal !== undefined && (
+                              <p className="mt-0.5 text-[11px] font-mono-tabular text-[#64756B] truncate">
+                                {formatCurrency(point.quotedTotal, 'INR')}
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>

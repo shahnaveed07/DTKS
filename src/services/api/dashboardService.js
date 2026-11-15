@@ -65,25 +65,78 @@ export function normalizeRecentMessagesPayload(rawPayload) {
   return [];
 }
 
-function normalizeBreakdownEntries(source) {
+function normalizeBreakdownEntries(source, kind = 'generic') {
   if (!source) return [];
   if (Array.isArray(source)) {
     return source
       .map((entry) => {
         if (!entry || typeof entry !== 'object') return null;
-        const label = String(entry.label ?? entry.status ?? entry.service ?? entry.category ?? entry.name ?? entry.period ?? entry.month ?? '').trim();
-        const count = Number(entry.count ?? entry.total ?? entry.orders ?? entry.value ?? 0);
-        if (!label || !Number.isFinite(count)) return null;
-        return { label, count };
+        const label = String(
+          entry.label ??
+            entry.status ??
+            entry.service ??
+            entry.category ??
+            entry.hostingPreference ??
+            entry.hosting_preference ??
+            entry.name ??
+            entry.period ??
+            entry.month ??
+            ''
+        ).trim();
+        const rawCount =
+          entry.orderCount ??
+          entry.order_count ??
+          entry.count ??
+          entry.total ??
+          entry.orders ??
+          entry.value;
+        if (rawCount === null || rawCount === undefined || rawCount === '') return null;
+        const count = Number(rawCount);
+        if (!label || !Number.isFinite(count) || count < 0) return null;
+
+        const quotedValue = toNullableNumber(
+          entry.quotedValue ?? entry.quoted_value ?? entry.quotedTotal ?? entry.quoted_total
+        );
+
+        const normalized = {
+          label,
+          count,
+          quotedValue,
+        };
+        if (kind === 'status') {
+          normalized.status = label;
+        } else if (kind === 'service') {
+          normalized.service = label;
+        } else if (kind === 'hosting') {
+          normalized.hostingPreference = label;
+        } else if (kind === 'monthly') {
+          normalized.month = label;
+          normalized.orderCount = count;
+          normalized.quotedTotal = quotedValue;
+        }
+        return normalized;
       })
       .filter(Boolean);
   }
   if (typeof source === 'object') {
     return Object.entries(source)
       .map(([label, val]) => {
+        if (val === null || val === undefined || val === '') return null;
         const count = Number(val);
-        if (!label || !Number.isFinite(count)) return null;
-        return { label, count };
+        if (!label || !Number.isFinite(count) || count < 0) return null;
+        const normalized = { label, count, quotedValue: null };
+        if (kind === 'status') {
+          normalized.status = label;
+        } else if (kind === 'service') {
+          normalized.service = label;
+        } else if (kind === 'hosting') {
+          normalized.hostingPreference = label;
+        } else if (kind === 'monthly') {
+          normalized.month = label;
+          normalized.orderCount = count;
+          normalized.quotedTotal = null;
+        }
+        return normalized;
       })
       .filter(Boolean);
   }
@@ -98,19 +151,40 @@ export function normalizeOrderAnalyticsPayload(rawPayload) {
     : null;
 
   if (!raw) {
-    return { byStatus: [], byService: [], timeline: [], totalAnalyzed: 0 };
+    return { byStatus: [], byService: [], byHosting: [], monthlyTrend: [], timeline: [], totalAnalyzed: 0 };
   }
 
-  const byStatus = normalizeBreakdownEntries(raw.byStatus || raw.statusBreakdown || raw.statuses);
-  const byService = normalizeBreakdownEntries(raw.byService || raw.serviceBreakdown || raw.categories);
-  const timeline = normalizeBreakdownEntries(raw.timeline || raw.monthly || raw.series || raw.trend);
+  const byStatus = normalizeBreakdownEntries(
+    raw.byStatus ?? raw.by_status ?? raw.statusBreakdown ?? raw.statuses,
+    'status'
+  );
+  const byService = normalizeBreakdownEntries(
+    raw.byService ?? raw.by_service ?? raw.serviceBreakdown ?? raw.categories,
+    'service'
+  );
+  const byHosting = normalizeBreakdownEntries(
+    raw.byHosting ?? raw.by_hosting ?? raw.hostingBreakdown ?? raw.hostings,
+    'hosting'
+  );
+  const monthlyTrend = normalizeBreakdownEntries(
+    raw.monthlyTrend ?? raw.monthly_trend ?? raw.timeline ?? raw.monthly ?? raw.series ?? raw.trend,
+    'monthly'
+  );
+
   const explicitTotal = toNullableNumber(raw.totalOrders ?? raw.total ?? raw.totalAnalyzed);
-  const computedTotal = byStatus.reduce((sum, item) => sum + item.count, 0);
+  const computedTotal =
+    byStatus.length > 0
+      ? byStatus.reduce((sum, item) => sum + item.count, 0)
+      : monthlyTrend.length > 0
+      ? monthlyTrend.reduce((sum, item) => sum + item.count, 0)
+      : byService.reduce((sum, item) => sum + item.count, 0);
 
   return {
     byStatus,
     byService,
-    timeline,
+    byHosting,
+    monthlyTrend,
+    timeline: monthlyTrend,
     totalAnalyzed: explicitTotal ?? computedTotal,
   };
 }
@@ -118,16 +192,68 @@ export function normalizeOrderAnalyticsPayload(rawPayload) {
 function buildLocalAnalytics(orders = []) {
   const statusMap = {};
   const serviceMap = {};
+  const hostingMap = {};
+  const monthlyMap = {};
+
   for (const order of orders) {
+    const quote = toNullableNumber(order?.quotationAmount) || 0;
     const st = order?.status || 'Unknown';
-    statusMap[st] = (statusMap[st] || 0) + 1;
+    if (!statusMap[st]) statusMap[st] = { count: 0, quotedValue: 0 };
+    statusMap[st].count += 1;
+    statusMap[st].quotedValue += quote;
+
     const svc = order?.service || 'Other';
-    serviceMap[svc] = (serviceMap[svc] || 0) + 1;
+    if (!serviceMap[svc]) serviceMap[svc] = { count: 0, quotedValue: 0 };
+    serviceMap[svc].count += 1;
+    serviceMap[svc].quotedValue += quote;
+
+    const hosting = order?.hostingPreference || 'Not specified';
+    if (!hostingMap[hosting]) hostingMap[hosting] = { count: 0 };
+    hostingMap[hosting].count += 1;
+
+    if (order?.createdAt) {
+      const d = new Date(order.createdAt);
+      if (!Number.isNaN(d.getTime())) {
+        const monthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { count: 0, quotedTotal: 0 };
+        monthlyMap[monthKey].count += 1;
+        monthlyMap[monthKey].quotedTotal += quote;
+      }
+    }
   }
+
+  const monthlyTrend = Object.entries(monthlyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, val]) => ({
+      label: month,
+      month,
+      count: val.count,
+      orderCount: val.count,
+      quotedValue: val.quotedTotal,
+      quotedTotal: val.quotedTotal,
+    }));
+
   return {
-    byStatus: Object.entries(statusMap).map(([label, count]) => ({ label, count })),
-    byService: Object.entries(serviceMap).map(([label, count]) => ({ label, count })),
-    timeline: [],
+    byStatus: Object.entries(statusMap).map(([status, val]) => ({
+      label: status,
+      status,
+      count: val.count,
+      quotedValue: val.quotedValue,
+    })),
+    byService: Object.entries(serviceMap).map(([service, val]) => ({
+      label: service,
+      service,
+      count: val.count,
+      quotedValue: val.quotedValue,
+    })),
+    byHosting: Object.entries(hostingMap).map(([hostingPreference, val]) => ({
+      label: hostingPreference,
+      hostingPreference,
+      count: val.count,
+      quotedValue: null,
+    })),
+    monthlyTrend,
+    timeline: monthlyTrend,
     totalAnalyzed: orders.length,
   };
 }

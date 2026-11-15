@@ -2,12 +2,19 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Lock, LogIn, ShieldAlert, AlertCircle } from 'lucide-react';
 import {
+  clearAdminAuthSession,
   getAdminAccessPolicy,
   loginAdmin,
   verifyAdminSession,
 } from '../../services/api/apiClient.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { sanitizeInternalRedirect, validateLoginCredentials } from '../../utils/authValidation.js';
+import {
+  canAccessAdminPath,
+  formatAdminAuthError,
+  isValidAdminRole,
+  sanitizeInternalRedirect,
+  validateLoginCredentials,
+} from '../../utils/authValidation.js';
 import { PasswordInput } from '../../components/auth/PasswordStrengthMeter.jsx';
 import SEO from '../../components/common/SEO.jsx';
 import BrandLogo from '../../components/common/BrandLogo.jsx';
@@ -31,7 +38,9 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
-  const [loginError, setLoginError] = useState('');
+  const [loginError, setLoginError] = useState(() =>
+    location.state?.error ? formatAdminAuthError(location.state.error) : ''
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -44,8 +53,9 @@ export default function AdminLoginPage() {
     verifyAdminSession()
       .then((res) => {
         if (!active) return;
-        if (res?.authenticated) {
-          navigate(redirectTo, { replace: true });
+        if (res?.authenticated && isValidAdminRole(res?.admin?.role)) {
+          const target = canAccessAdminPath(res.admin.role, redirectTo) ? redirectTo : '/admin';
+          navigate(target, { replace: true });
         } else {
           setCheckingSession(false);
         }
@@ -75,15 +85,29 @@ export default function AdminLoginPage() {
     try {
       const res = await loginAdmin(validation.data);
       if (!res.success) {
-        setLoginError(res.message || 'Invalid administrator email or password.');
+        setLoginError(formatAdminAuthError(res));
         return;
       }
+
+      // Immediately confirm server-recognized session and role via GET /api/v1/auth/me
+      const verified = await verifyAdminSession();
+      if (!verified?.authenticated || !verified?.admin || !isValidAdminRole(verified.admin.role)) {
+        clearAdminAuthSession();
+        setLoginError(formatAdminAuthError(verified));
+        return;
+      }
+
+      const targetRoute = canAccessAdminPath(verified.admin.role, redirectTo)
+        ? redirectTo
+        : '/admin';
+
       setPassword('');
       await refreshAll({ includeAdmin: true });
       addToast('Signed in to DTKS Administration.', 'success');
-      navigate(redirectTo, { replace: true });
+      navigate(targetRoute, { replace: true });
     } catch (err) {
-      setLoginError(err?.message || 'Unable to sign in right now. Please try again.');
+      clearAdminAuthSession();
+      setLoginError(formatAdminAuthError(err));
     } finally {
       setIsSubmitting(false);
     }

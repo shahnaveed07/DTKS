@@ -171,10 +171,11 @@ export default function AdminLayout({ title, children }) {
             <button
               type="button"
               onClick={handleSignOut}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[#17231C] border border-[#E3EBE5] hover:bg-[#F7FAF7] transition-colors"
+              disabled={signingOut}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[#17231C] border border-[#E3EBE5] hover:bg-[#F7FAF7] disabled:opacity-50 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0 text-[#16834A]" />
-              <span>Sign Out</span>
+              <span>{signingOut ? 'Signing Out...' : 'Sign Out'}</span>
             </button>
           ) : (
             <button
@@ -249,10 +250,11 @@ export default function AdminLayout({ title, children }) {
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-[#E3EBE5] text-[#17231C]"
+                  disabled={signingOut}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-[#E3EBE5] text-[#17231C] disabled:opacity-50"
                 >
                   <LogOut className="w-3.5 h-3.5 text-[#16834A]" />
-                  <span>Sign Out</span>
+                  <span>{signingOut ? 'Signing Out...' : 'Sign Out'}</span>
                 </button>
               ) : (
                 <button
