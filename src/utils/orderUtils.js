@@ -207,6 +207,33 @@ export function sanitizeSafeExternalUrl(rawUrl = '') {
   return '';
 }
 
+export const SOCIAL_PLATFORM_META = [
+  { key: 'github', label: 'GitHub', ariaLabel: 'Visit our GitHub profile' },
+  { key: 'linkedin', label: 'LinkedIn', ariaLabel: 'Visit our LinkedIn profile' },
+  { key: 'instagram', label: 'Instagram', ariaLabel: 'Visit our Instagram profile' },
+  { key: 'facebook', label: 'Facebook', ariaLabel: 'Visit our Facebook profile' },
+  { key: 'x', label: 'X', ariaLabel: 'Visit our X profile' },
+  { key: 'other', label: 'Other Profile', ariaLabel: 'Visit our external profile' },
+];
+
+export function getValidSocialLinks(socialLinks = {}) {
+  if (!socialLinks || typeof socialLinks !== 'object' || Array.isArray(socialLinks)) {
+    return [];
+  }
+  return SOCIAL_PLATFORM_META.reduce((acc, meta) => {
+    const safeUrl = sanitizeSafeExternalUrl(socialLinks[meta.key]);
+    if (safeUrl) {
+      acc.push({
+        platform: meta.key,
+        label: meta.label,
+        ariaLabel: meta.ariaLabel,
+        url: safeUrl,
+      });
+    }
+    return acc;
+  }, []);
+}
+
 export function computeDashboardStats({ orders = [], inquiries = [], portfolio = [], team = [] }) {
   const activeStatuses = new Set([
     'Confirmed',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search,
@@ -90,7 +90,10 @@ export default function AdminAccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const refreshInFlightRef = useRef(false);
+  const activeRequestIdRef = useRef(0);
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -138,35 +141,75 @@ export default function AdminAccountsPage() {
   const fetchAdmins = useCallback(async () => {
     if (!canView) {
       setLoading(false);
-      return;
+      return { success: false, skipped: true };
     }
+    const requestId = ++activeRequestIdRef.current;
     setLoading(true);
     setLoadError(null);
-    const res = await authService.listAdminUsers({
-      search,
-      role: roleFilter,
-      status: statusFilter,
-      page,
-      limit: PAGE_SIZE,
-    });
-    if (!res.success) {
+    try {
+      const res = await authService.listAdminUsers({
+        search,
+        role: roleFilter,
+        status: statusFilter,
+        page,
+        limit: PAGE_SIZE,
+      });
+      if (requestId !== activeRequestIdRef.current) {
+        return res;
+      }
+      if (!res.success) {
+        setLoadError({
+          message: res.message || 'Failed loading administrator accounts.',
+          statusCode: res.statusCode,
+          errorCode: res.errorCode,
+        });
+        setAccounts([]);
+      } else {
+        const list = Array.isArray(res.data?.accounts) ? res.data.accounts : [];
+        setAccounts(list);
+        setPagination(res.data?.pagination || null);
+      }
+      return res;
+    } catch (err) {
+      if (requestId !== activeRequestIdRef.current) {
+        return { success: false, message: err?.message || 'Failed loading administrator accounts.' };
+      }
+      const message = err?.message || 'Failed loading administrator accounts.';
       setLoadError({
-        message: res.message || 'Failed loading administrator accounts.',
-        statusCode: res.statusCode,
-        errorCode: res.errorCode,
+        message,
+        statusCode: null,
+        errorCode: 'UNEXPECTED_ERROR',
       });
       setAccounts([]);
-    } else {
-      const list = Array.isArray(res.data?.accounts) ? res.data.accounts : [];
-      setAccounts(list);
-      setPagination(res.data?.pagination || null);
+      return { success: false, message };
+    } finally {
+      if (requestId === activeRequestIdRef.current) {
+        setLoading(false);
+      }
     }
-    setLoading(false);
   }, [canView, search, roleFilter, statusFilter, page]);
 
   useEffect(() => {
     fetchAdmins();
   }, [fetchAdmins]);
+
+  const handleRefresh = async () => {
+    if (!canView || loading || refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    setIsRefreshing(true);
+    try {
+      const res = await fetchAdmins();
+      if (res?.skipped) return;
+      if (res?.success) {
+        addToast('Administrator accounts refreshed.', 'success');
+      } else {
+        addToast(res?.message || 'Failed to refresh administrator accounts.', 'error');
+      }
+    } finally {
+      refreshInFlightRef.current = false;
+      setIsRefreshing(false);
+    }
+  };
 
   // Client-side fallback filtering if backend omits pagination
   const displayedAdmins = useMemo(() => {
@@ -446,16 +489,31 @@ export default function AdminAccountsPage() {
             </p>
           </div>
 
-          {canManage && (
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               type="button"
-              onClick={openCreateModal}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap shrink-0"
+              onClick={handleRefresh}
+              disabled={loading || isRefreshing}
+              aria-label="Refresh administrator accounts"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border border-[#E3EBE5] bg-white hover:bg-[#F7FAF7] text-[#17231C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap shrink-0"
             >
-              <UserPlus className="w-4 h-4" />
-              <span>Invite Admin</span>
+              <RefreshCw
+                className={`w-4 h-4 text-[#16834A] ${loading || isRefreshing ? 'animate-spin' : ''}`}
+              />
+              <span>{loading || isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
             </button>
-          )}
+
+            {canManage && (
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap shrink-0"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Invite Admin</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {!canManage && (

@@ -2,11 +2,12 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin, Globe } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
+import SocialLinks from '../common/SocialLinks.jsx';
 import WhatsAppIcon from '../common/WhatsAppIcon.jsx';
 import {
   buildWhatsAppUrl,
   buildMailtoUrl,
-  sanitizeSafeExternalUrl,
+  getValidSocialLinks,
 } from '../../utils/orderUtils.js';
 
 export default function Footer() {
@@ -21,9 +22,7 @@ export default function Footer() {
   const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
   const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
 
-  const socialEntries = Object.entries(settings.socialLinks || {})
-    .map(([platform, url]) => [platform, sanitizeSafeExternalUrl(url)])
-    .filter(([, safeUrl]) => Boolean(safeUrl));
+  const hasSocialLinks = getValidSocialLinks(settings.socialLinks).length > 0;
 
   return (
     <footer className="border-t border-[#0E532E] bg-[#116438] text-white">
@@ -169,19 +168,13 @@ export default function Footer() {
                 </li>
               )}
             </ul>
-            {socialEntries.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-3 text-xs">
-                {socialEntries.map(([platform, url]) => (
-                  <a
-                    key={platform}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="capitalize font-medium text-white underline-offset-2 hover:underline"
-                  >
-                    {platform}
-                  </a>
-                ))}
+            {hasSocialLinks && (
+              <div className="mt-4">
+                <SocialLinks
+                  socialLinks={settings.socialLinks}
+                  companyName={settings.companyName || 'DreamTech Kashmir Solutions'}
+                  variant="footer"
+                />
               </div>
             )}
           </div>

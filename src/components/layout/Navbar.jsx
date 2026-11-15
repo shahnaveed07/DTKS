@@ -4,8 +4,13 @@ import { Menu, X, Mail, User, LogOut } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { useClientAuth } from '../../context/ClientAuthContext.jsx';
 import BrandLogo from '../common/BrandLogo.jsx';
+import SocialLinks from '../common/SocialLinks.jsx';
 import WhatsAppIcon from '../common/WhatsAppIcon.jsx';
-import { buildWhatsAppUrl, buildMailtoUrl } from '../../utils/orderUtils.js';
+import {
+  buildWhatsAppUrl,
+  buildMailtoUrl,
+  getValidSocialLinks,
+} from '../../utils/orderUtils.js';
 
 const NAV_LINKS = [
   { label: 'Home', to: '/' },
@@ -27,6 +32,8 @@ export default function Navbar() {
   const hasWhatsapp = Boolean(settings?.whatsappNumber && settings.whatsappNumber.trim());
   const mailtoUrl = hasEmail ? buildMailtoUrl(settings.contactEmail) : '';
   const whatsappUrl = hasWhatsapp ? buildWhatsAppUrl(settings.whatsappNumber) : '';
+  const hasSocialLinks = getValidSocialLinks(settings?.socialLinks).length > 0;
+  const companyName = settings?.companyName || 'DreamTech Kashmir Solutions';
   const showClientPortalControls = clientAccessPolicy !== 'blocked_production_local';
 
   useEffect(() => {
@@ -62,7 +69,7 @@ export default function Navbar() {
         </Link>
 
         {/* Zone 2: Clean single-line navigation links */}
-        <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-4 xl:gap-6">
+        <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-3 xl:gap-5">
           {NAV_LINKS.map((item) => (
             <NavLink
               key={item.to}
@@ -81,8 +88,21 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* Zone 3: Client Account controls + Contact + Primary CTA */}
-        <div className="hidden lg:flex items-center gap-2.5 shrink-0">
+        {/* Zone 3: Social + Client Account controls + Contact + Primary CTA */}
+        <div className="hidden lg:flex items-center gap-2 xl:gap-2.5 shrink-0">
+          {hasSocialLinks && (
+            <div
+              aria-label="Social media profiles"
+              className="flex items-center pr-2 border-r border-[#E3EBE5]"
+            >
+              <SocialLinks
+                socialLinks={settings?.socialLinks}
+                companyName={companyName}
+                variant="navbarDesktop"
+              />
+            </div>
+          )}
+
           {hasWhatsapp && (
             <a
               href={whatsappUrl}
@@ -163,8 +183,8 @@ export default function Navbar() {
 
       {/* Mobile Navigation Drawer */}
       <div
-        className={`lg:hidden overflow-hidden transition-all duration-200 border-[#E3EBE5] bg-white ${
-          mobileOpen ? 'max-h-[680px] border-t' : 'max-h-0'
+        className={`lg:hidden transition-all duration-200 border-[#E3EBE5] bg-white ${
+          mobileOpen ? 'max-h-[85vh] overflow-y-auto border-t' : 'max-h-0 overflow-hidden'
         }`}
       >
         <nav aria-label="Mobile navigation" className="px-4 py-4 flex flex-col gap-1">
@@ -288,6 +308,20 @@ export default function Navbar() {
                   <span>WhatsApp</span>
                 </a>
               )}
+            </div>
+          )}
+
+          {hasSocialLinks && (
+            <div className="pt-2.5 mt-1 border-t border-[#E3EBE5] flex flex-wrap items-center justify-between gap-2.5">
+              <span className="text-xs font-semibold text-[#64756B] shrink-0">
+                Social Media
+              </span>
+              <SocialLinks
+                socialLinks={settings?.socialLinks}
+                companyName={companyName}
+                variant="navbarMobile"
+                onLinkClick={() => setMobileOpen(false)}
+              />
             </div>
           )}
 

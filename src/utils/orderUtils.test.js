@@ -10,6 +10,7 @@ import {
   computeDashboardStats,
   buildWhatsAppUrl,
   buildMailtoUrl,
+  getValidSocialLinks,
 } from './orderUtils.js';
 import { sanitizeLegacyDataset } from '../services/storage/localStorageAdapter.js';
 import {
@@ -334,3 +335,37 @@ test('computeDashboardStats computes accurate counts including hosting & mainten
     teamMembers: 2,
   });
 });
+
+test('getValidSocialLinks returns only valid http/https social URLs in canonical platform order', () => {
+  assert.deepEqual(getValidSocialLinks(null), []);
+  assert.deepEqual(getValidSocialLinks({}), []);
+  assert.deepEqual(
+    getValidSocialLinks({
+      github: '',
+      linkedin: '   ',
+      instagram: 'javascript:alert(1)',
+      facebook: 'ftp://facebook.com/dtks',
+      x: 'not-a-valid-url',
+      other: 'data:text/html,hi',
+    }),
+    []
+  );
+
+  const valid = getValidSocialLinks({
+    other: 'https://dtks.example.org/profile',
+    x: 'https://x.com/dtks_kashmir',
+    facebook: 'http://facebook.com/dtks',
+    instagram: 'https://instagram.com/dtks',
+    linkedin: 'https://linkedin.com/company/dtks',
+    github: 'https://github.com/shahnaveed07/DTKS',
+  });
+
+  assert.deepEqual(
+    valid.map((item) => item.platform),
+    ['github', 'linkedin', 'instagram', 'facebook', 'x', 'other']
+  );
+  assert.equal(valid[0].url, 'https://github.com/shahnaveed07/DTKS');
+  assert.equal(valid[4].label, 'X');
+  assert.equal(valid[5].label, 'Other Profile');
+});
+
