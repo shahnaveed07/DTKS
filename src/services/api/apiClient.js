@@ -212,8 +212,7 @@ export function getAdminAccessPolicy() {
   if (adapter === 'api') {
     return 'session_required';
   }
-  const allowLocalAdminOverride = readEnvVar('VITE_ENABLE_LOCAL_ADMIN') === 'true';
-  if (isProductionEnvironment() && !allowLocalAdminOverride) {
+  if (isProductionEnvironment()) {
     return 'blocked_production_local';
   }
   return 'allowed_dev';
@@ -804,7 +803,8 @@ export async function verifyAdminSession() {
  * Authenticates an administrator against POST /api/v1/auth/login.
  */
 export async function loginAdmin({ email, password } = {}) {
-  if (getAdminAccessPolicy() === 'blocked_production_local') {
+  const policy = getAdminAccessPolicy();
+  if (policy === 'blocked_production_local') {
     return createServiceError(
       'Secure Admin access will be enabled after backend authentication is configured.',
       null,
@@ -812,6 +812,18 @@ export async function loginAdmin({ email, password } = {}) {
         errorType: 'BackendNotConfiguredError',
         errorCode: 'ADMIN_AUTH_UNCONFIGURED',
         statusCode: 503,
+      }
+    );
+  }
+
+  if (policy !== 'session_required') {
+    return createServiceError(
+      'Server authentication is unavailable in local preview mode. Use "Open Admin Console" for local development or configure VITE_DATA_ADAPTER=api and VITE_API_BASE_URL.',
+      null,
+      {
+        errorType: 'LocalAdapterAuthUnavailableError',
+        errorCode: 'LOCAL_ADAPTER_AUTH_UNAVAILABLE',
+        statusCode: 400,
       }
     );
   }

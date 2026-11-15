@@ -67,6 +67,7 @@ import {
   computeDashboardStats,
   sanitizeSafeExternalUrl,
 } from '../utils/orderUtils.js';
+import { formatAdminAuthError } from '../utils/authValidation.js';
 
 /**
  * Helper to create a controllable mock localStorage in Node.js tests.
@@ -2895,6 +2896,190 @@ test('dashboardService normalizes exact DTKS_BE analytics shape (byStatus, bySer
     assert.equal(failedOverview.stats.status, 'error');
     assert.equal(failedOverview.recentOrders.status, 'error');
     assert.equal(failedOverview.recentMessages.status, 'error');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('Admin Auth Policy & loginAdmin separation: blocks HTTP in allowed_dev, blocks VITE_ENABLE_LOCAL_ADMIN in production, and enforces real session_required flow', async () => {
+  createMockLocalStorage();
+  clearAdminAuthSession();
+
+  const originalFetch = globalThis.fetch;
+  const recordedRequests = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    recordedRequests.push({ url: u, method: init.method || 'GET', headers: init.headers || {} });
+
+    if (u === 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/login') {
+      const body = init.body ? JSON.parse(init.body) : {};
+      if (body.password === 'WrongPass!') {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            accessToken: 'prod-access-tok',
+            refreshToken: 'prod-refresh-tok',
+            csrfToken: 'prod-csrf-tok',
+            expiresIn: 900,
+            admin: {
+              id: 'adm-101',
+              name: 'Production Admin',
+              email: 'admin@dreamtechkashmirsolutions.studio',
+              role: 'super_admin',
+              isActive: true,
+            },
+          },
+        }),
+      };
+    }
+
+    if (u === 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/me') {
+      if (init.headers?.Authorization === 'Bearer revoked-access-tok') {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'SESSION_REVOKED', message: 'Session was revoked.' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            admin: {
+              id: 'adm-101',
+              name: 'Production Admin',
+              email: 'admin@dreamtechkashmirsolutions.studio',
+              role: 'super_admin',
+              isActive: true,
+            },
+          },
+        }),
+      };
+    }
+
+    if (u === 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/refresh') {
+      return {
+        ok: false,
+        status: 401,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: false,
+          error: { code: 'SESSION_REVOKED', message: 'Session revoked.' },
+        }),
+      };
+    }
+
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: false }),
+    };
+  };
+
+  try {
+    // 1. Local adapter mode (allowed_dev) must NOT call fetch() or generate fake JWTs on loginAdmin()
+    setRuntimeEnvOverrides({ isProd: false, dataAdapter: 'local', apiBaseUrl: '' });
+    assert.equal(getAdminAccessPolicy(), 'allowed_dev');
+    const localLoginRes = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(localLoginRes.success, false);
+    assert.equal(localLoginRes.errorCode, 'LOCAL_ADAPTER_AUTH_UNAVAILABLE');
+    assert.equal(getAdminAuthSession(), null);
+    assert.equal(recordedRequests.length, 0, 'allowed_dev loginAdmin must never send HTTP requests');
+    assert.match(formatAdminAuthError(localLoginRes), /local preview mode/i);
+
+    // 2. Production without API config blocks Admin access even if VITE_ENABLE_LOCAL_ADMIN='true'
+    setRuntimeEnvOverrides({
+      isProd: true,
+      dataAdapter: 'local',
+      apiBaseUrl: '',
+      VITE_ENABLE_LOCAL_ADMIN: 'true',
+    });
+    assert.equal(getAdminAccessPolicy(), 'blocked_production_local');
+    const overrideVerify = await verifyAdminSession();
+    assert.equal(overrideVerify.authenticated, false);
+    assert.equal(overrideVerify.policy, 'blocked_production_local');
+    const overrideLogin = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(overrideLogin.success, false);
+    assert.equal(overrideLogin.errorCode, 'ADMIN_AUTH_UNCONFIGURED');
+    assert.equal(recordedRequests.length, 0, 'blocked_production_local must never send HTTP requests');
+
+    // 3. API adapter mode (session_required) hits exact production login and /auth/me endpoints
+    setRuntimeEnvOverrides({
+      isProd: true,
+      dataAdapter: 'api',
+      apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio/api/v1',
+    });
+    assert.equal(getAdminAccessPolicy(), 'session_required');
+
+    const badLogin = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'WrongPass!',
+    });
+    assert.equal(badLogin.success, false);
+    assert.equal(badLogin.statusCode, 401);
+    assert.equal(badLogin.errorCode, 'INVALID_CREDENTIALS');
+    assert.equal(formatAdminAuthError(badLogin), 'Invalid email or password.');
+
+    const goodLogin = await loginAdmin({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+      password: 'ValidPassword#2026',
+    });
+    assert.equal(goodLogin.success, true);
+    assert.equal(
+      recordedRequests[1].url,
+      'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/login'
+    );
+
+    const verified = await verifyAdminSession();
+    assert.equal(verified.authenticated, true);
+    assert.equal(verified.admin.role, 'super_admin');
+    assert.equal(
+      recordedRequests[2].url,
+      'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/me'
+    );
+
+    // 4. Revoked session on /auth/me + failed refresh clears session and sets SESSION_REVOKED
+    setAdminAuthSession({
+      accessToken: 'revoked-access-tok',
+      refreshToken: 'revoked-refresh-tok',
+      csrfToken: 'prod-csrf-tok',
+      admin: { id: 'adm-101', email: 'admin@dreamtechkashmirsolutions.studio', role: 'super_admin' },
+    });
+    const revokedVerify = await verifyAdminSession();
+    assert.equal(revokedVerify.authenticated, false);
+    assert.equal(revokedVerify.errorCode, 'SESSION_REVOKED');
+    assert.equal(getAdminAuthSession(), null);
   } finally {
     globalThis.fetch = originalFetch;
     clearAdminAuthSession();

@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (policy !== 'session_required' || isSubmitting) return;
     setLoginError('');
     setFieldErrors({});
 
@@ -187,93 +187,104 @@ export default function AdminLoginPage() {
           </p>
         </div>
 
-        {policy === 'allowed_dev' && (
-          <div className="rounded-lg border border-[#16834A]/30 bg-[#E8F5EC]/60 px-3.5 py-3 text-xs text-[#116438] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <span>
-              Local dev adapter is active. Admin routes are accessible without a backend server.
-            </span>
+        {policy === 'allowed_dev' ? (
+          <div className="space-y-4">
+            <div
+              role="status"
+              className="rounded-lg border border-[#16834A]/30 bg-[#E8F5EC]/60 p-4 space-y-2"
+            >
+              <p className="text-xs font-semibold text-[#116438]">
+                Local Preview Mode (Offline Adapter)
+              </p>
+              <p className="text-xs text-[#17231C] leading-relaxed">
+                Server authentication is unavailable in local preview mode because no live backend API is configured. You can open the local development Admin Console directly using browser storage, or configure <code className="font-mono-tabular">VITE_DATA_ADAPTER=api</code> and <code className="font-mono-tabular">VITE_API_BASE_URL</code> to sign in against the backend server.
+              </p>
+            </div>
             <Link
               to={redirectTo}
-              className="font-semibold text-[#16834A] hover:text-[#116438] underline whitespace-nowrap shrink-0"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors"
             >
-              Open Admin Console
+              <LogIn className="w-4 h-4" />
+              <span>Open Admin Console</span>
             </Link>
           </div>
-        )}
-
-        {inviteAccepted && !loginError && (
-          <div
-            role="status"
-            className="rounded-lg border border-[#16834A]/30 bg-[#E8F5EC]/70 px-3.5 py-2.5 text-xs text-[#116438]"
-          >
-            Your administrator account is now active. Sign in using your email and new password.
-          </div>
-        )}
-
-        {wasExpired && !loginError && (
-          <div
-            role="status"
-            className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 flex items-start gap-2"
-          >
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>Your administrator session expired or was signed out. Please sign in again.</span>
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-4" noValidate>
-          {loginError && (
-            <div
-              role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700"
-            >
-              {loginError}
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="admin-login-email" className="block text-xs font-semibold text-[#17231C] mb-1">
-              Administrator Email<span className="text-red-600 ml-0.5">*</span>
-            </label>
-            <input
-              id="admin-login-email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@dreamtechkashmirsolutions.studio"
-              aria-invalid={Boolean(fieldErrors.email)}
-              className={`w-full px-3.5 py-2.5 text-sm rounded-lg border bg-white text-[#17231C] focus:outline-none ${
-                fieldErrors.email
-                  ? 'border-red-400 focus:border-red-600'
-                  : 'border-[#E3EBE5] focus:border-[#16834A]'
-              }`}
-            />
-            {fieldErrors.email && (
-              <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
+        ) : (
+          <>
+            {inviteAccepted && !loginError && (
+              <div
+                role="status"
+                className="rounded-lg border border-[#16834A]/30 bg-[#E8F5EC]/70 px-3.5 py-2.5 text-xs text-[#116438]"
+              >
+                Your administrator account is now active. Sign in using your email and new password.
+              </div>
             )}
-          </div>
 
-          <PasswordInput
-            id="admin-login-password"
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            required
-            error={fieldErrors.password}
-          />
+            {wasExpired && !loginError && (
+              <div
+                role="status"
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 flex items-start gap-2"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>Your administrator session expired or was signed out. Please sign in again.</span>
+              </div>
+            )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 text-white transition-colors"
-          >
-            <LogIn className="w-4 h-4" />
-            <span>{isSubmitting ? 'Signing In...' : 'Sign In to Admin'}</span>
-          </button>
-        </form>
+            <form onSubmit={handleLogin} className="space-y-4" noValidate>
+              {loginError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700"
+                >
+                  {loginError}
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="admin-login-email" className="block text-xs font-semibold text-[#17231C] mb-1">
+                  Administrator Email<span className="text-red-600 ml-0.5">*</span>
+                </label>
+                <input
+                  id="admin-login-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@dreamtechkashmirsolutions.studio"
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  className={`w-full px-3.5 py-2.5 text-sm rounded-lg border bg-white text-[#17231C] focus:outline-none ${
+                    fieldErrors.email
+                      ? 'border-red-400 focus:border-red-600'
+                      : 'border-[#E3EBE5] focus:border-[#16834A]'
+                  }`}
+                />
+                {fieldErrors.email && (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
+                )}
+              </div>
+
+              <PasswordInput
+                id="admin-login-password"
+                label="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+                error={fieldErrors.password}
+              />
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 text-white transition-colors"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>{isSubmitting ? 'Signing In...' : 'Sign In to Admin'}</span>
+              </button>
+            </form>
+          </>
+        )}
 
         <div className="pt-3 border-t border-[#E3EBE5] flex items-center justify-between gap-3 text-xs">
           <Link

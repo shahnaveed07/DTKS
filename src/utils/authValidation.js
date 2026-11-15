@@ -398,6 +398,10 @@ export function formatAdminAuthError(errorOrRes) {
     return 'Temporary network connectivity issue while contacting the authentication server. Please check your connection and try again.';
   }
 
+  if (code === 'LOCAL_ADAPTER_AUTH_UNAVAILABLE') {
+    return 'Server authentication is unavailable in local preview mode. Open the Admin Console directly or configure VITE_DATA_ADAPTER=api and VITE_API_BASE_URL.';
+  }
+
   if (
     code === 'INVALID_API_BASE_URL' ||
     code === 'ADMIN_AUTH_UNCONFIGURED' ||
