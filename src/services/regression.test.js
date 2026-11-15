@@ -48,6 +48,18 @@ import { portfolioService } from './api/portfolioService.js';
 import { teamService } from './api/teamService.js';
 import { settingsService } from './api/settingsService.js';
 import { mediaService, extractUploadedAssetKey } from './media/mediaService.js';
+import { dashboardService } from './api/dashboardService.js';
+import {
+  getInitialAppState,
+  loadAppResources,
+} from '../context/appResourceLoader.js';
+import {
+  getNoteDraftValue,
+  isNoteDraftDirty,
+  setNoteDraft,
+  clearNoteDraft,
+  executeInquiryNoteSave,
+} from '../utils/inquiryNotesState.js';
 import {
   formatCurrency,
   generateOrderReference,
@@ -2009,4 +2021,390 @@ test('computeDashboardStats counts DTKS_BE status aliases and sanitizeSafeExtern
   assert.equal(sanitizeSafeExternalUrl('vbscript:msgbox(1)'), '');
   assert.equal(sanitizeSafeExternalUrl('/relative/path'), '');
 });
+
+test('getInitialAppState never touches LocalStorage/seeders in api mode and preserves local seeding in local mode', () => {
+  let seededCount = 0;
+  let getterCount = 0;
+  const localGetters = {
+    ensureSeededStorage: () => {
+      seededCount += 1;
+    },
+    getServices: () => {
+      getterCount += 1;
+      return [{ id: 's-seed' }];
+    },
+    getPackages: () => {
+      getterCount += 1;
+      return [{ id: 'p-seed' }];
+    },
+    getMaintenancePlans: () => [],
+    getAddons: () => [],
+    getPortfolio: () => [{ id: 'pr-seed' }],
+    getTeam: () => [{ id: 'tm-seed' }],
+    getOrders: () => [{ id: 'o-seed' }],
+    getInquiries: () => [{ id: 'i-seed' }],
+    getSettings: () => ({ companyName: 'Local Seed Co' }),
+  };
+
+  const apiState = getInitialAppState('api', localGetters);
+  assert.equal(seededCount, 0);
+  assert.equal(getterCount, 0);
+  assert.equal(apiState.isLoading, true);
+  assert.deepEqual(apiState.packages, []);
+  assert.deepEqual(apiState.portfolio, []);
+  assert.deepEqual(apiState.team, []);
+  assert.deepEqual(apiState.orders, []);
+  assert.deepEqual(apiState.inquiries, []);
+  assert.equal(apiState.resourceStatus.catalog, 'loading');
+  assert.equal(apiState.resourceStatus.orders, 'loading');
+
+  const localState = getInitialAppState('local', localGetters);
+  assert.equal(seededCount, 1);
+  assert.equal(getterCount, 2);
+  assert.equal(localState.isLoading, false);
+  assert.equal(localState.packages[0].id, 'p-seed');
+  assert.equal(localState.portfolio[0].id, 'pr-seed');
+  assert.equal(localState.resourceStatus.catalog, 'ready');
+});
+
+test('loadAppResources isolates failing endpoints via Promise.allSettled without discarding healthy resources', async () => {
+  const res = await loadAppResources({
+    includeAdmin: true,
+    packageService: {
+      fetchCatalog: async () => ({
+        success: true,
+        data: { packages: [{ id: 'pkg-1' }], maintenancePlans: [], addons: [] },
+      }),
+      listServices: async () => ({ success: true, data: [{ id: 'svc-1' }] }),
+    },
+    portfolioService: {
+      listPortfolio: async () => {
+        throw new Error('Portfolio service timeout');
+      },
+    },
+    teamService: {
+      listTeam: async () => ({ success: true, data: [{ id: 'tm-1' }] }),
+    },
+    orderService: {
+      listOrders: async () => ({ success: true, data: [{ id: 'ord-1' }] }),
+    },
+    inquiryService: {
+      listInquiries: async () => ({ success: false, message: 'Inquiries forbidden' }),
+    },
+    settingsService: {
+      getSettings: async () => ({ success: true, data: { companyName: 'DTKS Live' } }),
+    },
+  });
+
+  assert.equal(res.updates.packages[0].id, 'pkg-1');
+  assert.equal(res.updates.services[0].id, 'svc-1');
+  assert.equal(res.updates.team[0].id, 'tm-1');
+  assert.equal(res.updates.orders[0].id, 'ord-1');
+  assert.equal(res.updates.settings.companyName, 'DTKS Live');
+  assert.equal(res.updates.portfolio, undefined);
+  assert.equal(res.updates.inquiries, undefined);
+
+  assert.equal(res.resourceStatus.catalog, 'ready');
+  assert.equal(res.resourceStatus.portfolio, 'error');
+  assert.equal(res.resourceStatus.inquiries, 'error');
+  assert.equal(res.resourceErrors.portfolio, 'Portfolio service timeout');
+  assert.equal(res.resourceErrors.inquiries, 'Inquiries forbidden');
+  assert.equal(res.resourceErrors.catalog, null);
+  assert.equal(res.hasErrors, true);
+});
+
+test('inquiryNotesState isolates per-keystroke edits from API calls, guards duplicates, and preserves failed drafts', async () => {
+  const inquiry = { id: 'inq-1', adminNotes: 'Initial note' };
+  let drafts = {};
+  let updateCalls = [];
+
+  assert.equal(getNoteDraftValue(drafts, inquiry), 'Initial note');
+  assert.equal(isNoteDraftDirty(drafts, inquiry), false);
+
+  // Typing updates local draft only — zero updateInquiry calls
+  drafts = setNoteDraft(drafts, inquiry.id, 'Follow up tomorrow at 3 PM');
+  assert.equal(getNoteDraftValue(drafts, inquiry), 'Follow up tomorrow at 3 PM');
+  assert.equal(isNoteDraftDirty(drafts, inquiry), true);
+  assert.equal(updateCalls.length, 0);
+
+  // Duplicate save lock skips overlapping saves
+  const lockedSave = await executeInquiryNoteSave({
+    inquiry,
+    drafts,
+    savingIds: { 'inq-1': true },
+    updateInquiry: async (id, patch) => {
+      updateCalls.push({ id, patch });
+      return { success: true };
+    },
+  });
+  assert.equal(lockedSave.skipped, true);
+  assert.equal(updateCalls.length, 0);
+
+  // Failed save preserves unsaved draft
+  const failedSave = await executeInquiryNoteSave({
+    inquiry,
+    drafts,
+    savingIds: {},
+    updateInquiry: async (id, patch) => {
+      updateCalls.push({ id, patch });
+      return { success: false, message: 'Server unavailable' };
+    },
+  });
+  assert.equal(failedSave.saved, false);
+  assert.equal(failedSave.preservedDraft, 'Follow up tomorrow at 3 PM');
+  assert.equal(getNoteDraftValue(drafts, inquiry), 'Follow up tomorrow at 3 PM');
+  assert.equal(updateCalls.length, 1);
+
+  // Successful save clears draft when caller invokes clearNoteDraft
+  const successSave = await executeInquiryNoteSave({
+    inquiry,
+    drafts,
+    savingIds: {},
+    updateInquiry: async (id, patch) => {
+      updateCalls.push({ id, patch });
+      return { success: true, data: { ...inquiry, ...patch } };
+    },
+  });
+  assert.equal(successSave.saved, true);
+  assert.deepEqual(updateCalls[1], {
+    id: 'inq-1',
+    patch: { adminNotes: 'Follow up tomorrow at 3 PM' },
+  });
+  drafts = clearNoteDraft(drafts, inquiry.id);
+  assert.equal(isNoteDraftDirty(drafts, inquiry), false);
+});
+
+test('logoutAdmin and clientAuthService.logout always clear local session and truthfully report serverRevoked', async () => {
+  createMockLocalStorage();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+
+  const originalFetch = globalThis.fetch;
+  let failLogout = false;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/logout')) {
+      if (failLogout) {
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'SERVICE_UNAVAILABLE', message: 'Revocation backend offline' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, message: 'Session revoked cleanly.' }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: {} }),
+    };
+  };
+
+  try {
+    // 1. Admin logout success
+    setAdminAuthSession({
+      accessToken: 'adm-tok-1',
+      refreshToken: 'adm-ref-1',
+      csrfToken: 'adm-csrf-1',
+      admin: { id: 'adm-1', email: 'admin@dtks.studio' },
+    });
+    const adminOk = await logoutAdmin();
+    assert.equal(adminOk.success, true);
+    assert.equal(adminOk.loggedOut, true);
+    assert.equal(adminOk.serverRevoked, true);
+    assert.equal(getAdminAuthSession(), null);
+
+    // 2. Admin logout server failure -> local session still cleared, serverRevoked === false
+    failLogout = true;
+    setAdminAuthSession({
+      accessToken: 'adm-tok-2',
+      refreshToken: 'adm-ref-2',
+      csrfToken: 'adm-csrf-2',
+      admin: { id: 'adm-1', email: 'admin@dtks.studio' },
+    });
+    const adminWarn = await logoutAdmin();
+    assert.equal(adminWarn.success, false);
+    assert.equal(adminWarn.loggedOut, true);
+    assert.equal(adminWarn.serverRevoked, false);
+    assert.match(adminWarn.message, /Revocation backend offline/);
+    assert.equal(getAdminAuthSession(), null);
+
+    // 3. Client logout success
+    failLogout = false;
+    setClientAuthSession({
+      accessToken: 'cli-tok-1',
+      refreshToken: 'cli-ref-1',
+      csrfToken: 'cli-csrf-1',
+      client: { id: 'cli-1', email: 'client@dtks.studio' },
+    });
+    const clientOk = await clientAuthService.logout();
+    assert.equal(clientOk.success, true);
+    assert.equal(clientOk.loggedOut, true);
+    assert.equal(clientOk.serverRevoked, true);
+    assert.equal(getClientAuthSession(), null);
+
+    // 4. Client logout server failure -> local session still cleared, serverRevoked === false
+    failLogout = true;
+    setClientAuthSession({
+      accessToken: 'cli-tok-2',
+      refreshToken: 'cli-ref-2',
+      csrfToken: 'cli-csrf-2',
+      client: { id: 'cli-1', email: 'client@dtks.studio' },
+    });
+    const clientWarn = await clientAuthService.logout();
+    assert.equal(clientWarn.success, false);
+    assert.equal(clientWarn.loggedOut, true);
+    assert.equal(clientWarn.serverRevoked, false);
+    assert.match(clientWarn.message, /Revocation backend offline/);
+    assert.equal(getClientAuthSession(), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    clearClientAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('dashboardService queries backend dashboard endpoints and handles partial errors truthfully', async () => {
+  createMockLocalStorage();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  setAdminAuthSession({
+    accessToken: 'adm-dash-tok',
+    csrfToken: 'adm-dash-csrf',
+    admin: { id: 'adm-1', email: 'admin@dtks.studio' },
+  });
+
+  const requested = [];
+  let failAnalytics = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    requested.push(u);
+    if (u.includes('/admin/dashboard/stats')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            stats: {
+              totalOrders: 12,
+              activeProjects: 4,
+              pendingQuotations: 3,
+              completedProjects: 5,
+              managedHostingOrders: 6,
+              maintenanceInterestedOrders: 7,
+              portfolioProjects: 8,
+              newInquiries: 2,
+            },
+          },
+        }),
+      };
+    }
+    if (u.includes('/admin/dashboard/recent-orders')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { orders: [{ id: 'ord-1', referenceId: 'DKS-2026-0001', projectName: 'Shop' }] },
+        }),
+      };
+    }
+    if (u.includes('/admin/dashboard/recent-messages')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { messages: [{ id: 'inq-1', fullName: 'Aamir', status: 'New' }] },
+        }),
+      };
+    }
+    if (u.includes('/admin/dashboard/order-analytics')) {
+      if (failAnalytics) {
+        return {
+          ok: false,
+          status: 500,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'INTERNAL_ERROR', message: 'Analytics query failed' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            analytics: {
+              byStatus: { 'New Request': 3, Completed: 5 },
+              byService: [{ label: 'Business & Corporate Websites', count: 4 }],
+              timeline: [{ period: '2026-10', count: 6 }],
+              totalOrders: 12,
+            },
+          },
+        }),
+      };
+    }
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: false }),
+    };
+  };
+
+  try {
+    const okOverview = await dashboardService.fetchOverview();
+    assert.equal(okOverview.stats.status, 'ready');
+    assert.equal(okOverview.stats.data.totalOrders, 12);
+    assert.equal(okOverview.recentOrders.status, 'ready');
+    assert.equal(okOverview.recentOrders.data[0].referenceId, 'DKS-2026-0001');
+    assert.equal(okOverview.recentMessages.status, 'ready');
+    assert.equal(okOverview.recentMessages.data[0].fullName, 'Aamir');
+    assert.equal(okOverview.analytics.status, 'ready');
+    assert.equal(okOverview.analytics.data.byStatus.length, 2);
+    assert.equal(okOverview.analytics.data.byService[0].count, 4);
+    assert.equal(okOverview.analytics.data.timeline[0].label, '2026-10');
+
+    failAnalytics = true;
+    const partialOverview = await dashboardService.fetchOverview();
+    assert.equal(partialOverview.stats.status, 'ready');
+    assert.equal(partialOverview.analytics.status, 'error');
+    assert.equal(partialOverview.analytics.data, null);
+    assert.match(partialOverview.analytics.error, /Analytics query failed/);
+    assert.ok(requested.some((u) => u.includes('/api/v1/admin/dashboard/stats')));
+    assert.ok(requested.some((u) => u.includes('/api/v1/admin/dashboard/recent-orders')));
+    assert.ok(requested.some((u) => u.includes('/api/v1/admin/dashboard/recent-messages')));
+    assert.ok(requested.some((u) => u.includes('/api/v1/admin/dashboard/order-analytics')));
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
 

@@ -808,24 +808,62 @@ export async function loginAdmin({ email, password } = {}) {
 
 /**
  * Logs out the current administrator via POST /api/v1/auth/logout and clears session storage.
+ * Always clears local session state in finally, while truthfully reporting whether backend
+ * session revocation succeeded.
  */
 export async function logoutAdmin() {
   const refreshToken = getRefreshToken();
   const accessToken = getAccessToken();
+  const isApi = getDataAdapterMode() === 'api';
+  const hadSession = Boolean(accessToken || hasRefreshableSession());
+  let serverRes = null;
+  let serverRevoked = !isApi || !hadSession;
 
   try {
-    if (getDataAdapterMode() === 'api' && (accessToken || hasRefreshableSession())) {
-      await apiRequest(API_ENDPOINTS.authLogout, {
+    if (isApi && hadSession) {
+      serverRes = await apiRequest(API_ENDPOINTS.authLogout, {
         method: 'POST',
         body: refreshToken ? { refreshToken } : {},
         skipAuthRefresh: true,
       });
+      serverRevoked = Boolean(serverRes?.success);
     }
+  } catch (err) {
+    serverRevoked = false;
+    serverRes = createServiceError(
+      err?.message || 'Network error while revoking administrator session.',
+      null,
+      { errorType: 'NetworkError', errorCode: 'NETWORK_ERROR' }
+    );
   } finally {
     clearAdminAuthSession();
   }
 
-  return createServiceResponse({ loggedOut: true }, 'Logged out successfully.');
+  if (isApi && hadSession && !serverRevoked) {
+    const warningMessage = serverRes?.message
+      ? `Local session cleared, but server logout could not be confirmed: ${serverRes.message}`
+      : 'Local session cleared, but server session revocation could not be confirmed.';
+    return {
+      ...createServiceError(
+        warningMessage,
+        { loggedOut: true, serverRevoked: false },
+        {
+          errorType: serverRes?.errorType || 'LogoutRevocationError',
+          errorCode: serverRes?.errorCode || 'SERVER_LOGOUT_UNCONFIRMED',
+          statusCode: serverRes?.statusCode ?? null,
+        }
+      ),
+      loggedOut: true,
+      serverRevoked: false,
+    };
+  }
+
+  return createServiceResponse(
+    { loggedOut: true, serverRevoked: true },
+    serverRes?.message || 'Logged out and server session revoked.',
+    true,
+    { loggedOut: true, serverRevoked: true }
+  );
 }
 
 /**

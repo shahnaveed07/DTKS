@@ -16,6 +16,10 @@ import { TEAM_ROLES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 import { mediaService } from '../../services/media/mediaService.js';
 
 const EMPTY_MEMBER = {
@@ -45,8 +49,14 @@ export default function AdminTeamPage() {
     requestConfirm,
     addToast,
     dataAdapterMode,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
   } = useApp();
   const isApiMode = dataAdapterMode === 'api';
+  const teamLoading = isApiMode && (isLoading || resourceStatus?.team === 'loading');
+  const teamError = isApiMode ? resourceErrors?.team : null;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -210,7 +220,18 @@ export default function AdminTeamPage() {
           </button>
         </div>
 
-        {team.length > 0 ? (
+        {teamError && (
+          <ResourceErrorNotice
+            title="Unable to load team profiles"
+            message={teamError}
+            onRetry={() => refreshAll({ includeAdmin: true })}
+            retrying={teamLoading}
+          />
+        )}
+
+        {teamLoading && team.length === 0 ? (
+          <ResourceLoadingNotice label="Loading team profiles from backend..." />
+        ) : team.length > 0 ? (
           <div className="space-y-4">
             {team.map((member, index) => (
               <div
@@ -298,7 +319,7 @@ export default function AdminTeamPage() {
               </div>
             ))}
           </div>
-        ) : (
+        ) : teamError ? null : (
           <EmptyState
             title="Meet the people behind DreamTech Kashmir Solutions."
             description="No team profiles have been added yet. Add verified team member profiles to display them on the public Team page."

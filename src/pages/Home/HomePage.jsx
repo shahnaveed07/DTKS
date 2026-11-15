@@ -6,6 +6,10 @@ import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import ServiceCard from '../../components/cards/ServiceCard.jsx';
 import ProjectCard from '../../components/cards/ProjectCard.jsx';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 
 const PROCESS_STEPS = [
   { step: '01', title: 'Discuss Requirements', summary: 'Clarify business objectives, user journeys, and technical scope.' },
@@ -51,7 +55,17 @@ const WHY_CHOOSE_US = [
 ];
 
 export default function HomePage() {
-  const { settings, services, portfolio } = useApp();
+  const {
+    settings,
+    services,
+    portfolio,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
+    dataAdapterMode,
+  } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
 
   const verifiedHighlights = (settings.highlights || []).filter(
     (item) => item.verified && String(item.value || '').trim().length > 0
@@ -61,6 +75,11 @@ export default function HomePage() {
     .filter((p) => p.published && !p.isSample)
     .sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)))
     .slice(0, 3);
+
+  const servicesLoading =
+    isApiMode && (isLoading || resourceStatus?.services === 'loading') && services.length === 0;
+  const portfolioLoading =
+    isApiMode && (isLoading || resourceStatus?.portfolio === 'loading') && portfolio.length === 0;
 
   return (
     <>
@@ -186,11 +205,26 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
-            {services.map((service, idx) => (
-              <ServiceCard key={service.id} service={service} index={idx} />
-            ))}
-          </div>
+          {isApiMode && resourceErrors?.services && (
+            <div className="mb-6">
+              <ResourceErrorNotice
+                title="Unable to load website services"
+                message={resourceErrors.services}
+                onRetry={() => refreshAll()}
+                retrying={isLoading}
+              />
+            </div>
+          )}
+
+          {servicesLoading ? (
+            <ResourceLoadingNotice label="Loading website design & development services..." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+              {services.map((service, idx) => (
+                <ServiceCard key={service.id} service={service} index={idx} />
+              ))}
+            </div>
+          )}
 
           <div className="mt-8 rounded-xl border border-[#E3EBE5] bg-white p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="text-xs sm:text-sm text-[#64756B]">
@@ -228,13 +262,26 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {featuredProjects.length > 0 ? (
+          {isApiMode && resourceErrors?.portfolio && (
+            <div className="mb-6">
+              <ResourceErrorNotice
+                title="Unable to load featured projects"
+                message={resourceErrors.portfolio}
+                onRetry={() => refreshAll()}
+                retrying={isLoading}
+              />
+            </div>
+          )}
+
+          {portfolioLoading ? (
+            <ResourceLoadingNotice label="Loading featured website showcases..." />
+          ) : featuredProjects.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {featuredProjects.map((project) => (
                 <ProjectCard key={project.id} project={project} />
               ))}
             </div>
-          ) : (
+          ) : !resourceErrors?.portfolio ? (
             <div className="rounded-xl border border-dashed border-[#E3EBE5] bg-[#F7FAF7] p-10 text-center">
               <h3 className="text-base font-semibold text-[#17231C]">
                 Our project portfolio is being updated.
@@ -250,7 +297,7 @@ export default function HomePage() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
-          )}
+          ) : null}
         </div>
       </section>
 

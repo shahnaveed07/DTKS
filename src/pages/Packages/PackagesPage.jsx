@@ -7,10 +7,28 @@ import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
 import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import { buildFaqSchema, buildPackagesOfferCatalogSchema } from '../../seo/structuredData.js';
 import { formatCurrency } from '../../utils/orderUtils.js';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 
 export default function PackagesPage() {
-  const { packages, addons, maintenancePlans, settings } = useApp();
+  const {
+    packages,
+    addons,
+    maintenancePlans,
+    settings,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
+    dataAdapterMode,
+  } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
   const activePackages = packages.filter((p) => p.active);
+  const catalogLoading =
+    isApiMode && (isLoading || resourceStatus?.catalog === 'loading') && packages.length === 0;
+  const catalogError = isApiMode ? resourceErrors?.catalog : null;
 
   return (
     <>
@@ -60,7 +78,20 @@ export default function PackagesPage() {
       {/* Package Cards */}
       <section className="py-14 bg-[#F7FAF7]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {activePackages.length > 0 ? (
+          {catalogError && (
+            <div className="mb-6">
+              <ResourceErrorNotice
+                title="Failed to load website packages catalog"
+                message={catalogError}
+                onRetry={() => refreshAll()}
+                retrying={isLoading}
+              />
+            </div>
+          )}
+
+          {catalogLoading ? (
+            <ResourceLoadingNotice label="Loading website packages, add-ons, and maintenance plans..." />
+          ) : activePackages.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activePackages.map((pkg) => {
                 const formattedPrice = formatCurrency(pkg.startingPrice, pkg.currency);
@@ -167,13 +198,13 @@ export default function PackagesPage() {
                 );
               })}
             </div>
-          ) : (
+          ) : !catalogError ? (
             <div className="rounded-xl border border-[#E3EBE5] bg-white p-10 text-center">
               <p className="text-sm text-[#64756B]">
                 No packages are currently active. You can still submit a custom project quotation request.
               </p>
             </div>
-          )}
+          ) : null}
 
           {/* Package Comparison Table */}
           {activePackages.length > 0 && (

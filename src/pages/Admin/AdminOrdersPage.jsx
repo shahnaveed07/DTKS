@@ -5,11 +5,27 @@ import { ORDER_STATUSES, WEBSITE_CATEGORIES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 import { filterOrders, formatCurrency } from '../../utils/orderUtils.js';
 
 export default function AdminOrdersPage() {
-  const { orders, updateOrder, deleteOrder, requestConfirm, dataAdapterMode } = useApp();
+  const {
+    orders,
+    updateOrder,
+    deleteOrder,
+    requestConfirm,
+    dataAdapterMode,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
+  } = useApp();
   const isApiMode = dataAdapterMode === 'api';
+  const ordersLoading = isApiMode && (isLoading || resourceStatus?.orders === 'loading');
+  const ordersError = isApiMode ? resourceErrors?.orders : null;
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [serviceFilter, setServiceFilter] = useState('All');
@@ -166,8 +182,19 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
+        {ordersError && (
+          <ResourceErrorNotice
+            title="Unable to load website orders"
+            message={ordersError}
+            onRetry={() => refreshAll({ includeAdmin: true })}
+            retrying={ordersLoading}
+          />
+        )}
+
         {/* Orders Table */}
-        {filtered.length > 0 ? (
+        {ordersLoading && orders.length === 0 ? (
+          <ResourceLoadingNotice label="Loading website orders from backend..." />
+        ) : filtered.length > 0 ? (
           <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-sm">
@@ -244,10 +271,12 @@ export default function AdminOrdersPage() {
             </div>
           </div>
         ) : orders.length === 0 ? (
-          <EmptyState
-            title="No Website Orders Yet"
-            description="Customer website enquiries and development requests will appear here. No orders received yet."
-          />
+          ordersError ? null : (
+            <EmptyState
+              title="No Website Orders Yet"
+              description="Customer website enquiries and development requests will appear here. No orders received yet."
+            />
+          )
         ) : (
           <EmptyState
             title="No matching website orders"

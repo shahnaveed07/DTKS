@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { Save, Download, RotateCcw } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 
 export default function AdminSettingsPage() {
   const {
@@ -11,8 +15,14 @@ export default function AdminSettingsPage() {
     restoreFromBackup,
     isMutating,
     dataAdapterMode,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
   } = useApp();
   const isApiMode = dataAdapterMode === 'api';
+  const settingsLoading = isApiMode && (isLoading || resourceStatus?.settings === 'loading');
+  const settingsError = isApiMode ? resourceErrors?.settings : null;
   const [form, setForm] = useState(settings);
 
   useEffect(() => {
@@ -94,7 +104,7 @@ export default function AdminSettingsPage() {
             )}
             <button
               type="submit"
-              disabled={isMutating}
+              disabled={isMutating || Boolean(settingsError) || settingsLoading}
               className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] disabled:opacity-50 text-white whitespace-nowrap"
             >
               <Save className="w-4 h-4" />
@@ -102,6 +112,19 @@ export default function AdminSettingsPage() {
             </button>
           </div>
         </div>
+
+        {settingsError && (
+          <ResourceErrorNotice
+            title="Unable to load live website settings"
+            message={`${settingsError} Retry before saving so existing backend settings are not overwritten.`}
+            onRetry={() => refreshAll({ includeAdmin: true })}
+            retrying={settingsLoading}
+          />
+        )}
+
+        {settingsLoading && !settingsError && (
+          <ResourceLoadingNotice label="Loading live website settings from backend..." />
+        )}
 
         {/* Business Identity */}
         <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6 space-y-4">

@@ -17,15 +17,55 @@ import { buildProjectSchema } from '../../seo/structuredData.js';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import { sanitizeSafeExternalUrl } from '../../utils/orderUtils.js';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 
 export default function ProjectDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { portfolio, settings } = useApp();
+  const {
+    portfolio,
+    settings,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
+    dataAdapterMode,
+  } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
   const project = portfolio.find((p) => p.slug === slug && p.published && !p.isSample);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
+  const portfolioLoading =
+    isApiMode && (isLoading || resourceStatus?.portfolio === 'loading') && !project;
+  const portfolioError = isApiMode ? resourceErrors?.portfolio : null;
+
   if (!project) {
+    if (portfolioLoading) {
+      return (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+          <SEO fullTitle="Loading Project | DreamTech Kashmir Solutions (DTKS)" settings={settings} />
+          <ResourceLoadingNotice label="Loading project case study..." />
+        </div>
+      );
+    }
+
+    if (portfolioError) {
+      return (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+          <SEO noindex fullTitle="Project Unavailable | DreamTech Kashmir Solutions (DTKS)" settings={settings} />
+          <ResourceErrorNotice
+            title="Unable to load project details"
+            message={portfolioError}
+            onRetry={() => refreshAll()}
+            retrying={isLoading}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <SEO noindex fullTitle="Project Not Found | DreamTech Kashmir Solutions (DTKS)" settings={settings} />

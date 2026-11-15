@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useRef, createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   ensureSeededStorage,
   exportLocalDataSnapshot,
@@ -19,29 +19,48 @@ import {
   getDataAdapterMode,
   getSubmissionMode,
 } from '../services/api/apiClient.js';
+import {
+  createInitialResourceMap,
+  getInitialAppState,
+  loadAppResources,
+} from './appResourceLoader.js';
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  ensureSeededStorage();
-
-  const [services, setServices] = useState(() => packageService.getServices());
-  const [packages, setPackages] = useState(() => packageService.getPackages());
-  const [maintenancePlans, setMaintenancePlans] = useState(() =>
-    packageService.getMaintenancePlans()
+  const [initialState] = useState(() =>
+    getInitialAppState(getDataAdapterMode(), {
+      ensureSeededStorage,
+      getServices: () => packageService.getServices(),
+      getPackages: () => packageService.getPackages(),
+      getMaintenancePlans: () => packageService.getMaintenancePlans(),
+      getAddons: () => packageService.getAddons(),
+      getPortfolio: () => portfolioService.getAll(),
+      getTeam: () => teamService.getAll(),
+      getOrders: () => orderService.getAll(),
+      getInquiries: () => inquiryService.getAll(),
+      getSettings: () => settingsService.get(),
+    })
   );
-  const [addons, setAddons] = useState(() => packageService.getAddons());
-  const [portfolio, setPortfolio] = useState(() => portfolioService.getAll());
-  const [team, setTeam] = useState(() => teamService.getAll());
-  const [orders, setOrders] = useState(() => orderService.getAll());
-  const [inquiries, setInquiries] = useState(() => inquiryService.getAll());
-  const [settings, setSettings] = useState(() => settingsService.get());
-  const [isLoading, setIsLoading] = useState(false);
+
+  const [services, setServices] = useState(initialState.services);
+  const [packages, setPackages] = useState(initialState.packages);
+  const [maintenancePlans, setMaintenancePlans] = useState(initialState.maintenancePlans);
+  const [addons, setAddons] = useState(initialState.addons);
+  const [portfolio, setPortfolio] = useState(initialState.portfolio);
+  const [team, setTeam] = useState(initialState.team);
+  const [orders, setOrders] = useState(initialState.orders);
+  const [inquiries, setInquiries] = useState(initialState.inquiries);
+  const [settings, setSettings] = useState(initialState.settings);
+  const [isLoading, setIsLoading] = useState(initialState.isLoading);
+  const [resourceStatus, setResourceStatus] = useState(initialState.resourceStatus);
+  const [resourceErrors, setResourceErrors] = useState(initialState.resourceErrors);
   const [pendingOperations, setPendingOperations] = useState(0);
   const [error, setError] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const toastTimersRef = useRef(new Map());
+  const refreshSeqRef = useRef(0);
 
   const dismissToast = useCallback((id) => {
     const timer = toastTimersRef.current.get(id);
@@ -81,6 +100,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const refreshLocalState = useCallback(() => {
+    ensureSeededStorage();
     setServices(packageService.getServices());
     setPackages(packageService.getPackages());
     setMaintenancePlans(packageService.getMaintenancePlans());
@@ -90,79 +110,86 @@ export function AppProvider({ children }) {
     setOrders(orderService.getAll());
     setInquiries(inquiryService.getAll());
     setSettings(settingsService.get());
+    setResourceStatus(createInitialResourceMap('ready'));
+    setResourceErrors(createInitialResourceMap(null));
+    setError(null);
+    setIsLoading(false);
   }, []);
 
-  const refreshAll = useCallback(async ({ includeAdmin = false } = {}) => {
-    if (getDataAdapterMode() !== 'api') {
-      refreshLocalState();
-      return;
-    }
+  const refreshAll = useCallback(
+    async ({ includeAdmin = false } = {}) => {
+      if (getDataAdapterMode() !== 'api') {
+        refreshLocalState();
+        return null;
+      }
 
-    const shouldLoadAdmin =
-      includeAdmin || Boolean(getAdminAuthSession()?.accessToken || getCsrfToken());
+      const seq = ++refreshSeqRef.current;
+      const shouldLoadAdmin =
+        includeAdmin || Boolean(getAdminAuthSession()?.accessToken || getCsrfToken());
 
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [
-        catalogRes,
-        servicesRes,
-        portfolioRes,
-        teamRes,
-        ordersRes,
-        inquiriesRes,
-        settingsRes,
-      ] = await Promise.all([
-        packageService.fetchCatalog({ includeInactive: shouldLoadAdmin }),
-        packageService.listServices({ includeInactive: shouldLoadAdmin }),
-        portfolioService.listPortfolio({ includeDrafts: shouldLoadAdmin }),
-        teamService.listTeam({ includeHidden: shouldLoadAdmin }),
-        shouldLoadAdmin
-          ? orderService.listOrders()
-          : Promise.resolve({ success: true, data: null }),
-        shouldLoadAdmin
-          ? inquiryService.listInquiries()
-          : Promise.resolve({ success: true, data: null }),
-        settingsService.getSettings(),
-      ]);
+      setIsLoading(true);
+      setError(null);
+      setResourceStatus((prev) => ({
+        ...prev,
+        catalog: 'loading',
+        services: 'loading',
+        portfolio: 'loading',
+        team: 'loading',
+        orders: shouldLoadAdmin ? 'loading' : prev.orders || 'skipped',
+        inquiries: shouldLoadAdmin ? 'loading' : prev.inquiries || 'skipped',
+        settings: 'loading',
+      }));
 
-      if (catalogRes.success && catalogRes.data) {
-        if (Array.isArray(catalogRes.data.services)) setServices(catalogRes.data.services);
-        if (Array.isArray(catalogRes.data.packages)) setPackages(catalogRes.data.packages);
-        if (Array.isArray(catalogRes.data.maintenancePlans)) {
-          setMaintenancePlans(catalogRes.data.maintenancePlans);
+      try {
+        const result = await loadAppResources({
+          includeAdmin: shouldLoadAdmin,
+          packageService,
+          portfolioService,
+          teamService,
+          orderService,
+          inquiryService,
+          settingsService,
+        });
+
+        if (seq !== refreshSeqRef.current) {
+          return result;
         }
-        if (Array.isArray(catalogRes.data.addons)) setAddons(catalogRes.data.addons);
-      } else if (!catalogRes.success) {
-        setError(catalogRes.message);
-      }
 
-      if (servicesRes.success && Array.isArray(servicesRes.data)) {
-        setServices(servicesRes.data);
+        const { updates } = result;
+        if (Array.isArray(updates.services)) setServices(updates.services);
+        if (Array.isArray(updates.packages)) setPackages(updates.packages);
+        if (Array.isArray(updates.maintenancePlans)) {
+          setMaintenancePlans(updates.maintenancePlans);
+        }
+        if (Array.isArray(updates.addons)) setAddons(updates.addons);
+        if (Array.isArray(updates.portfolio)) setPortfolio(updates.portfolio);
+        if (Array.isArray(updates.team)) setTeam(updates.team);
+        if (Array.isArray(updates.orders)) setOrders(updates.orders);
+        if (Array.isArray(updates.inquiries)) setInquiries(updates.inquiries);
+        if (updates.settings && typeof updates.settings === 'object') {
+          setSettings(updates.settings);
+        }
+
+        setResourceStatus(result.resourceStatus);
+        setResourceErrors(result.resourceErrors);
+        setError(result.error);
+        return result;
+      } catch (err) {
+        if (seq !== refreshSeqRef.current) {
+          return null;
+        }
+        const msg = err?.message || 'Failed loading data from API.';
+        setError(msg);
+        addToast(msg, 'error');
+        return null;
+      } finally {
+        if (seq === refreshSeqRef.current) {
+          setIsLoading(false);
+        }
       }
-      if (portfolioRes.success && Array.isArray(portfolioRes.data)) {
-        setPortfolio(portfolioRes.data);
-      }
-      if (teamRes.success && Array.isArray(teamRes.data)) {
-        setTeam(teamRes.data);
-      }
-      if (ordersRes.success && Array.isArray(ordersRes.data)) {
-        setOrders(ordersRes.data);
-      }
-      if (inquiriesRes.success && Array.isArray(inquiriesRes.data)) {
-        setInquiries(inquiriesRes.data);
-      }
-      if (settingsRes.success && settingsRes.data && typeof settingsRes.data === 'object') {
-        setSettings(settingsRes.data);
-      }
-    } catch (err) {
-      const msg = err?.message || 'Failed loading data from API.';
-      setError(msg);
-      addToast(msg, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshLocalState, addToast]);
+    },
+    [refreshLocalState, addToast]
+  );
 
   useEffect(() => {
     if (getDataAdapterMode() === 'api') {
@@ -586,6 +613,8 @@ export function AppProvider({ children }) {
     adminAccessPolicy: getAdminAccessPolicy(),
     storageDiagnostics: getStorageDiagnostics(),
     isLoading,
+    resourceStatus,
+    resourceErrors,
     isMutating: pendingOperations > 0,
     pendingOperations,
     error,

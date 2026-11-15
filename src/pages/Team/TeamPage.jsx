@@ -7,11 +7,27 @@ import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import { sanitizeSafeExternalUrl } from '../../utils/orderUtils.js';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 
 export default function TeamPage() {
-  const { team, settings } = useApp();
+  const {
+    team,
+    settings,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
+    dataAdapterMode,
+  } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
   const navigate = useNavigate();
   const visibleMembers = team.filter((m) => m.visible && !m.isPlaceholder);
+  const teamLoading =
+    isApiMode && (isLoading || resourceStatus?.team === 'loading') && team.length === 0;
+  const teamError = isApiMode ? resourceErrors?.team : null;
 
   return (
     <>
@@ -46,8 +62,16 @@ export default function TeamPage() {
       </section>
 
       <section className="py-14 bg-[#F7FAF7]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {visibleMembers.length > 0 ? (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <ResourceErrorNotice
+            title="Failed to load team profiles"
+            message={teamError}
+            onRetry={() => refreshAll()}
+            retrying={isLoading}
+          />
+          {teamLoading ? (
+            <ResourceLoadingNotice label="Loading team member profiles..." />
+          ) : visibleMembers.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {visibleMembers.map((member) => {
                 const safeLinkedin = sanitizeSafeExternalUrl(member.linkedinUrl);
@@ -160,14 +184,14 @@ export default function TeamPage() {
                 );
               })}
             </div>
-          ) : (
+          ) : !teamError ? (
             <EmptyState
               title="Meet the people behind DreamTech Kashmir Solutions."
               description="Verified team member profiles, roles, and technical specializations are being updated and will appear here once published."
               actionLabel="Contact Our Team"
               onAction={() => navigate('/contact')}
             />
-          )}
+          ) : null}
         </div>
       </section>
     </>

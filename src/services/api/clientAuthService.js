@@ -442,22 +442,58 @@ export const clientAuthService = {
 
     const accessToken = getClientAccessToken();
     const refreshToken = getClientRefreshToken();
+    const isApi = getDataAdapterMode() === 'api';
+    const hadSession = Boolean(accessToken || refreshToken || getClientAuthSession());
+    let serverRes = null;
+    let serverRevoked = !isApi || !hadSession;
 
     try {
-      if (getDataAdapterMode() === 'api' && (accessToken || refreshToken || getClientAuthSession())) {
-        await clientApiRequest(API_ENDPOINTS.clientAuthLogout, {
+      if (isApi && hadSession) {
+        serverRes = await clientApiRequest(API_ENDPOINTS.clientAuthLogout, {
           method: 'POST',
           body: {
             ...(refreshToken ? { refreshToken } : {}),
           },
           skipAuthRefresh: true,
         });
+        serverRevoked = Boolean(serverRes?.success);
       }
+    } catch (err) {
+      serverRevoked = false;
+      serverRes = createServiceError(
+        err?.message || 'Network error while revoking client session.',
+        null,
+        { errorType: 'NetworkError', errorCode: 'NETWORK_ERROR' }
+      );
     } finally {
       clearClientAuthSession();
     }
 
-    return createServiceResponse({ loggedOut: true }, 'Signed out from your client account.');
+    if (isApi && hadSession && !serverRevoked) {
+      const warningMessage = serverRes?.message
+        ? `Signed out locally, but server session revocation could not be confirmed: ${serverRes.message}`
+        : 'Signed out locally, but server session revocation could not be confirmed.';
+      return {
+        ...createServiceError(
+          warningMessage,
+          { loggedOut: true, serverRevoked: false },
+          {
+            errorType: serverRes?.errorType || 'LogoutRevocationError',
+            errorCode: serverRes?.errorCode || 'SERVER_LOGOUT_UNCONFIRMED',
+            statusCode: serverRes?.statusCode ?? null,
+          }
+        ),
+        loggedOut: true,
+        serverRevoked: false,
+      };
+    }
+
+    return createServiceResponse(
+      { loggedOut: true, serverRevoked: true },
+      serverRes?.message || 'Signed out from your client account.',
+      true,
+      { loggedOut: true, serverRevoked: true }
+    );
   },
 
   async forgotPassword({ email } = {}) {

@@ -3,6 +3,11 @@ import { Plus, Edit3, Trash2, X, Star } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import { WEBSITE_CATEGORIES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
+import EmptyState from '../../components/common/EmptyState.jsx';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 import { formatCurrency } from '../../utils/orderUtils.js';
 
 const EMPTY_PACKAGE = {
@@ -34,12 +39,24 @@ export default function AdminPackagesPage() {
     addons,
     saveAddons,
     requestConfirm,
+    dataAdapterMode,
+    isLoading,
+    isMutating,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
   } = useApp();
+
+  const isApiMode = dataAdapterMode === 'api';
+  const catalogLoading = isApiMode && (isLoading || resourceStatus?.catalog === 'loading');
+  const catalogError = isApiMode ? resourceErrors?.catalog : null;
 
   const [tab, setTab] = useState('packages');
   const [editingPkg, setEditingPkg] = useState(null);
   const [pkgForm, setPkgForm] = useState(EMPTY_PACKAGE);
   const [modalOpen, setModalOpen] = useState(false);
+  const [maintDrafts, setMaintDrafts] = useState({});
+  const [addonDrafts, setAddonDrafts] = useState({});
 
   useEffect(() => {
     if (!modalOpen) return undefined;
@@ -117,17 +134,50 @@ export default function AdminPackagesPage() {
   };
 
   const handleMaintenancePriceChange = (id, value) => {
+    setMaintDrafts((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const hasDirtyMaintenance = maintenancePlans.some((p) => {
+    if (!Object.prototype.hasOwnProperty.call(maintDrafts, p.id)) return false;
+    const raw = maintDrafts[p.id];
+    const draftNum = raw === '' || raw === null ? null : Number(raw);
+    const normalized = Number.isNaN(draftNum) ? null : draftNum;
+    return normalized !== (p.price ?? null);
+  });
+
+  const handleSaveMaintenancePlans = async () => {
     const next = maintenancePlans.map((p) => {
-      if (p.id !== id) return p;
-      const num = value === '' ? null : Number(value);
+      if (!Object.prototype.hasOwnProperty.call(maintDrafts, p.id)) return p;
+      const raw = maintDrafts[p.id];
+      const num = raw === '' || raw === null ? null : Number(raw);
       return { ...p, price: Number.isNaN(num) ? null : num };
     });
-    saveMaintenancePlans(next);
+    const res = await saveMaintenancePlans(next);
+    if (res?.success !== false) {
+      setMaintDrafts({});
+    }
   };
 
   const handleAddonNoteChange = (id, value) => {
-    const next = addons.map((a) => (a.id === id ? { ...a, pricingNote: value } : a));
-    saveAddons(next);
+    setAddonDrafts((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const hasDirtyAddons = addons.some(
+    (a) =>
+      Object.prototype.hasOwnProperty.call(addonDrafts, a.id) &&
+      addonDrafts[a.id] !== (a.pricingNote ?? '')
+  );
+
+  const handleSaveAddons = async () => {
+    const next = addons.map((a) =>
+      Object.prototype.hasOwnProperty.call(addonDrafts, a.id)
+        ? { ...a, pricingNote: addonDrafts[a.id] }
+        : a
+    );
+    const res = await saveAddons(next);
+    if (res?.success !== false) {
+      setAddonDrafts({});
+    }
   };
 
   return (
@@ -179,141 +229,239 @@ export default function AdminPackagesPage() {
           ))}
         </div>
 
+        {catalogError && (
+          <ResourceErrorNotice
+            title="Unable to load packages catalog"
+            message={catalogError}
+            onRetry={() => refreshAll({ includeAdmin: true })}
+            retrying={catalogLoading}
+          />
+        )}
+
         {/* Packages List */}
         {tab === 'packages' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {packages.map((pkg) => (
-              <div
-                key={pkg.id}
-                className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold text-[#16834A]">
-                        {pkg.category} · {pkg.active ? 'Active' : 'Archived'}
-                      </p>
-                      <h2 className="mt-1 font-display text-lg font-bold text-[#17231C]">
-                        {pkg.title}
-                      </h2>
+          catalogLoading && packages.length === 0 ? (
+            <ResourceLoadingNotice label="Loading website packages from backend..." />
+          ) : packages.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {packages.map((pkg) => (
+                <div
+                  key={pkg.id}
+                  className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-[#16834A]">
+                          {pkg.category} · {pkg.active ? 'Active' : 'Archived'}
+                        </p>
+                        <h2 className="mt-1 font-display text-lg font-bold text-[#17231C]">
+                          {pkg.title}
+                        </h2>
+                      </div>
+                      <span className="font-mono-tabular text-base font-bold text-[#116438] whitespace-nowrap">
+                        {formatCurrency(pkg.startingPrice, pkg.currency)}
+                      </span>
                     </div>
-                    <span className="font-mono-tabular text-base font-bold text-[#116438] whitespace-nowrap">
-                      {formatCurrency(pkg.startingPrice, pkg.currency)}
-                    </span>
+
+                    <p className="mt-2 text-sm text-[#64756B]">{pkg.description}</p>
+                    <p className="mt-3 text-xs text-[#64756B]">
+                      {pkg.pagesCount} · {pkg.deliveryEstimate} · {pkg.revisions}
+                    </p>
                   </div>
 
-                  <p className="mt-2 text-sm text-[#64756B]">{pkg.description}</p>
-                  <p className="mt-3 text-xs text-[#64756B]">
-                    {pkg.pagesCount} · {pkg.deliveryEstimate} · {pkg.revisions}
-                  </p>
-                </div>
+                  <div className="mt-5 pt-4 border-t border-[#E3EBE5] flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updatePackage(pkg.id, { active: !pkg.active })}
+                        className="px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
+                      >
+                        {pkg.active ? 'Disable' : 'Enable'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updatePackage(pkg.id, { featured: !pkg.featured })}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border ${
+                          pkg.featured
+                            ? 'border-[#16834A] bg-[#E8F5EC] text-[#116438]'
+                            : 'border-[#E3EBE5] text-[#64756B]'
+                        }`}
+                      >
+                        <Star className="w-3 h-3" />
+                        <span>{pkg.featured ? 'Featured' : 'Feature'}</span>
+                      </button>
+                    </div>
 
-                <div className="mt-5 pt-4 border-t border-[#E3EBE5] flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updatePackage(pkg.id, { active: !pkg.active })}
-                      className="px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:bg-[#F7FAF7]"
-                    >
-                      {pkg.active ? 'Disable' : 'Enable'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updatePackage(pkg.id, { featured: !pkg.featured })}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border ${
-                        pkg.featured
-                          ? 'border-[#16834A] bg-[#E8F5EC] text-[#116438]'
-                          : 'border-[#E3EBE5] text-[#64756B]'
-                      }`}
-                    >
-                      <Star className="w-3 h-3" />
-                      <span>{pkg.featured ? 'Featured' : 'Feature'}</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(pkg)}
-                      aria-label={`Edit ${pkg.title}`}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A]"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeletePackage(pkg)}
-                      aria-label={`Delete ${pkg.title}`}
-                      className="p-1.5 rounded-md border border-[#E3EBE5] text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(pkg)}
+                        aria-label={`Edit ${pkg.title}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-[#E3EBE5] text-[#17231C] hover:border-[#16834A] hover:text-[#16834A]"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePackage(pkg)}
+                        aria-label={`Delete ${pkg.title}`}
+                        className="p-1.5 rounded-md border border-[#E3EBE5] text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : catalogError ? null : (
+            <EmptyState
+              title="No Website Packages Configured"
+              description="Create your first website development package to display confirmed options or quote requests."
+              actionLabel="Add Package"
+              onAction={openCreate}
+            />
+          )
         )}
 
         {/* Maintenance Plans Config */}
         {tab === 'maintenance' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {maintenancePlans.map((plan) => (
-              <div
-                key={plan.id}
-                className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6 space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <h2 className="font-display text-lg font-bold text-[#17231C]">
-                    {plan.name} Maintenance
-                  </h2>
-                  <span className="text-xs text-[#64756B]">{plan.billingCycle}</span>
-                </div>
-                <div>
-                  <label
-                    htmlFor={`maint-price-${plan.id}`}
-                    className="block text-xs font-semibold text-[#17231C] mb-1"
-                  >
-                    Confirmed Price (INR — leave empty for &ldquo;Request a Quote&rdquo;)
-                  </label>
-                  <input
-                    id={`maint-price-${plan.id}`}
-                    type="number"
-                    min="0"
-                    value={plan.price ?? ''}
-                    onChange={(e) => handleMaintenancePriceChange(plan.id, e.target.value)}
-                    placeholder="Request a Quote"
-                    className="w-full px-3 py-2 text-sm font-mono-tabular rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                  />
-                </div>
+          catalogLoading && maintenancePlans.length === 0 ? (
+            <ResourceLoadingNotice label="Loading maintenance plans..." />
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E3EBE5] bg-white px-5 py-3.5 shadow-xs">
                 <p className="text-xs text-[#64756B]">
-                  {plan.backupFrequency} · {plan.securityChecks} · {plan.responseTime}
+                  {hasDirtyMaintenance
+                    ? 'You have unsaved maintenance pricing changes.'
+                    : 'Adjust confirmed maintenance pricing and save when ready.'}
                 </p>
+                <div className="flex items-center gap-2">
+                  {hasDirtyMaintenance && (
+                    <button
+                      type="button"
+                      disabled={isMutating}
+                      onClick={() => setMaintDrafts({})}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#64756B] hover:text-[#17231C] hover:bg-[#F7FAF7] disabled:opacity-50"
+                    >
+                      Discard Changes
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!hasDirtyMaintenance || isMutating}
+                    onClick={handleSaveMaintenancePlans}
+                    className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white disabled:opacity-45 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isMutating ? 'Saving...' : 'Save Maintenance Plans'}
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {maintenancePlans.map((plan) => {
+                  const inputVal = Object.prototype.hasOwnProperty.call(maintDrafts, plan.id)
+                    ? maintDrafts[plan.id]
+                    : plan.price ?? '';
+                  return (
+                    <div
+                      key={plan.id}
+                      className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs p-6 space-y-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h2 className="font-display text-lg font-bold text-[#17231C]">
+                          {plan.name} Maintenance
+                        </h2>
+                        <span className="text-xs text-[#64756B]">{plan.billingCycle}</span>
+                      </div>
+                      <div>
+                        <label
+                          htmlFor={`maint-price-${plan.id}`}
+                          className="block text-xs font-semibold text-[#17231C] mb-1"
+                        >
+                          Confirmed Price (INR — leave empty for &ldquo;Request a Quote&rdquo;)
+                        </label>
+                        <input
+                          id={`maint-price-${plan.id}`}
+                          type="number"
+                          min="0"
+                          value={inputVal}
+                          onChange={(e) => handleMaintenancePriceChange(plan.id, e.target.value)}
+                          placeholder="Request a Quote"
+                          className="w-full px-3 py-2 text-sm font-mono-tabular rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                        />
+                      </div>
+                      <p className="text-xs text-[#64756B]">
+                        {plan.backupFrequency} · {plan.securityChecks} · {plan.responseTime}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )
         )}
 
         {/* Addons Config */}
         {tab === 'addons' && (
-          <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs divide-y divide-[#E3EBE5]">
-            {addons.map((addon) => (
-              <div key={addon.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#17231C]">{addon.name}</h3>
-                  <p className="text-xs text-[#64756B]">{addon.description}</p>
+          catalogLoading && addons.length === 0 ? (
+            <ResourceLoadingNotice label="Loading optional add-ons..." />
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E3EBE5] bg-white px-5 py-3.5 shadow-xs">
+                <p className="text-xs text-[#64756B]">
+                  {hasDirtyAddons
+                    ? 'You have unsaved optional add-on changes.'
+                    : 'Update optional add-on pricing notes and save when ready.'}
+                </p>
+                <div className="flex items-center gap-2">
+                  {hasDirtyAddons && (
+                    <button
+                      type="button"
+                      disabled={isMutating}
+                      onClick={() => setAddonDrafts({})}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#64756B] hover:text-[#17231C] hover:bg-[#F7FAF7] disabled:opacity-50"
+                    >
+                      Discard Changes
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!hasDirtyAddons || isMutating}
+                    onClick={handleSaveAddons}
+                    className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white disabled:opacity-45 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isMutating ? 'Saving...' : 'Save Add-Ons'}
+                  </button>
                 </div>
-                <input
-                  type="text"
-                  aria-label={`Pricing note for ${addon.name}`}
-                  value={addon.pricingNote}
-                  onChange={(e) => handleAddonNoteChange(addon.id, e.target.value)}
-                  className="sm:w-52 px-3 py-1.5 text-xs rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
-                />
               </div>
-            ))}
-          </div>
+
+              <div className="rounded-xl border border-[#E3EBE5] bg-white shadow-xs divide-y divide-[#E3EBE5]">
+                {addons.map((addon) => {
+                  const inputVal = Object.prototype.hasOwnProperty.call(addonDrafts, addon.id)
+                    ? addonDrafts[addon.id]
+                    : addon.pricingNote ?? '';
+                  return (
+                    <div key={addon.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-[#17231C]">{addon.name}</h3>
+                        <p className="text-xs text-[#64756B]">{addon.description}</p>
+                      </div>
+                      <input
+                        type="text"
+                        aria-label={`Pricing note for ${addon.name}`}
+                        value={inputVal}
+                        onChange={(e) => handleAddonNoteChange(addon.id, e.target.value)}
+                        className="sm:w-52 px-3 py-1.5 text-xs rounded-lg border border-[#E3EBE5] bg-white text-[#17231C] focus:outline-none focus:border-[#16834A]"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )
         )}
       </div>
 

@@ -5,6 +5,10 @@ import { PORTFOLIO_CATEGORIES } from '../../data/seedData.js';
 import SEO from '../../components/common/SEO.jsx';
 import ImageWithFallback from '../../components/common/ImageWithFallback.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 import { mediaService } from '../../services/media/mediaService.js';
 
 const EMPTY_PROJECT = {
@@ -39,8 +43,14 @@ export default function AdminPortfolioPage() {
     requestConfirm,
     addToast,
     dataAdapterMode,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
   } = useApp();
   const isApiMode = dataAdapterMode === 'api';
+  const portfolioLoading = isApiMode && (isLoading || resourceStatus?.portfolio === 'loading');
+  const portfolioError = isApiMode ? resourceErrors?.portfolio : null;
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_PROJECT);
@@ -211,7 +221,18 @@ export default function AdminPortfolioPage() {
           </button>
         </div>
 
-        {portfolio.length > 0 ? (
+        {portfolioError && (
+          <ResourceErrorNotice
+            title="Unable to load portfolio projects"
+            message={portfolioError}
+            onRetry={() => refreshAll({ includeAdmin: true })}
+            retrying={portfolioLoading}
+          />
+        )}
+
+        {portfolioLoading && portfolio.length === 0 ? (
+          <ResourceLoadingNotice label="Loading portfolio projects from backend..." />
+        ) : portfolio.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {portfolio.map((proj) => (
               <div
@@ -295,7 +316,7 @@ export default function AdminPortfolioPage() {
               </div>
             ))}
           </div>
-        ) : (
+        ) : portfolioError ? null : (
           <EmptyState
             title="Our project portfolio is being updated."
             description="No portfolio projects have been added yet. Add your first verified client website or production build to showcase it on the public Portfolio page."

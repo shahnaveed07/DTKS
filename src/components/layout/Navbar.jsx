@@ -34,8 +34,16 @@ export default function Navbar() {
   }, [location.pathname]);
 
   const handleClientSignOut = async () => {
-    await logoutClient();
-    addToast('Signed out from your client account.', 'info');
+    const res = await logoutClient();
+    if (res?.serverRevoked === false || res?.success === false) {
+      addToast(
+        res?.message ||
+          'Signed out locally, but server session revocation could not be confirmed.',
+        'error'
+      );
+    } else {
+      addToast('Signed out from your client account.', 'info');
+    }
     if (location.pathname.startsWith('/account')) {
       navigate('/login', { replace: true });
     }

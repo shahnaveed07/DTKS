@@ -43,7 +43,8 @@ const ADMIN_NAV = [
 
 export default function AdminLayout({ title, children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { resetDemoData, requestConfirm, adminAccessPolicy, addToast } = useApp();
+  const [signingOut, setSigningOut] = useState(false);
+  const { resetDemoData, requestConfirm, adminAccessPolicy, addToast, refreshAll } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const isApiSessionMode = adminAccessPolicy === 'session_required';
@@ -57,10 +58,11 @@ export default function AdminLayout({ title, children }) {
       return undefined;
     }
     setAuthSession(getAdminAuthSession());
+    refreshAll({ includeAdmin: true });
     return subscribeAdminAuth((nextSession) => {
       setAuthSession(nextSession);
     });
-  }, [isApiSessionMode]);
+  }, [isApiSessionMode, refreshAll]);
 
   const currentRole = isApiSessionMode ? authSession?.admin?.role || '' : 'super_admin';
   const visibleNav = filterAdminNavByRole(ADMIN_NAV, currentRole);
@@ -77,10 +79,25 @@ export default function AdminLayout({ title, children }) {
   };
 
   const handleSignOut = async () => {
-    await logoutAdmin();
-    addToast('Signed out from administrator session.', 'info');
-    if (isApiSessionMode) {
-      navigate('/admin/login', { replace: true });
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const res = await logoutAdmin();
+      setSidebarOpen(false);
+      if (res?.serverRevoked === false || res?.success === false) {
+        addToast(
+          res?.message ||
+            'Local session cleared, but server session revocation could not be confirmed.',
+          'error'
+        );
+      } else {
+        addToast('Signed out from administrator session.', 'info');
+      }
+      if (isApiSessionMode) {
+        navigate('/admin/login', { replace: true });
+      }
+    } finally {
+      setSigningOut(false);
     }
   };
 

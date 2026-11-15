@@ -27,6 +27,10 @@ import Breadcrumbs from '../../components/common/Breadcrumbs.jsx';
 import { ROUTE_SEO } from '../../seo/seoConfig.js';
 import { buildServiceCatalogSchema } from '../../seo/structuredData.js';
 import { formatCurrency } from '../../utils/orderUtils.js';
+import {
+  ResourceErrorNotice,
+  ResourceLoadingNotice,
+} from '../../components/common/ResourceNotice.jsx';
 
 const ICON_MAP = {
   Globe,
@@ -49,7 +53,19 @@ const ICON_MAP = {
 };
 
 export default function ServicesPage() {
-  const { services, settings } = useApp();
+  const {
+    services,
+    settings,
+    isLoading,
+    resourceStatus,
+    resourceErrors,
+    refreshAll,
+    dataAdapterMode,
+  } = useApp();
+  const isApiMode = dataAdapterMode === 'api';
+  const servicesLoading =
+    isApiMode && (isLoading || resourceStatus?.services === 'loading') && services.length === 0;
+  const servicesError = isApiMode ? resourceErrors?.services : null;
 
   return (
     <>
@@ -89,6 +105,20 @@ export default function ServicesPage() {
 
       <section className="py-14 bg-[#F7FAF7]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <ResourceErrorNotice
+            title="Failed to load website services"
+            message={servicesError}
+            onRetry={() => refreshAll()}
+            retrying={isLoading}
+          />
+          {servicesLoading && (
+            <ResourceLoadingNotice label="Loading website design & development services..." />
+          )}
+          {!servicesLoading && services.length === 0 && !servicesError && (
+            <div className="rounded-xl border border-[#E3EBE5] bg-white p-8 text-center text-sm text-[#64756B]">
+              No active service categories are currently listed.
+            </div>
+          )}
           {services.map((service, idx) => {
             const Icon = ICON_MAP[service.iconName] || Globe;
             const priceText = formatCurrency(service.startingPrice, service.currency || 'INR');
