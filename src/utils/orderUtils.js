@@ -38,6 +38,8 @@ export function buildMailtoUrl(email = '') {
   if (typeof email !== 'string') return '';
   const trimmed = email.trim();
   if (!trimmed) return '';
+  if (/[\s\u0000-\u001f\u007f?#/\\]/.test(trimmed)) return '';
+  if (!isValidEmail(trimmed)) return '';
   return `mailto:${trimmed}`;
 }
 
@@ -196,6 +198,7 @@ export function sanitizeSafeExternalUrl(rawUrl = '') {
   if (typeof rawUrl !== 'string') return '';
   const trimmed = rawUrl.trim();
   if (!trimmed) return '';
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return '';
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
@@ -205,6 +208,82 @@ export function sanitizeSafeExternalUrl(rawUrl = '') {
     return '';
   }
   return '';
+}
+
+export function sanitizeSafeMediaUrl(
+  rawUrl = '',
+  { allowBlob = true, allowDataImage = false } = {}
+) {
+  if (typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  if (/[\u0000-\u001f\u007f\\]/.test(trimmed)) return '';
+
+  if (/^idb:\/\/[a-z0-9._-]+$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^blob:/i.test(trimmed)) {
+    if (!allowBlob) return '';
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === 'blob:' ? trimmed : '';
+    } catch {
+      return '';
+    }
+  }
+
+  if (/^data:/i.test(trimmed)) {
+    if (!allowDataImage) return '';
+    return /^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(trimmed)
+      ? trimmed
+      : '';
+  }
+
+  if (trimmed.startsWith('/')) {
+    if (trimmed.startsWith('//') || /%2f|%5c/i.test(trimmed)) return '';
+    try {
+      const parsed = new URL(trimmed, 'https://dtks.local');
+      if (parsed.origin !== 'https://dtks.local' || parsed.pathname.startsWith('//')) {
+        return '';
+      }
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+      return '';
+    }
+  }
+
+  return sanitizeSafeExternalUrl(trimmed);
+}
+
+/**
+ * Strips customer PII and internal admin fields from public order-tracking payloads.
+ */
+export function sanitizeTrackedOrder(order) {
+  if (!order || typeof order !== 'object' || Array.isArray(order)) return null;
+  const safeFields = {
+    id: order.id ?? null,
+    referenceId: order.referenceId ?? '',
+    projectName: order.projectName ?? '',
+    service: order.service ?? '',
+    packageId: order.packageId ?? '',
+    packageTitle: order.packageTitle ?? '',
+    status: order.status ?? '',
+    quotationAmount: order.quotationAmount ?? null,
+    quotationCurrency: order.quotationCurrency ?? 'INR',
+    quotationNotes: order.quotationNotes ?? '',
+    customerUpdate: order.customerUpdate ?? '',
+    expectedDeliveryDate: order.expectedDeliveryDate ?? '',
+    expectedTimeline: order.expectedTimeline ?? '',
+    domainPreference: order.domainPreference ?? '',
+    hostingPreference: order.hostingPreference ?? '',
+    maintenanceInterest: order.maintenanceInterest ?? '',
+    maintenancePlanSelected: order.maintenancePlanSelected ?? '',
+    estimatedBudget: order.estimatedBudget ?? '',
+    createdAt: order.createdAt ?? null,
+    updatedAt: order.updatedAt ?? null,
+  };
+  return safeFields;
 }
 
 export const SOCIAL_PLATFORM_META = [

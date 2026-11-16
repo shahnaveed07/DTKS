@@ -1,5 +1,9 @@
 import { SITE_CONFIG, buildCanonicalUrl, getSiteUrl } from './seoConfig.js';
-import { buildWhatsAppUrl } from '../utils/orderUtils.js';
+import {
+  buildWhatsAppUrl,
+  sanitizeSafeExternalUrl,
+  sanitizeSafeMediaUrl,
+} from '../utils/orderUtils.js';
 import { resolveBackendAssetUrl } from '../services/api/apiClient.js';
 
 function isPlaceholderValue(value) {
@@ -16,9 +20,12 @@ function isPlaceholderValue(value) {
 }
 
 function getVerifiedSocialUrls(socialLinks = {}) {
+  if (!socialLinks || typeof socialLinks !== 'object' || Array.isArray(socialLinks)) {
+    return [];
+  }
   return Object.values(socialLinks)
-    .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url.trim()))
-    .map((url) => url.trim());
+    .map((url) => sanitizeSafeExternalUrl(url))
+    .filter(Boolean);
 }
 
 export function hasVerifiedLocalBusinessDetails(settings = {}) {
@@ -266,11 +273,15 @@ export function buildPortfolioSchema(projects = []) {
 export function buildProjectSchema(project) {
   if (!project) return null;
   const siteUrl = getSiteUrl();
-  const resolvedCover = resolveBackendAssetUrl(project.coverImage || '');
-  const imageUrl = resolvedCover
-    ? resolvedCover.startsWith('http')
-      ? resolvedCover
-      : `${siteUrl}${resolvedCover.startsWith('/') ? resolvedCover : `/${resolvedCover}`}`
+  const safeCover = sanitizeSafeMediaUrl(resolveBackendAssetUrl(project.coverImage || ''), {
+    allowBlob: false,
+    allowDataImage: false,
+  });
+  const usableCover = safeCover && !safeCover.startsWith('idb://') ? safeCover : '';
+  const imageUrl = usableCover
+    ? usableCover.startsWith('http')
+      ? usableCover
+      : `${siteUrl}${usableCover.startsWith('/') ? usableCover : `/${usableCover}`}`
     : `${siteUrl}${SITE_CONFIG.ogImagePath}`;
 
   return {

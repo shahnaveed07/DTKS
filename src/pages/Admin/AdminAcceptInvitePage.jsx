@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,29 +10,69 @@ import {
 } from 'lucide-react';
 import { authService } from '../../services/api/authService.js';
 import { getAdminAccessPolicy } from '../../services/api/apiClient.js';
-import { validateAcceptInviteInput } from '../../utils/authValidation.js';
+import {
+  buildSanitizedTokenUrl,
+  extractTokenDetailsFromUrl,
+  validateAcceptInviteInput,
+} from '../../utils/authValidation.js';
 import { PasswordInput } from '../../components/auth/PasswordStrengthMeter.jsx';
 import BrandLogo from '../../components/common/BrandLogo.jsx';
 import SEO from '../../components/common/SEO.jsx';
 
 export default function AdminAcceptInvitePage() {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const policy = getAdminAccessPolicy();
-  const initialToken = searchParams.get('token') || '';
 
-  const [token, setToken] = useState(initialToken);
+  const [token, setToken] = useState(
+    () =>
+      extractTokenDetailsFromUrl({
+        hash: location.hash,
+        search: location.search,
+        allowQueryFallback: true,
+      }).token
+  );
+  const [hasTokenFromUrl, setHasTokenFromUrl] = useState(() =>
+    Boolean(
+      extractTokenDetailsFromUrl({
+        hash: location.hash,
+        search: location.search,
+        allowQueryFallback: true,
+      }).token
+    )
+  );
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const inFlightRef = useRef(false);
   const redirectTimerRef = useRef(null);
 
   useEffect(() => {
-    setToken(initialToken);
-  }, [initialToken]);
+    const { token: incomingToken } = extractTokenDetailsFromUrl({
+      hash: location.hash,
+      search: location.search,
+      allowQueryFallback: true,
+    });
+    if (incomingToken) {
+      setToken(incomingToken);
+      setHasTokenFromUrl(true);
+    }
+
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      const { nextUrl, hadTokenInUrl } = buildSanitizedTokenUrl({
+        pathname: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        paramNames: ['token'],
+      });
+      if (hadTokenInUrl) {
+        window.history.replaceState(window.history.state, document.title, nextUrl);
+      }
+    }
+  }, [location.hash, location.search]);
 
   useEffect(() => {
     return () => {
@@ -44,7 +84,7 @@ export default function AdminAcceptInvitePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || inFlightRef.current) return;
     setErrors({});
     setServerError('');
 
@@ -54,6 +94,7 @@ export default function AdminAcceptInvitePage() {
       return;
     }
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       const res = await authService.acceptAdminInvite(validation.data);
@@ -68,6 +109,7 @@ export default function AdminAcceptInvitePage() {
         return;
       }
 
+      setToken('');
       setPassword('');
       setConfirmPassword('');
       setAccepted(true);
@@ -75,6 +117,7 @@ export default function AdminAcceptInvitePage() {
         navigate('/admin/login', { replace: true, state: { inviteAccepted: true } });
       }, 1800);
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -82,7 +125,7 @@ export default function AdminAcceptInvitePage() {
   if (policy === 'blocked_production_local') {
     return (
       <div className="min-h-screen bg-[#F7FAF7] flex flex-col justify-center items-center p-6">
-        <SEO noindex fullTitle="Administrator Invitation | DTKS" />
+        <SEO noindex referrerPolicy="no-referrer" fullTitle="Administrator Invitation | DTKS" />
         <div className="max-w-lg w-full rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-5">
           <div className="flex items-center justify-between">
             <BrandLogo variant="header" />
@@ -113,7 +156,7 @@ export default function AdminAcceptInvitePage() {
 
   return (
     <div className="min-h-screen bg-[#F7FAF7] flex flex-col justify-center items-center p-6">
-      <SEO noindex fullTitle="Accept Administrator Invitation | DTKS" />
+      <SEO noindex referrerPolicy="no-referrer" fullTitle="Accept Administrator Invitation | DTKS" />
 
       <div className="max-w-md w-full rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-6">
         <div className="flex items-center justify-between">
@@ -155,7 +198,7 @@ export default function AdminAcceptInvitePage() {
               </p>
             </div>
 
-            {!initialToken && !serverError && (
+            {!hasTokenFromUrl && !serverError && (
               <div
                 role="status"
                 className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800"
@@ -174,7 +217,7 @@ export default function AdminAcceptInvitePage() {
                 </div>
               )}
 
-              {!initialToken && (
+              {!hasTokenFromUrl && (
                 <div>
                   <label htmlFor="invite-token" className="block text-xs font-semibold text-[#17231C] mb-1">
                     Invitation Token<span className="text-red-600 ml-0.5">*</span>

@@ -11,6 +11,9 @@ import {
   buildWhatsAppUrl,
   buildMailtoUrl,
   getValidSocialLinks,
+  sanitizeSafeExternalUrl,
+  sanitizeSafeMediaUrl,
+  sanitizeTrackedOrder,
 } from './orderUtils.js';
 import { sanitizeLegacyDataset } from '../services/storage/localStorageAdapter.js';
 import {
@@ -367,5 +370,72 @@ test('getValidSocialLinks returns only valid http/https social URLs in canonical
   assert.equal(valid[0].url, 'https://github.com/shahnaveed07/DTKS');
   assert.equal(valid[4].label, 'X');
   assert.equal(valid[5].label, 'Other Profile');
+});
+
+test('buildMailtoUrl and sanitizeSafeExternalUrl block header injection and unsafe schemes/control chars', () => {
+  assert.equal(buildMailtoUrl('support@dreamtechkashmirsolutions.studio?subject=hack'), '');
+  assert.equal(buildMailtoUrl('user@example.com\r\nBcc:evil@example.com'), '');
+  assert.equal(buildMailtoUrl('user@example.com/path'), '');
+  assert.equal(sanitizeSafeExternalUrl('https://example.com/\nfoo'), '');
+  assert.equal(sanitizeSafeExternalUrl('javascript:alert(1)'), '');
+  assert.equal(sanitizeSafeExternalUrl('https://github.com/shahnaveed07/DTKS'), 'https://github.com/shahnaveed07/DTKS');
+});
+
+test('sanitizeSafeMediaUrl allows safe assets/idb/blob and rejects SVG, HTML, and script schemes', () => {
+  assert.equal(sanitizeSafeMediaUrl('idb://media-123'), 'idb://media-123');
+  assert.equal(sanitizeSafeMediaUrl('blob:https://dreamtechkashmirsolutions.studio/abc'), 'blob:https://dreamtechkashmirsolutions.studio/abc');
+  assert.equal(sanitizeSafeMediaUrl('blob:https://dreamtechkashmirsolutions.studio/abc', { allowBlob: false }), '');
+  assert.equal(sanitizeSafeMediaUrl('/assets/images/logo.webp'), '/assets/images/logo.webp');
+  assert.equal(sanitizeSafeMediaUrl('https://api.dreamtechkashmirsolutions.studio/api/v1/uploads/a.webp'), 'https://api.dreamtechkashmirsolutions.studio/api/v1/uploads/a.webp');
+
+  assert.equal(sanitizeSafeMediaUrl('data:image/svg+xml,<svg onload=alert(1)>', { allowDataImage: true }), '');
+  assert.equal(sanitizeSafeMediaUrl('data:image/png;base64,iVBORw0KGgo=', { allowDataImage: false }), '');
+  assert.equal(sanitizeSafeMediaUrl('data:image/png;base64,iVBORw0KGgo=', { allowDataImage: true }), 'data:image/png;base64,iVBORw0KGgo=');
+  assert.equal(sanitizeSafeMediaUrl('javascript:alert(1)'), '');
+  assert.equal(sanitizeSafeMediaUrl('//evil.example/a.png'), '');
+  assert.equal(sanitizeSafeMediaUrl('/%2fevil.example/a.png'), '');
+});
+
+test('sanitizeTrackedOrder strips customer PII and internal notes while retaining safe status fields', () => {
+  const sanitized = sanitizeTrackedOrder({
+    id: 'ord-1',
+    referenceId: 'DKS-2026-0001',
+    projectName: 'Tourism Portal',
+    service: 'Tourism & Travel Websites',
+    packageId: 'pkg-business',
+    packageTitle: 'Business Growth Website',
+    status: 'Quotation Sent',
+    quotationAmount: 35000,
+    quotationCurrency: 'INR',
+    quotationNotes: 'Includes booking inquiry module',
+    customerUpdate: 'Quotation sent via email',
+    expectedDeliveryDate: '2026-12-15',
+    domainPreference: 'Need new domain',
+    hostingPreference: 'DreamTech-managed',
+    maintenanceInterest: 'Interested',
+    maintenancePlanSelected: 'Essential',
+    estimatedBudget: 'INR 20,000 – 45,000',
+    createdAt: '2026-10-01T00:00:00Z',
+    customerName: 'Sensitive Name',
+    customerEmail: 'sensitive@example.com',
+    customerPhone: '+91 9999999999',
+    customerCity: 'Srinagar',
+    adminNotes: 'Internal pricing margin note',
+    internalNotes: 'Private staff note',
+    hostingNotes: 'Internal infra detail',
+    clientId: 'cli-secret-1',
+  });
+
+  assert.equal(sanitized.referenceId, 'DKS-2026-0001');
+  assert.equal(sanitized.quotationAmount, 35000);
+  assert.equal('customerName' in sanitized, false);
+  assert.equal('customerEmail' in sanitized, false);
+  assert.equal('customerPhone' in sanitized, false);
+  assert.equal('customerCity' in sanitized, false);
+  assert.equal('adminNotes' in sanitized, false);
+  assert.equal('internalNotes' in sanitized, false);
+  assert.equal('hostingNotes' in sanitized, false);
+  assert.equal('clientId' in sanitized, false);
+  assert.equal(sanitizeTrackedOrder(null), null);
 });
 

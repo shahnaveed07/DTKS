@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
                     Local Development Reset Link
                   </p>
                   <Link
-                    to={`/reset-password?token=${encodeURIComponent(sentState.localResetToken)}`}
+                    to={`/reset-password#token=${encodeURIComponent(sentState.localResetToken)}`}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#16834A] hover:underline"
                   >
                     <span>Reset Password Now</span>

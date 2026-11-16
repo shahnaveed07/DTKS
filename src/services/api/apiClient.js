@@ -123,17 +123,124 @@ export function isLocalhostApiUrl(url = '') {
   }
 }
 
+export function validateApiRequestUrl(url = '') {
+  const raw = String(url || '').trim();
+  if (!raw) {
+    return {
+      ok: false,
+      errorType: 'BackendNotConfiguredError',
+      errorCode: 'INVALID_API_BASE_URL',
+      statusCode: 503,
+      message: 'API request URL is missing.',
+    };
+  }
+
+  const isAbsolute = /^https?:\/\//i.test(raw);
+  if (!isAbsolute) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//')) {
+      return {
+        ok: false,
+        errorType: 'UntrustedOriginError',
+        errorCode: 'UNTRUSTED_API_ORIGIN',
+        statusCode: 400,
+        message: 'Blocked API request to an invalid URL scheme.',
+      };
+    }
+    return { ok: true };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return {
+      ok: false,
+      errorType: 'BackendNotConfiguredError',
+      errorCode: 'INVALID_API_BASE_URL',
+      statusCode: 503,
+      message: 'API URL is malformed.',
+    };
+  }
+
+  const expectedOrigin = getApiOrigin();
+  if (expectedOrigin && parsed.origin !== expectedOrigin) {
+    return {
+      ok: false,
+      errorType: 'UntrustedOriginError',
+      errorCode: 'UNTRUSTED_API_ORIGIN',
+      statusCode: 400,
+      message: 'Blocked API request to an untrusted origin.',
+    };
+  }
+  if (!expectedOrigin) {
+    return {
+      ok: false,
+      errorType: 'UntrustedOriginError',
+      errorCode: 'UNTRUSTED_API_ORIGIN',
+      statusCode: 400,
+      message: 'Blocked external API request because VITE_API_BASE_URL is not configured.',
+    };
+  }
+
+  if (isProductionEnvironment() && isLocalhostApiUrl(raw)) {
+    return {
+      ok: false,
+      errorType: 'BackendNotConfiguredError',
+      errorCode: 'INVALID_API_BASE_URL',
+      statusCode: 503,
+      message: 'Production API base URL is misconfigured to localhost.',
+    };
+  }
+
+  if (isProductionEnvironment() && parsed.protocol === 'http:') {
+    return {
+      ok: false,
+      errorType: 'InsecureTransportError',
+      errorCode: 'INSECURE_API_TRANSPORT',
+      statusCode: 503,
+      message: 'Production API requests require a secure HTTPS endpoint.',
+    };
+  }
+
+  return { ok: true };
+}
+
 export function resolveBackendAssetUrl(urlOrPath = '') {
   const str = String(urlOrPath || '').trim();
   if (!str) return '';
-  if (/^(https?:\/\/|blob:|data:|idb:\/\/)/i.test(str)) {
+  if (/[\u0000-\u001f\u007f\\]/.test(str)) return '';
+
+  if (/^idb:\/\/[a-z0-9._-]+$/i.test(str)) {
     return str;
   }
+  if (/^blob:/i.test(str)) {
+    try {
+      return new URL(str).protocol === 'blob:' ? str : '';
+    } catch {
+      return '';
+    }
+  }
+  if (/^data:/i.test(str)) {
+    return /^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(str) ? str : '';
+  }
   if (str.startsWith('/api/v1/uploads/')) {
+    if (str.startsWith('//') || /%2f|%5c/i.test(str)) return '';
     const origin = getApiOrigin();
     return origin ? `${origin}${str}` : str;
   }
-  return str;
+  if (str.startsWith('/')) {
+    if (str.startsWith('//') || /%2f|%5c/i.test(str)) return '';
+    return str;
+  }
+  try {
+    const parsed = new URL(str);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.href;
+    }
+  } catch {
+    return '';
+  }
+  return '';
 }
 
 /**
@@ -220,8 +327,20 @@ export function getAdminAccessPolicy() {
 }
 
 // ============================================================================
-// ADMIN AUTHENTICATION SESSION STORAGE (Memory + sessionStorage, NEVER localStorage)
+// ADMIN AUTHENTICATION SESSION STATE (Strictly Volatile In-Memory ONLY)
+// Never persists access tokens, refresh tokens, or CSRF tokens in Web Storage.
 // ============================================================================
+
+function purgeLegacyAdminStorageTokens() {
+  try {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage?.removeItem?.(SESSION_STORAGE_AUTH_KEY);
+      window.localStorage?.removeItem?.(SESSION_STORAGE_AUTH_KEY);
+    }
+  } catch {
+    // Ignore Web Storage access errors in restricted/SSR contexts
+  }
+}
 
 function notifyAuthListeners() {
   const snapshot = getAdminAuthSession();
@@ -243,24 +362,7 @@ export function subscribeAdminAuth(listener) {
 }
 
 export function getAdminAuthSession() {
-  if (memoryAuthSession) {
-    return memoryAuthSession;
-  }
-  try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      const raw = window.sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          memoryAuthSession = parsed;
-          return memoryAuthSession;
-        }
-      }
-    }
-  } catch {
-    // Ignore sessionStorage errors in restricted/SSR contexts
-  }
-  return null;
+  return memoryAuthSession || null;
 }
 
 export function setAdminAuthSession(sessionData) {
@@ -289,27 +391,14 @@ export function setAdminAuthSession(sessionData) {
     admin,
   };
 
-  try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      window.sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(memoryAuthSession));
-    }
-  } catch {
-    // Ignore sessionStorage write errors
-  }
-
+  purgeLegacyAdminStorageTokens();
   notifyAuthListeners();
   return memoryAuthSession;
 }
 
 export function clearAdminAuthSession() {
   memoryAuthSession = null;
-  try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      window.sessionStorage.removeItem(SESSION_STORAGE_AUTH_KEY);
-    }
-  } catch {
-    // Ignore
-  }
+  purgeLegacyAdminStorageTokens();
   notifyAuthListeners();
 }
 
@@ -465,6 +554,10 @@ async function attemptTokenRefresh() {
   activeRefreshPromise = (async () => {
     try {
       const url = buildApiUrl(API_ENDPOINTS.authRefresh);
+      const urlCheck = validateApiRequestUrl(url);
+      if (!urlCheck.ok) {
+        return null;
+      }
       const response = await fetch(url, {
         method: 'POST',
         credentials: 'include',
@@ -535,21 +628,19 @@ async function attemptTokenRefresh() {
  * Bearer token injection, automatic refresh-token rotation on 401, and structured error parsing.
  */
 export async function apiRequest(endpoint, options = {}) {
-  const normalizedEndpoint = String(endpoint || '').startsWith('/')
-    ? String(endpoint)
-    : `/${endpoint}`;
+  const normalizedEndpoint = String(endpoint || '').trim().startsWith('/')
+    ? String(endpoint).trim()
+    : /^https?:\/\//i.test(String(endpoint || '').trim())
+    ? String(endpoint).trim()
+    : `/${String(endpoint || '').trim()}`;
   const url = buildApiUrl(normalizedEndpoint);
-
-  if (isProductionEnvironment() && isLocalhostApiUrl(url)) {
-    return createServiceError(
-      'Production API base URL is misconfigured to localhost.',
-      null,
-      {
-        errorType: 'BackendNotConfiguredError',
-        errorCode: 'INVALID_API_BASE_URL',
-        statusCode: 503,
-      }
-    );
+  const urlCheck = validateApiRequestUrl(url);
+  if (!urlCheck.ok) {
+    return createServiceError(urlCheck.message, null, {
+      errorType: urlCheck.errorType,
+      errorCode: urlCheck.errorCode,
+      statusCode: urlCheck.statusCode,
+    });
   }
 
   const timeoutMs = options.timeoutMs ?? DEFAULT_API_TIMEOUT_MS;

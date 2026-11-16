@@ -3,7 +3,7 @@
  * Isolated Client Authentication Session & REST API Client
  *
  * Strictly separate from Admin authentication (`apiClient.js`):
- * - Uses separate sessionStorage key: `dtks_client_auth_session_v1`
+ * - Uses volatile in-memory state ONLY (never stores access/refresh/CSRF tokens in sessionStorage or localStorage)
  * - Uses separate CSRF cookie lookup (`dtks_client_csrf_token`)
  * - Never reads, writes, or clears Admin tokens or Admin session storage
  * - Never stores plaintext passwords or secrets in localStorage
@@ -16,9 +16,9 @@ import {
   createServiceError,
   createServiceResponse,
   getDataAdapterMode,
-  isLocalhostApiUrl,
   isProductionEnvironment,
   parseApiErrorPayload,
+  validateApiRequestUrl,
 } from './apiClient.js';
 
 export const CLIENT_SESSION_STORAGE_KEY = 'dtks_client_auth_session_v1';
@@ -56,25 +56,19 @@ export function subscribeClientAuth(listener) {
   };
 }
 
-export function getClientAuthSession() {
-  if (memoryClientSession) {
-    return memoryClientSession;
-  }
+function purgeLegacyClientStorageTokens() {
   try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      const raw = window.sessionStorage.getItem(CLIENT_SESSION_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          memoryClientSession = parsed;
-          return memoryClientSession;
-        }
-      }
+    if (typeof window !== 'undefined') {
+      window.sessionStorage?.removeItem?.(CLIENT_SESSION_STORAGE_KEY);
+      window.localStorage?.removeItem?.(CLIENT_SESSION_STORAGE_KEY);
     }
   } catch {
-    // Ignore sessionStorage errors
+    // Ignore storage errors
   }
-  return null;
+}
+
+export function getClientAuthSession() {
+  return memoryClientSession || null;
 }
 
 export function setClientAuthSession(sessionData) {
@@ -103,27 +97,14 @@ export function setClientAuthSession(sessionData) {
     client,
   };
 
-  try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      window.sessionStorage.setItem(CLIENT_SESSION_STORAGE_KEY, JSON.stringify(memoryClientSession));
-    }
-  } catch {
-    // Ignore sessionStorage write errors
-  }
-
+  purgeLegacyClientStorageTokens();
   notifyClientAuthListeners();
   return memoryClientSession;
 }
 
 export function clearClientAuthSession() {
   memoryClientSession = null;
-  try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      window.sessionStorage.removeItem(CLIENT_SESSION_STORAGE_KEY);
-    }
-  } catch {
-    // Ignore
-  }
+  purgeLegacyClientStorageTokens();
   notifyClientAuthListeners();
 }
 
@@ -180,6 +161,10 @@ export async function attemptClientTokenRefresh() {
   activeClientRefreshPromise = (async () => {
     try {
       const url = buildApiUrl(API_ENDPOINTS.clientAuthRefresh);
+      const urlCheck = validateApiRequestUrl(url);
+      if (!urlCheck.ok) {
+        return null;
+      }
       const response = await fetch(url, {
         method: 'POST',
         credentials: 'include',
@@ -250,21 +235,19 @@ export async function attemptClientTokenRefresh() {
 }
 
 export async function clientApiRequest(endpoint, options = {}) {
-  const normalizedEndpoint = String(endpoint || '').startsWith('/')
-    ? String(endpoint)
-    : `/${endpoint}`;
+  const normalizedEndpoint = String(endpoint || '').trim().startsWith('/')
+    ? String(endpoint).trim()
+    : /^https?:\/\//i.test(String(endpoint || '').trim())
+    ? String(endpoint).trim()
+    : `/${String(endpoint || '').trim()}`;
   const url = buildApiUrl(normalizedEndpoint);
-
-  if (isProductionEnvironment() && isLocalhostApiUrl(url)) {
-    return createServiceError(
-      'Production API base URL is misconfigured to localhost.',
-      null,
-      {
-        errorType: 'BackendNotConfiguredError',
-        errorCode: 'INVALID_API_BASE_URL',
-        statusCode: 503,
-      }
-    );
+  const urlCheck = validateApiRequestUrl(url);
+  if (!urlCheck.ok) {
+    return createServiceError(urlCheck.message, null, {
+      errorType: urlCheck.errorType,
+      errorCode: urlCheck.errorCode,
+      statusCode: urlCheck.statusCode,
+    });
   }
 
   const timeoutMs = options.timeoutMs ?? DEFAULT_API_TIMEOUT_MS;

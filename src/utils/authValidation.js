@@ -319,13 +319,41 @@ export function filterAdminNavByRole(navItems = [], role = '') {
 /**
  * Prevents open redirects when restoring a previously requested route after sign-in.
  */
+const BLOCKED_AUTH_REDIRECT_PATHS = new Set([
+  '/admin/login',
+  '/login',
+  '/admin/forgot-password',
+  '/admin/reset-password',
+  '/admin/accept-invite',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+]);
+
 export function sanitizeInternalRedirect(candidate, fallback = '/', requiredPrefix = '/') {
   if (typeof candidate !== 'string') return fallback;
   const trimmed = candidate.trim();
+  if (!trimmed) return fallback;
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return fallback;
+  if (trimmed.includes('\\') || /%2f|%5c/i.test(trimmed)) return fallback;
   if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return fallback;
-  if (requiredPrefix && !trimmed.startsWith(requiredPrefix)) return fallback;
-  if (trimmed === '/admin/login' || trimmed === '/login') return fallback;
-  return trimmed;
+
+  const pathBeforeQuery = trimmed.split(/[?#]/)[0];
+  if (pathBeforeQuery.includes('@') || pathBeforeQuery.includes(':')) return fallback;
+
+  let parsed;
+  try {
+    parsed = new URL(trimmed, 'https://dtks.local');
+  } catch {
+    return fallback;
+  }
+
+  if (parsed.origin !== 'https://dtks.local') return fallback;
+  if (!parsed.pathname.startsWith('/') || parsed.pathname.startsWith('//')) return fallback;
+  if (requiredPrefix && !parsed.pathname.startsWith(requiredPrefix)) return fallback;
+  if (BLOCKED_AUTH_REDIRECT_PATHS.has(parsed.pathname)) return fallback;
+
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
 export function isValidAdminRole(role) {
@@ -404,6 +432,8 @@ export function formatAdminAuthError(errorOrRes) {
 
   if (
     code === 'INVALID_API_BASE_URL' ||
+    code === 'INSECURE_API_TRANSPORT' ||
+    code === 'UNTRUSTED_API_ORIGIN' ||
     code === 'ADMIN_AUTH_UNCONFIGURED' ||
     code === 'SERVICE_UNAVAILABLE' ||
     status >= 500
@@ -466,7 +496,8 @@ export function formatAdminRecoveryError(errorOrRes, context = 'reset') {
     code === 'EMAIL_PROVIDER_UNCONFIGURED' ||
     code === 'ADMIN_AUTH_UNCONFIGURED' ||
     code === 'INSECURE_API_TRANSPORT' ||
-    code === 'INVALID_API_BASE_URL'
+    code === 'INVALID_API_BASE_URL' ||
+    code === 'UNTRUSTED_API_ORIGIN'
   ) {
     return 'Administrator password recovery is temporarily unavailable because email recovery is not configured.';
   }
@@ -559,21 +590,109 @@ export function formatAdminRecoveryError(errorOrRes, context = 'reset') {
   return rawMessage || defaultMsg;
 }
 
+function readTokenFromParamString(raw = '', paramName = 'token') {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  try {
+    const params = new URLSearchParams(trimmed);
+    return String(params.get(paramName) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Extracts one-time auth/invite/verification tokens preferring the URL fragment (#token=...).
+ * Supports optional legacy query-string fallback (?token=...) so older backend email templates
+ * remain compatible while callers immediately scrub the URL bar via history.replaceState.
+ */
+export function extractTokenDetailsFromUrl({
+  hash = '',
+  search = '',
+  paramName = 'token',
+  allowQueryFallback = false,
+} = {}) {
+  const rawHash = String(hash || '').replace(/^#/, '').trim();
+  if (rawHash) {
+    const fragmentParamString = rawHash.includes('?')
+      ? rawHash.slice(rawHash.indexOf('?') + 1)
+      : rawHash;
+    const fragmentToken = readTokenFromParamString(fragmentParamString, paramName);
+    if (fragmentToken) {
+      return { token: fragmentToken, source: 'fragment' };
+    }
+  }
+
+  if (allowQueryFallback && search) {
+    const rawSearch = String(search || '').replace(/^\?/, '').trim();
+    const queryToken = readTokenFromParamString(rawSearch, paramName);
+    if (queryToken) {
+      return { token: queryToken, source: 'query' };
+    }
+  }
+
+  return { token: '', source: 'none' };
+}
+
+export function extractTokenFromUrl(options = {}) {
+  return extractTokenDetailsFromUrl(options).token;
+}
+
+/**
+ * Removes sensitive parameters from both fragment and query string so the browser URL bar
+ * and session history do not retain one-time secrets or PII.
+ */
+export function buildSanitizedTokenUrl({
+  pathname = '/',
+  search = '',
+  hash = '',
+  paramNames = ['token'],
+} = {}) {
+  const searchParams = new URLSearchParams(String(search || '').replace(/^\?/, ''));
+  let hadQuerySecret = false;
+  for (const name of paramNames) {
+    if (searchParams.has(name)) {
+      hadQuerySecret = true;
+      searchParams.delete(name);
+    }
+  }
+  const cleanSearch = searchParams.toString();
+
+  const rawHash = String(hash || '').replace(/^#/, '');
+  let hadHashSecret = false;
+  let cleanHash = rawHash;
+
+  if (rawHash.includes('=')) {
+    const hashParams = new URLSearchParams(rawHash);
+    for (const name of paramNames) {
+      if (hashParams.has(name)) {
+        hadHashSecret = true;
+        hashParams.delete(name);
+      }
+    }
+    cleanHash = hashParams.toString();
+  }
+
+  const nextUrl = `${pathname || '/'}${cleanSearch ? `?${cleanSearch}` : ''}${
+    cleanHash ? `#${cleanHash}` : ''
+  }`;
+
+  return {
+    nextUrl,
+    hadTokenInUrl: hadHashSecret || hadQuerySecret,
+  };
+}
+
 /**
  * Extracts the Admin password-reset token strictly from the URL fragment (#token=...).
  * Never falls back to query-string tokens so secrets are kept out of server logs and Referer headers.
  */
 export function extractAdminResetTokenFromUrl({ hash = '' } = {}) {
-  const rawHash = String(hash || '').replace(/^#/, '').trim();
-  if (!rawHash) return '';
-
-  const paramString = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : rawHash;
-  try {
-    const params = new URLSearchParams(paramString);
-    return String(params.get('token') || '').trim();
-  } catch {
-    return '';
-  }
+  return extractTokenFromUrl({
+    hash,
+    paramName: 'token',
+    allowQueryFallback: false,
+  });
 }
 
 /**
@@ -585,28 +704,10 @@ export function buildSanitizedAdminResetUrl({
   search = '',
   hash = '',
 } = {}) {
-  const searchParams = new URLSearchParams(String(search || '').replace(/^\?/, ''));
-  const hadQueryToken = searchParams.has('token');
-  searchParams.delete('token');
-  const cleanSearch = searchParams.toString();
-
-  const rawHash = String(hash || '').replace(/^#/, '');
-  let hadHashToken = false;
-  let cleanHash = rawHash;
-
-  if (rawHash.includes('=')) {
-    const hashParams = new URLSearchParams(rawHash);
-    hadHashToken = hashParams.has('token');
-    hashParams.delete('token');
-    cleanHash = hashParams.toString();
-  }
-
-  const nextUrl = `${pathname || '/admin/reset-password'}${cleanSearch ? `?${cleanSearch}` : ''}${
-    cleanHash ? `#${cleanHash}` : ''
-  }`;
-
-  return {
-    nextUrl,
-    hadTokenInUrl: hadHashToken || hadQueryToken,
-  };
+  return buildSanitizedTokenUrl({
+    pathname: pathname || '/admin/reset-password',
+    search,
+    hash,
+    paramNames: ['token'],
+  });
 }

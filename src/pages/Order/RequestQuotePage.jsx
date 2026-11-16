@@ -257,7 +257,8 @@ export default function RequestQuotePage() {
 
               <div className="mt-8 pt-6 border-t border-[#E3EBE5] flex flex-wrap gap-3">
                 <Link
-                  to={`/track-order?ref=${encodeURIComponent(submittedOrder.referenceId)}&email=${encodeURIComponent(submittedOrder.customerEmail)}`}
+                  to="/track-order"
+                  state={{ prefillReferenceId: submittedOrder.referenceId }}
                   className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
                 >
                   Track This Request

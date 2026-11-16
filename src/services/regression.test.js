@@ -31,6 +31,7 @@ import {
   clearAdminAuthSession,
   getCsrfToken,
   resolveBackendAssetUrl,
+  validateApiRequestUrl,
 } from './api/apiClient.js';
 import { API_ENDPOINTS } from './models/backendModels.js';
 import {
@@ -589,7 +590,8 @@ test('Adapter Test 1: Local adapter performs full async CRUD across all 9 domain
     'imran@srinagardental.in'
   );
   assert.equal(trackedOrder.success, true);
-  assert.equal(trackedOrder.data.customerName, 'Dr. Imran Khan');
+  assert.equal(trackedOrder.data.projectName, 'Srinagar Dental Clinic Website');
+  assert.equal(trackedOrder.data.customerName, undefined);
 
   const updatedOrder = await orderService.updateOrder(createdOrder.data.id, { status: 'In Review' });
   assert.equal(updatedOrder.success, true);
@@ -842,12 +844,12 @@ test('Image Validation & Media Upload rejects oversized/invalid files and stores
   const storage = createMockLocalStorage();
   setRuntimeEnvOverrides({ dataAdapter: 'local', isProd: false });
 
-  // 1. Valid PNG image (1 KB)
-  const validPngFile = {
-    name: 'portfolio-banner.png',
-    type: 'image/png',
-    size: 1024,
-  };
+  // 1. Valid PNG image (real PNG signature bytes)
+  const validPngFile = new Blob(
+    [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])],
+    { type: 'image/png' }
+  );
+  validPngFile.name = 'portfolio-banner.png';
   const validCheck = mediaService.validateImage(validPngFile);
   assert.equal(validCheck.valid, true);
 
@@ -864,7 +866,16 @@ test('Image Validation & Media Upload rejects oversized/invalid files and stores
   const deleteRes = await mediaService.deleteImage(uploadRes.data.reference);
   assert.equal(deleteRes.success, true);
 
-  // 2. Oversized image (> 5 MB)
+  // 2. Spoofed MIME/extension PNG with executable/HTML bytes must fail magic-byte check
+  const spoofedPng = new Blob([new TextEncoder().encode('<svg onload=alert(1)>')], {
+    type: 'image/png',
+  });
+  spoofedPng.name = 'spoofed.png';
+  const spoofedUpload = await mediaService.uploadImage(spoofedPng, { entityType: 'portfolio' });
+  assert.equal(spoofedUpload.success, false);
+  assert.match(spoofedUpload.message, /valid JPG, PNG, or WebP/i);
+
+  // 3. Oversized image (> 5 MB)
   const oversizedFile = {
     name: 'huge-photo.jpg',
     type: 'image/jpeg',
@@ -877,15 +888,16 @@ test('Image Validation & Media Upload rejects oversized/invalid files and stores
   const failedUpload = await mediaService.uploadImage(oversizedFile);
   assert.equal(failedUpload.success, false);
 
-  // 3. Unsupported file type (EXE)
-  const invalidTypeFile = {
-    name: 'malware.exe',
-    type: 'application/x-msdownload',
-    size: 2048,
-  };
-  const typeCheck = mediaService.validateImage(invalidTypeFile);
-  assert.equal(typeCheck.valid, false);
-  assert.match(typeCheck.message, /Unsupported image type/);
+  // 4. Unsupported file types (EXE, SVG, GIF)
+  for (const bad of [
+    { name: 'malware.exe', type: 'application/x-msdownload', size: 2048 },
+    { name: 'xss.svg', type: 'image/svg+xml', size: 512 },
+    { name: 'anim.gif', type: 'image/gif', size: 1024 },
+  ]) {
+    const typeCheck = mediaService.validateImage(bad);
+    assert.equal(typeCheck.valid, false);
+    assert.match(typeCheck.message, /Unsupported image type/);
+  }
 
   setRuntimeEnvOverrides(null);
 });
@@ -1321,6 +1333,8 @@ test('Client and Admin sessions remain strictly isolated across storage, CSRF, a
   assert.equal(getClientAuthSession().client.email, 'aamir@kashmir.in');
   assert.equal(getCsrfToken(), 'admin-csrf-token');
   assert.equal(getClientCsrfToken(), 'client-csrf-token');
+  assert.equal(sessionStore.has('dtks_admin_auth_session_v1'), false, 'Admin tokens must not persist in sessionStorage');
+  assert.equal(sessionStore.has('dtks_client_auth_session_v1'), false, 'Client tokens must not persist in sessionStorage');
 
   // Clearing client session must NOT clear admin session
   clearClientAuthSession();
@@ -1330,6 +1344,7 @@ test('Client and Admin sessions remain strictly isolated across storage, CSRF, a
 
   clearAdminAuthSession();
   assert.equal(storage.getItem('dtks_admin_auth_session_v1'), null);
+  assert.equal(sessionStore.has('dtks_admin_auth_session_v1'), false);
 });
 
 test('Client API auth fixes: confirmPassword on register & reset, /client/auth/profile, change-password session clear, and allDevices logout', async () => {
@@ -1872,7 +1887,10 @@ test('mediaService sends authenticated apiRequest on upload/delete and resolves 
   };
 
   try {
-    const file = new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'image/webp' });
+    const file = new Blob(
+      [new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50])],
+      { type: 'image/webp' }
+    );
     file.name = 'hero.webp';
     const upRes = await mediaService.uploadImage(file, { entityType: 'portfolio', entityId: 'p-1' });
     assert.equal(upRes.success, true);
@@ -1898,7 +1916,8 @@ test('mediaService sends authenticated apiRequest on upload/delete and resolves 
     const delRes = await mediaService.deleteImage('/api/v1/uploads/portfolio/hero.webp');
     assert.equal(delRes.success, true);
     assert.equal(calls[1].method, 'DELETE');
-    assert.ok(calls[1].url.endsWith('/api/v1/portfolio/upload?key=portfolio%2Fhero.webp'));
+    assert.ok(calls[1].url.endsWith('/api/v1/portfolio/upload/portfolio/hero.webp'));
+    assert.equal(calls[1].url.includes('?key='), false);
     assert.equal(calls[1].headers.Authorization, 'Bearer adm-media-tok');
 
     // Static asset URLs should no-op without calling DELETE
@@ -3448,6 +3467,162 @@ test('Admin Login & App routing configure Forgot/Reset Password publicly, read f
 
   assert.match(headersSrc, /\/admin\/reset-password[\s\S]*Referrer-Policy:\s*no-referrer/);
   assert.match(headersSrc, /\/admin\/forgot-password[\s\S]*Referrer-Policy:\s*no-referrer/);
+});
+
+test('Security Remediation: origin pinning, HTTPS transport enforcement, tracking PII stripping, unconfigured prod fail-closed, and hardened headers/pages', async () => {
+  createMockLocalStorage();
+  const sessionStore = new Map([
+    ['dtks_admin_auth_session_v1', 'legacy-leaked'],
+    ['dtks_client_auth_session_v1', 'legacy-leaked'],
+  ]);
+  globalThis.window.sessionStorage = {
+    getItem: (k) => (sessionStore.has(k) ? sessionStore.get(k) : null),
+    setItem: (k, v) => sessionStore.set(k, String(v)),
+    removeItem: (k) => sessionStore.delete(k),
+  };
+
+  // 1. Legacy token keys are purged and never rewritten
+  clearAdminAuthSession();
+  clearClientAuthSession();
+  setAdminAuthSession({ accessToken: 'mem-only-admin', csrfToken: 'c1', admin: { id: 'a1', role: 'admin' } });
+  setClientAuthSession({ accessToken: 'mem-only-client', csrfToken: 'c2', client: { id: 'c1', email: 'c@dtks.in' } });
+  assert.equal(sessionStore.get('dtks_admin_auth_session_v1'), undefined);
+  assert.equal(sessionStore.get('dtks_client_auth_session_v1'), undefined);
+  assert.equal(getAdminAuthSession()?.accessToken, 'mem-only-admin');
+  assert.equal(getClientAuthSession()?.accessToken, 'mem-only-client');
+  clearAdminAuthSession();
+  clearClientAuthSession();
+
+  // 2. HTTP transport downgrade & cross-origin exfiltration blocked in production
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'http://api.dreamtechkashmirsolutions.studio',
+  });
+  const insecureRes = await apiRequest('/api/v1/orders');
+  assert.equal(insecureRes.success, false);
+  assert.equal(insecureRes.errorCode, 'INSECURE_API_TRANSPORT');
+
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  const crossOriginCheck = validateApiRequestUrl('https://evil.example/api/v1/orders');
+  assert.equal(crossOriginCheck.ok, false);
+  assert.equal(crossOriginCheck.errorCode, 'UNTRUSTED_API_ORIGIN');
+  const blockedCrossOrigin = await apiRequest('https://evil.example/api/v1/orders');
+  assert.equal(blockedCrossOrigin.success, false);
+  assert.equal(blockedCrossOrigin.errorCode, 'UNTRUSTED_API_ORIGIN');
+  const blockedClientCrossOrigin = await clientApiRequest('https://evil.example/api/v1/client/orders');
+  assert.equal(blockedClientCrossOrigin.success, false);
+  assert.equal(blockedClientCrossOrigin.errorCode, 'UNTRUSTED_API_ORIGIN');
+
+  // 3. resolveBackendAssetUrl rejects script/SVG/protocol-relative tricks
+  assert.equal(resolveBackendAssetUrl('javascript:alert(1)'), '');
+  assert.equal(resolveBackendAssetUrl('data:image/svg+xml,<svg/>'), '');
+  assert.equal(resolveBackendAssetUrl('//evil.example/x.png'), '');
+  assert.equal(resolveBackendAssetUrl('/%2fevil.example/x.png'), '');
+
+  // 4. trackOrder strips PII in API mode and blocks local lookup in unconfigured production
+  setRuntimeEnvOverrides({ isProd: true, dataAdapter: 'local', apiBaseUrl: '' });
+  const unconfiguredTrack = await orderService.trackOrder('DKS-2026-0001', 'u@example.com');
+  assert.equal(unconfiguredTrack.success, false);
+  assert.equal(unconfiguredTrack.errorCode, 'BACKEND_NOT_CONFIGURED');
+
+  const unconfiguredUpload = await mediaService.uploadImage(
+    new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: 'image/png' })
+  );
+  assert.equal(unconfiguredUpload.success, false);
+  assert.equal(unconfiguredUpload.errorCode, 'BACKEND_NOT_CONFIGURED');
+
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => 'application/json' },
+    json: async () => ({
+      success: true,
+      data: {
+        order: {
+          referenceId: 'DKS-2026-0009',
+          projectName: 'Secured Site',
+          status: 'Under Review',
+          customerEmail: 'private@example.com',
+          customerPhone: '+91 9999999999',
+          adminNotes: 'Internal staff note',
+        },
+      },
+    }),
+  });
+  try {
+    const tracked = await orderService.trackOrder('DKS-2026-0009', 'private@example.com');
+    assert.equal(tracked.success, true);
+    assert.equal(tracked.data.referenceId, 'DKS-2026-0009');
+    assert.equal('customerEmail' in tracked.data, false);
+    assert.equal('customerPhone' in tracked.data, false);
+    assert.equal('adminNotes' in tracked.data, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    setRuntimeEnvOverrides(null);
+  }
+
+  // 5. Static hardening audit across HTML, _headers, and auth/tracking pages
+  const { readFile } = await import('node:fs/promises');
+  const [
+    indexHtml,
+    headersSrc,
+    invitePage,
+    clientResetPage,
+    verifyPage,
+    quotePage,
+    trackPage,
+  ] = await Promise.all([
+    readFile(new URL('../../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../../public/_headers', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Admin/AdminAcceptInvitePage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Auth/ResetPasswordPage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Auth/VerifyEmailPage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Order/RequestQuotePage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Order/TrackOrderPage.jsx', import.meta.url), 'utf8'),
+  ]);
+
+  assert.equal(/onload=/i.test(indexHtml), false, 'index.html must not contain inline JS event handlers');
+  assert.match(headersSrc, /X-Frame-Options:\s*DENY/);
+  assert.match(headersSrc, /Strict-Transport-Security:\s*max-age=31536000/);
+  assert.match(headersSrc, /Content-Security-Policy:[\s\S]*default-src 'self'[\s\S]*script-src 'self'[\s\S]*frame-ancestors 'none'/);
+  for (const sensitiveRoute of [
+    '/admin/login',
+    '/admin/accept-invite',
+    '/account',
+    '/login',
+    '/verify-email',
+    '/reset-password',
+    '/track-order',
+  ]) {
+    assert.match(
+      headersSrc,
+      new RegExp(`${sensitiveRoute.replace('/', '\\/')}[\\s\\S]*?Referrer-Policy:\\s*no-referrer`),
+      `${sensitiveRoute} must enforce Referrer-Policy: no-referrer`
+    );
+    assert.match(
+      headersSrc,
+      new RegExp(`${sensitiveRoute.replace('/', '\\/')}[\\s\\S]*?Cache-Control:\\s*no-store`),
+      `${sensitiveRoute} must enforce Cache-Control: no-store`
+    );
+  }
+
+  for (const pageSrc of [invitePage, clientResetPage, verifyPage, trackPage]) {
+    assert.match(pageSrc, /history\.replaceState/);
+    assert.match(pageSrc, /referrerPolicy="no-referrer"/);
+  }
+  assert.equal(quotePage.includes('/track-order?ref='), false);
+  assert.match(quotePage, /prefillReferenceId/);
 });
 
 

@@ -535,7 +535,7 @@ export default function AdminPortfolioPage() {
 
               <div>
                 <label htmlFor="proj-cover" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Screenshot / Cover Image (JPG, PNG, WebP, GIF, AVIF — Max 5 MB)
+                  Screenshot / Cover Image (JPG, PNG, WebP — Max 5 MB)
                 </label>
                 <div className="flex items-center gap-3">
                   <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] cursor-pointer hover:bg-[#F7FAF7] shrink-0">
@@ -543,7 +543,7 @@ export default function AdminPortfolioPage() {
                     <span>{uploadingImage ? 'Uploading...' : 'Upload Screenshot'}</span>
                     <input
                       type="file"
-                      accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif"
+                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                       disabled={uploadingImage}
                       onChange={handleImageUpload}
                       className="hidden"

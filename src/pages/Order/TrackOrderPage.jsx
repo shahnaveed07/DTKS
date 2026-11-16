@@ -1,10 +1,18 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation, Link } from 'react-router-dom';
 import { Search, Info, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import SEO from '../../components/common/SEO.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
-import { findTrackedOrder, formatCurrency } from '../../utils/orderUtils.js';
+import {
+  buildSanitizedTokenUrl,
+  extractTokenDetailsFromUrl,
+} from '../../utils/authValidation.js';
+import {
+  findTrackedOrder,
+  formatCurrency,
+  sanitizeTrackedOrder,
+} from '../../utils/orderUtils.js';
 
 const CANONICAL_TRACKING_STAGES = [
   'New Request',
@@ -36,23 +44,83 @@ const TRACKING_STAGE_ALIASES = {
 };
 
 export default function TrackOrderPage() {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { orders, settings, trackOrder, submissionMode } = useApp();
 
-  const [referenceId, setReferenceId] = useState(searchParams.get('ref') || '');
-  const [email, setEmail] = useState(searchParams.get('email') || '');
+  const [referenceId, setReferenceId] = useState(() => {
+    const stateRef =
+      typeof location.state?.prefillReferenceId === 'string'
+        ? location.state.prefillReferenceId.trim()
+        : '';
+    if (stateRef) return stateRef;
+    return extractTokenDetailsFromUrl({
+      hash: location.hash,
+      search: location.search,
+      paramName: 'ref',
+      allowQueryFallback: true,
+    }).token;
+  });
+  const [email, setEmail] = useState(
+    () =>
+      extractTokenDetailsFromUrl({
+        hash: location.hash,
+        search: location.search,
+        paramName: 'email',
+        allowQueryFallback: true,
+      }).token
+  );
   const [searched, setSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [lookupError, setLookupError] = useState('');
   const [matchedOrder, setMatchedOrder] = useState(null);
+  const autoLookupKeyRef = useRef('');
 
   useEffect(() => {
-    const initialRef = searchParams.get('ref');
-    const initialEmail = searchParams.get('email');
-    if (initialRef && initialEmail) {
+    const urlRef = extractTokenDetailsFromUrl({
+      hash: location.hash,
+      search: location.search,
+      paramName: 'ref',
+      allowQueryFallback: true,
+    }).token;
+    const urlEmail = extractTokenDetailsFromUrl({
+      hash: location.hash,
+      search: location.search,
+      paramName: 'email',
+      allowQueryFallback: true,
+    }).token;
+
+    if (urlRef) setReferenceId(urlRef);
+    if (urlEmail) setEmail(urlEmail);
+
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      const { nextUrl, hadTokenInUrl } = buildSanitizedTokenUrl({
+        pathname: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        paramNames: ['ref', 'email', 'token'],
+      });
+      if (hadTokenInUrl) {
+        window.history.replaceState(window.history.state, document.title, nextUrl);
+      }
+    }
+
+    if (urlRef && urlEmail) {
+      const queryKey = `${urlRef}:${urlEmail}:${submissionMode}`;
+      if (autoLookupKeyRef.current === queryKey) return;
+      autoLookupKeyRef.current = queryKey;
+
+      if (submissionMode === 'production_unconfigured') {
+        setLookupError(
+          'Online order tracking is currently unavailable while the production backend API is being configured.'
+        );
+        setMatchedOrder(null);
+        setSearched(true);
+        return;
+      }
+
       if (submissionMode === 'api') {
         setIsSearching(true);
-        trackOrder(initialRef, initialEmail)
+        trackOrder(urlRef, urlEmail)
           .then((res) => {
             setMatchedOrder(res?.success ? res.data : null);
             setLookupError(res?.success ? '' : res?.message || '');
@@ -60,15 +128,23 @@ export default function TrackOrderPage() {
           })
           .finally(() => setIsSearching(false));
       } else {
-        setMatchedOrder(findTrackedOrder(orders, initialRef, initialEmail));
+        setMatchedOrder(sanitizeTrackedOrder(findTrackedOrder(orders, urlRef, urlEmail)));
         setSearched(true);
       }
     }
-  }, [searchParams, orders, submissionMode, trackOrder]);
+  }, [location.hash, location.search, orders, submissionMode, trackOrder]);
 
   const handleLookup = async (e) => {
     e.preventDefault();
     setLookupError('');
+    if (submissionMode === 'production_unconfigured') {
+      setLookupError(
+        'Online order tracking is currently unavailable while the production backend API is being configured.'
+      );
+      setMatchedOrder(null);
+      setSearched(true);
+      return;
+    }
     if (submissionMode === 'api') {
       setIsSearching(true);
       try {
@@ -84,7 +160,7 @@ export default function TrackOrderPage() {
       return;
     }
     const found = findTrackedOrder(orders, referenceId, email);
-    setMatchedOrder(found);
+    setMatchedOrder(sanitizeTrackedOrder(found));
     setSearched(true);
   };
 
@@ -99,7 +175,7 @@ export default function TrackOrderPage() {
 
   return (
     <>
-      <SEO noindex settings={settings} />
+      <SEO noindex referrerPolicy="no-referrer" settings={settings} />
 
       <section className="border-b border-[#E3EBE5] bg-white py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">

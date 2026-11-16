@@ -4,6 +4,7 @@ import {
   createServiceError,
   createServiceResponse,
   getDataAdapterMode,
+  isProductionEnvironment,
   resolveBackendAssetUrl,
 } from '../api/apiClient.js';
 
@@ -13,8 +14,6 @@ export const ALLOWED_IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/webp',
-  'image/gif',
-  'image/avif',
 ];
 
 export const ALLOWED_IMAGE_EXTENSIONS = [
@@ -22,8 +21,6 @@ export const ALLOWED_IMAGE_EXTENSIONS = [
   '.jpeg',
   '.png',
   '.webp',
-  '.gif',
-  '.avif',
 ];
 
 const IDB_DB_NAME = 'dtks_media_db';
@@ -240,7 +237,7 @@ export function validateImage(file, options = {}) {
     return {
       valid: false,
       errorType: 'UnsupportedFileTypeError',
-      message: `Unsupported image type "${mimeType || 'unknown'}". Allowed formats: JPG, PNG, WebP, GIF, AVIF.`,
+      message: `Unsupported image type "${mimeType || 'unknown'}". Allowed formats: JPG, PNG, WebP.`,
     };
   }
 
@@ -261,6 +258,81 @@ export function validateImage(file, options = {}) {
   };
 }
 
+async function readLeadingFileBytes(file, maxBytes = 12) {
+  if (!file || typeof file !== 'object') return null;
+  try {
+    if (typeof file.slice === 'function' && typeof Blob !== 'undefined' && file instanceof Blob) {
+      const buf = await file.slice(0, maxBytes).arrayBuffer();
+      return new Uint8Array(buf);
+    }
+    if (typeof file.arrayBuffer === 'function') {
+      const buf = await file.arrayBuffer();
+      return new Uint8Array(buf.slice(0, maxBytes));
+    }
+    const raw = file.buffer ?? file.content;
+    if (raw instanceof Uint8Array) {
+      return raw.subarray(0, maxBytes);
+    }
+    if (raw instanceof ArrayBuffer) {
+      return new Uint8Array(raw.slice(0, maxBytes));
+    }
+    if (Array.isArray(raw)) {
+      return Uint8Array.from(raw.slice(0, maxBytes));
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function matchesImageMagicBytes(bytes, mimeType = '') {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 3) return false;
+  const normalized = String(mimeType || '').trim().toLowerCase();
+
+  if (normalized === 'image/jpeg') {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (normalized === 'image/png') {
+    return (
+      bytes.length >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a
+    );
+  }
+  if (normalized === 'image/webp') {
+    return (
+      bytes.length >= 12 &&
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    );
+  }
+  return false;
+}
+
+export async function validateImageMagicBytes(file, mimeType = '') {
+  const bytes = await readLeadingFileBytes(file, 12);
+  if (!bytes || !matchesImageMagicBytes(bytes, mimeType)) {
+    return {
+      valid: false,
+      errorType: 'InvalidFileSignatureError',
+      message: 'The selected file signature does not match a valid JPG, PNG, or WebP image.',
+    };
+  }
+  return { valid: true };
+}
+
 /**
  * Uploads an image file:
  * - In 'api' mode: sends multipart FormData to /uploads (Cloudflare R2 / backend ready) without hardcoded credentials.
@@ -272,6 +344,15 @@ export async function uploadImage(file, options = {}) {
   if (!validation.valid) {
     return createServiceError(validation.message, {
       errorType: validation.errorType,
+    });
+  }
+
+  const signatureCheck = await validateImageMagicBytes(file, validation.mimeType);
+  if (!signatureCheck.valid) {
+    return createServiceError(signatureCheck.message, null, {
+      errorType: signatureCheck.errorType,
+      errorCode: 'INVALID_IMAGE_SIGNATURE',
+      statusCode: 400,
     });
   }
 
@@ -317,6 +398,18 @@ export async function uploadImage(file, options = {}) {
         name: validation.name,
       },
       res.message || 'Image uploaded to R2 media storage.'
+    );
+  }
+
+  if (isProductionEnvironment()) {
+    return createServiceError(
+      'Media upload requires an active backend API connection in production.',
+      null,
+      {
+        errorType: 'BackendNotConfiguredError',
+        errorCode: 'BACKEND_NOT_CONFIGURED',
+        statusCode: 503,
+      }
     );
   }
 
@@ -403,8 +496,13 @@ export async function deleteImage(mediaRefOrId) {
         'External or static asset URL left unchanged.'
       );
     }
+    const encodedKeyPath = key
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
     const res = await apiRequest(
-      `${API_ENDPOINTS.portfolioUpload}?key=${encodeURIComponent(key)}`,
+      `${API_ENDPOINTS.portfolioUpload}/${encodedKeyPath}`,
       { method: 'DELETE' }
     );
     if (!res.success) {
@@ -504,6 +602,7 @@ export async function getImageUrl(mediaRef) {
 
 export const mediaService = {
   validateImage,
+  validateImageMagicBytes,
   uploadImage,
   deleteImage,
   getImageUrl,

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Code2 } from 'lucide-react';
 import { getImageDimensions } from '../../seo/seoConfig.js';
 import { getCachedImageUrl, getImageUrl } from '../../services/media/mediaService.js';
+import { sanitizeSafeMediaUrl } from '../../utils/orderUtils.js';
 
 function deriveWebpSrc(src) {
   if (!src || typeof src !== 'string') return null;
@@ -23,19 +24,25 @@ export default function ImageWithFallback({
   height,
 }) {
   const [hasError, setHasError] = useState(false);
-  const [resolvedSrc, setResolvedSrc] = useState(() => getCachedImageUrl(src));
+  const [resolvedSrc, setResolvedSrc] = useState(() =>
+    sanitizeSafeMediaUrl(getCachedImageUrl(src), { allowBlob: true, allowDataImage: false })
+  );
 
   useEffect(() => {
     setHasError(false);
-    const immediate = getCachedImageUrl(src);
+    const immediate = sanitizeSafeMediaUrl(getCachedImageUrl(src), {
+      allowBlob: true,
+      allowDataImage: false,
+    });
     setResolvedSrc(immediate);
 
     if (src && typeof src === 'string' && src.startsWith('idb://') && !immediate) {
       let active = true;
       getImageUrl(src).then((url) => {
         if (active) {
-          if (url) {
-            setResolvedSrc(url);
+          const safeUrl = sanitizeSafeMediaUrl(url, { allowBlob: true, allowDataImage: false });
+          if (safeUrl) {
+            setResolvedSrc(safeUrl);
           } else {
             setHasError(true);
           }

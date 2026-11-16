@@ -202,7 +202,7 @@ export default function RegisterPage() {
                   No outbound email server runs in local browser storage mode. Use the verification route directly to complete testing:
                 </p>
                 <Link
-                  to={`/verify-email?token=${encodeURIComponent(registeredState.localVerificationToken)}`}
+                  to={`/verify-email#token=${encodeURIComponent(registeredState.localVerificationToken)}`}
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#16834A] hover:underline"
                 >
                   <span>Verify Email Now</span>

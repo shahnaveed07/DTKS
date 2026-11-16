@@ -100,6 +100,12 @@ export function AppProvider({ children }) {
   }, []);
 
   const refreshLocalState = useCallback(() => {
+    if (getSubmissionMode() === 'production_unconfigured') {
+      setResourceStatus(createInitialResourceMap('error'));
+      setError('Backend API is not configured for production.');
+      setIsLoading(false);
+      return;
+    }
     ensureSeededStorage();
     setServices(packageService.getServices());
     setPackages(packageService.getPackages());
@@ -196,7 +202,7 @@ export function AppProvider({ children }) {
       refreshAll();
     }
     const handleStorage = () => {
-      if (getDataAdapterMode() === 'local') {
+      if (getDataAdapterMode() === 'local' && getSubmissionMode() !== 'production_unconfigured') {
         refreshLocalState();
       }
     };
@@ -601,7 +607,9 @@ export function AppProvider({ children }) {
       URL.revokeObjectURL(url);
       addToast('Local data backup exported as JSON.');
     } catch (err) {
-      console.error('Export failed:', err);
+      if (import.meta?.env?.DEV) {
+        console.error('Export failed:', err);
+      }
       addToast('Failed to export local data snapshot.', 'error');
     }
     return snapshot;

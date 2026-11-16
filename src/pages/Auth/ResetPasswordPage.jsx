@@ -1,31 +1,71 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { KeyRound, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useClientAuth } from '../../context/ClientAuthContext.jsx';
 import { useApp } from '../../context/AppContext.jsx';
-import { validateResetPasswordInput } from '../../utils/authValidation.js';
+import {
+  buildSanitizedTokenUrl,
+  extractTokenDetailsFromUrl,
+  validateResetPasswordInput,
+} from '../../utils/authValidation.js';
 import { PasswordInput } from '../../components/auth/PasswordStrengthMeter.jsx';
 import SEO from '../../components/common/SEO.jsx';
 
 export default function ResetPasswordPage() {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { settings, addToast } = useApp();
   const { resetPassword } = useClientAuth();
 
-  const initialToken = searchParams.get('token') || '';
-  const [token, setToken] = useState(initialToken);
+  const [token, setToken] = useState(
+    () =>
+      extractTokenDetailsFromUrl({
+        hash: location.hash,
+        search: location.search,
+        allowQueryFallback: true,
+      }).token
+  );
+  const [hasTokenFromUrl, setHasTokenFromUrl] = useState(() =>
+    Boolean(
+      extractTokenDetailsFromUrl({
+        hash: location.hash,
+        search: location.search,
+        allowQueryFallback: true,
+      }).token
+    )
+  );
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [resetComplete, setResetComplete] = useState(false);
+  const inFlightRef = useRef(false);
   const redirectTimerRef = useRef(null);
 
   useEffect(() => {
-    setToken(initialToken);
-  }, [initialToken]);
+    const { token: incomingToken } = extractTokenDetailsFromUrl({
+      hash: location.hash,
+      search: location.search,
+      allowQueryFallback: true,
+    });
+    if (incomingToken) {
+      setToken(incomingToken);
+      setHasTokenFromUrl(true);
+    }
+
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      const { nextUrl, hadTokenInUrl } = buildSanitizedTokenUrl({
+        pathname: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        paramNames: ['token'],
+      });
+      if (hadTokenInUrl) {
+        window.history.replaceState(window.history.state, document.title, nextUrl);
+      }
+    }
+  }, [location.hash, location.search]);
 
   useEffect(() => {
     return () => {
@@ -37,7 +77,7 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || inFlightRef.current) return;
     setErrors({});
     setServerError('');
 
@@ -47,6 +87,7 @@ export default function ResetPasswordPage() {
       return;
     }
 
+    inFlightRef.current = true;
     setSubmitting(true);
     try {
       const res = await resetPassword(validation.data);
@@ -57,6 +98,7 @@ export default function ResetPasswordPage() {
         setServerError(res.message || 'This reset token is invalid or has expired.');
         return;
       }
+      setToken('');
       setNewPassword('');
       setConfirmPassword('');
       setResetComplete(true);
@@ -65,13 +107,14 @@ export default function ResetPasswordPage() {
         navigate('/login', { replace: true });
       }, 1500);
     } finally {
+      inFlightRef.current = false;
       setSubmitting(false);
     }
   };
 
   return (
     <section className="py-12 sm:py-16 bg-[#F7FAF7] min-h-[75vh] flex items-center">
-      <SEO noindex fullTitle="Reset Password" settings={settings} />
+      <SEO noindex referrerPolicy="no-referrer" fullTitle="Reset Password" settings={settings} />
 
       <div className="max-w-md w-full mx-auto px-4 sm:px-6">
         <div className="rounded-xl border border-[#E3EBE5] bg-white p-6 sm:p-8 shadow-xs space-y-6">
@@ -119,7 +162,7 @@ export default function ResetPasswordPage() {
                   </div>
                 )}
 
-                {!initialToken && (
+                {!hasTokenFromUrl && (
                   <div>
                     <label htmlFor="reset-token" className="block text-xs font-semibold text-[#17231C] mb-1">
                       Reset Token<span className="text-red-600 ml-0.5">*</span>

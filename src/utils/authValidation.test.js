@@ -19,6 +19,9 @@ import {
   formatAdminRecoveryError,
   extractAdminResetTokenFromUrl,
   buildSanitizedAdminResetUrl,
+  extractTokenDetailsFromUrl,
+  extractTokenFromUrl,
+  buildSanitizedTokenUrl,
 } from './authValidation.js';
 
 test('evaluatePasswordStrength scores empty, weak, fair, good, and strong passwords accurately', () => {
@@ -185,10 +188,22 @@ test('RBAC visibility helpers restrict admin accounts accurately across super_ad
   assert.equal(filterAdminNavByRole(nav, 'super_admin').length, 2);
 });
 
-test('sanitizeInternalRedirect prevents open redirects and login self-loops', () => {
+test('sanitizeInternalRedirect prevents open redirects, encoding bypasses, and login/recovery self-loops', () => {
   assert.equal(sanitizeInternalRedirect('https://evil.example', '/admin', '/admin'), '/admin');
   assert.equal(sanitizeInternalRedirect('//evil.example', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('\\\\evil.example', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin\\@evil.com', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin/%2fevil.example', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin/%5cevil.example', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin\n/orders', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin@evil.example', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin:8080/orders', '/admin', '/admin'), '/admin');
   assert.equal(sanitizeInternalRedirect('/admin/login', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin/forgot-password', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin/reset-password', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/admin/accept-invite', '/admin', '/admin'), '/admin');
+  assert.equal(sanitizeInternalRedirect('/verify-email', '/', '/'), '/');
+  assert.equal(sanitizeInternalRedirect('/reset-password', '/account', '/account'), '/account');
   assert.equal(sanitizeInternalRedirect('/account', '/admin', '/admin'), '/admin');
   assert.equal(sanitizeInternalRedirect('/admin/orders?page=2', '/admin', '/admin'), '/admin/orders?page=2');
   assert.equal(sanitizeInternalRedirect('/account/orders', '/account', '/account'), '/account/orders');
@@ -322,4 +337,46 @@ test('extractAdminResetTokenFromUrl reads strictly from fragment (#token=...) an
     nextUrl: '/admin/reset-password',
     hadTokenInUrl: false,
   });
+});
+
+test('extractTokenDetailsFromUrl prefers fragments, respects query fallback flag, and buildSanitizedTokenUrl scrubs multiple sensitive params', () => {
+  assert.deepEqual(
+    extractTokenDetailsFromUrl({
+      hash: '#token=frag-tok',
+      search: '?token=query-tok',
+      allowQueryFallback: true,
+    }),
+    { token: 'frag-tok', source: 'fragment' }
+  );
+
+  assert.deepEqual(
+    extractTokenDetailsFromUrl({
+      hash: '',
+      search: '?token=query-tok',
+      allowQueryFallback: false,
+    }),
+    { token: '', source: 'none' }
+  );
+
+  assert.equal(
+    extractTokenFromUrl({
+      hash: '',
+      search: '?token=legacy-invite-tok',
+      allowQueryFallback: true,
+    }),
+    'legacy-invite-tok'
+  );
+
+  assert.deepEqual(
+    buildSanitizedTokenUrl({
+      pathname: '/track-order',
+      search: '?ref=DKS-2026-0001&email=client%40example.com&view=summary',
+      hash: '#ref=DKS-2026-0001&section=timeline',
+      paramNames: ['ref', 'email', 'token'],
+    }),
+    {
+      nextUrl: '/track-order?view=summary#section=timeline',
+      hadTokenInUrl: true,
+    }
+  );
 });

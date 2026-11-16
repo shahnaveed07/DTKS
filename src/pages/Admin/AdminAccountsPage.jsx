@@ -535,7 +535,7 @@ export default function AdminAccountsPage() {
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <Link
-                to={`/admin/accept-invite?token=${encodeURIComponent(localInvitePreview.token)}`}
+                to={`/admin/accept-invite#token=${encodeURIComponent(localInvitePreview.token)}`}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#16834A] hover:underline"
               >
                 <span>Accept Invite</span>

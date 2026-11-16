@@ -154,6 +154,12 @@ async function main() {
       pageHtml = replaceTitle(pageHtml, seo.resolvedTitle);
       pageHtml = replaceMetaContent(pageHtml, 'name', 'description', seo.resolvedDescription);
       pageHtml = replaceMetaContent(pageHtml, 'name', 'robots', seo.resolvedRobots);
+      pageHtml = replaceMetaContent(
+        pageHtml,
+        'name',
+        'referrer',
+        isNoindex || route.path === '/track-order' ? 'no-referrer' : ''
+      );
       pageHtml = replaceCanonical(pageHtml, seo.canonicalUrl, isNoindex);
 
       if (verification.google) {

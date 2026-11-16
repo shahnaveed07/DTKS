@@ -464,7 +464,7 @@ export default function AdminTeamPage() {
 
               <div>
                 <label htmlFor="tm-avatar" className="block text-xs font-semibold text-[#17231C] mb-1">
-                  Profile Photograph (JPG, PNG, WebP, GIF, AVIF — Max 5 MB)
+                  Profile Photograph (JPG, PNG, WebP — Max 5 MB)
                 </label>
                 <div className="flex items-center gap-3">
                   <label className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-[#E3EBE5] text-[#17231C] cursor-pointer hover:bg-[#F7FAF7] shrink-0">
@@ -472,7 +472,7 @@ export default function AdminTeamPage() {
                     <span>{uploadingPhoto ? 'Uploading...' : 'Upload Photo'}</span>
                     <input
                       type="file"
-                      accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif"
+                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                       disabled={uploadingPhoto}
                       onChange={handlePhotoUpload}
                       className="hidden"

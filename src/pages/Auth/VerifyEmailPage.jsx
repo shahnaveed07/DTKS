@@ -1,18 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle2, AlertCircle, MailCheck, ArrowRight, RefreshCw } from 'lucide-react';
 import { useClientAuth } from '../../context/ClientAuthContext.jsx';
 import { useApp } from '../../context/AppContext.jsx';
-import { isValidEmailAddress } from '../../utils/authValidation.js';
+import {
+  buildSanitizedTokenUrl,
+  extractTokenDetailsFromUrl,
+  isValidEmailAddress,
+} from '../../utils/authValidation.js';
 import SEO from '../../components/common/SEO.jsx';
 
-// Deduplicates automatic ?token= verification across React StrictMode double-mounts
+// Deduplicates automatic token verification across React StrictMode double-mounts
 // so single-use backend/local verification tokens are never consumed twice on mount.
 const autoVerifyPromiseCache = new Map();
 
 export default function VerifyEmailPage() {
-  const [searchParams] = useSearchParams();
-  const initialToken = searchParams.get('token') || '';
+  const location = useLocation();
+  const [initialToken] = useState(
+    () =>
+      extractTokenDetailsFromUrl({
+        hash: location.hash,
+        search: location.search,
+        allowQueryFallback: true,
+      }).token
+  );
   const { settings, addToast } = useApp();
   const { verifyClientEmail, resendVerification } = useClientAuth();
 
@@ -63,10 +74,30 @@ export default function VerifyEmailPage() {
   );
 
   useEffect(() => {
-    if (initialToken) {
-      runVerification(initialToken, { deduplicate: true });
+    const { token: incomingToken } = extractTokenDetailsFromUrl({
+      hash: location.hash,
+      search: location.search,
+      allowQueryFallback: true,
+    });
+
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      const { nextUrl, hadTokenInUrl } = buildSanitizedTokenUrl({
+        pathname: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        paramNames: ['token'],
+      });
+      if (hadTokenInUrl) {
+        window.history.replaceState(window.history.state, document.title, nextUrl);
+      }
     }
-  }, [initialToken, runVerification]);
+
+    const tokenToVerify = incomingToken || initialToken;
+    if (tokenToVerify) {
+      setTokenInput(tokenToVerify);
+      runVerification(tokenToVerify, { deduplicate: true });
+    }
+  }, [initialToken, location.hash, location.search, runVerification]);
 
   const handleManualVerify = async (e) => {
     e.preventDefault();
@@ -105,7 +136,7 @@ export default function VerifyEmailPage() {
 
   return (
     <section className="py-12 sm:py-16 bg-[#F7FAF7] min-h-[75vh] flex items-center">
-      <SEO noindex fullTitle="Verify Email" settings={settings} />
+      <SEO noindex referrerPolicy="no-referrer" fullTitle="Verify Email" settings={settings} />
 
       <div className="max-w-lg w-full mx-auto px-4 sm:px-6 space-y-6">
         <div className="rounded-xl border border-[#E3EBE5] bg-white p-6 sm:p-8 shadow-xs space-y-5">

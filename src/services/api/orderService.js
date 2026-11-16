@@ -4,7 +4,11 @@ import {
   writeStorageDetailed,
 } from '../storage/localStorageAdapter.js';
 import { INITIAL_ORDERS } from '../../data/seedData.js';
-import { generateOrderReference, findTrackedOrder } from '../../utils/orderUtils.js';
+import {
+  generateOrderReference,
+  findTrackedOrder,
+  sanitizeTrackedOrder,
+} from '../../utils/orderUtils.js';
 import { API_ENDPOINTS } from '../models/backendModels.js';
 import {
   apiRequest,
@@ -196,7 +200,19 @@ export const orderService = {
         { method: 'GET' }
       );
       if (!res.success) return res;
-      return createServiceResponse(res.data?.order || res.data, res.message);
+      const sanitized = sanitizeTrackedOrder(res.data?.order || res.data);
+      return createServiceResponse(sanitized, res.message);
+    }
+    if (getSubmissionMode() === 'production_unconfigured') {
+      return createServiceError(
+        'Online order tracking is currently being configured alongside our production backend.',
+        null,
+        {
+          errorType: 'BackendNotConfiguredError',
+          errorCode: 'BACKEND_NOT_CONFIGURED',
+          statusCode: 503,
+        }
+      );
     }
     const found = this.track(referenceId, email);
     if (!found) {
@@ -206,7 +222,7 @@ export const orderService = {
         { errorType: 'NotFoundError' }
       );
     }
-    return createServiceResponse(found, 'Order record retrieved.');
+    return createServiceResponse(sanitizeTrackedOrder(found), 'Order record retrieved.');
   },
 };
 
