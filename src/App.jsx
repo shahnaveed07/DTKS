@@ -31,6 +31,8 @@ import ForgotPasswordPage from './pages/Auth/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/Auth/ResetPasswordPage.jsx';
 
 const AdminLoginPage = lazy(() => import('./pages/Admin/AdminLoginPage.jsx'));
+const AdminForgotPasswordPage = lazy(() => import('./pages/Admin/AdminForgotPasswordPage.jsx'));
+const AdminResetPasswordPage = lazy(() => import('./pages/Admin/AdminResetPasswordPage.jsx'));
 const AdminAcceptInvitePage = lazy(() => import('./pages/Admin/AdminAcceptInvitePage.jsx'));
 const AdminDashboardPage = lazy(() => import('./pages/Admin/AdminDashboardPage.jsx'));
 const AdminOrdersPage = lazy(() => import('./pages/Admin/AdminOrdersPage.jsx'));
@@ -135,6 +137,22 @@ export function AppRoutes() {
           element={
             <Suspense fallback={<RouteModuleFallback label="Loading sign in..." />}>
               <AdminLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/forgot-password"
+          element={
+            <Suspense fallback={<RouteModuleFallback label="Loading password recovery..." />}>
+              <AdminForgotPasswordPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin/reset-password"
+          element={
+            <Suspense fallback={<RouteModuleFallback label="Loading password reset..." />}>
+              <AdminResetPasswordPage />
             </Suspense>
           }
         />

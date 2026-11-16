@@ -22,6 +22,8 @@ export const API_ENDPOINTS = {
   authProfile: '/api/v1/auth/profile',
   authChangePassword: '/api/v1/auth/change-password',
   authAcceptInvite: '/api/v1/auth/accept-invite',
+  authForgotPassword: '/api/v1/auth/forgot-password',
+  authResetPassword: '/api/v1/auth/reset-password',
   customers: '/api/v1/customers',
   adminAccounts: '/api/v1/admin/accounts',
   clientAuthRegister: '/api/v1/client/auth/register',

@@ -33,6 +33,7 @@ export default function AdminLoginPage() {
   );
   const wasExpired = Boolean(location.state?.expired || searchParams.get('reason') === 'expired');
   const inviteAccepted = Boolean(location.state?.inviteAccepted);
+  const passwordReset = Boolean(location.state?.passwordReset);
 
   const [checkingSession, setCheckingSession] = useState(policy === 'session_required');
   const [email, setEmail] = useState('');
@@ -219,6 +220,15 @@ export default function AdminLoginPage() {
               </div>
             )}
 
+            {passwordReset && !inviteAccepted && !loginError && (
+              <div
+                role="status"
+                className="rounded-lg border border-[#16834A]/30 bg-[#E8F5EC]/70 px-3.5 py-2.5 text-xs text-[#116438]"
+              >
+                Your administrator password has been reset. Please sign in with your new password.
+              </div>
+            )}
+
             {wasExpired && !loginError && (
               <div
                 role="status"
@@ -273,6 +283,15 @@ export default function AdminLoginPage() {
                 required
                 error={fieldErrors.password}
               />
+
+              <div className="flex justify-end -mt-2">
+                <Link
+                  to="/admin/forgot-password"
+                  className="text-xs font-semibold text-[#16834A] hover:text-[#116438] hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#16834A]/40 focus-visible:ring-offset-2"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
 
               <button
                 type="submit"

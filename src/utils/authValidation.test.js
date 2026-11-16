@@ -15,6 +15,8 @@ import {
   sanitizeInternalRedirect,
   isValidAdminRole,
   formatAdminAuthError,
+  validateAdminForgotPasswordInput,
+  formatAdminRecoveryError,
 } from './authValidation.js';
 
 test('evaluatePasswordStrength scores empty, weak, fair, good, and strong passwords accurately', () => {
@@ -228,5 +230,48 @@ test('isValidAdminRole and formatAdminAuthError handle roles and all backend err
   assert.match(
     formatAdminAuthError({ errorCode: 'INSUFFICIENT_PERMISSIONS', statusCode: 403 }),
     /permissions/i
+  );
+});
+
+test('validateAdminForgotPasswordInput and formatAdminRecoveryError validate email and map recovery errors safely', () => {
+  const invalid = validateAdminForgotPasswordInput({ email: 'not-an-email' });
+  assert.equal(invalid.isValid, false);
+  assert.ok(invalid.errors.email);
+
+  const valid = validateAdminForgotPasswordInput({ email: '  Admin@DreamTechKashmirSolutions.Studio ' });
+  assert.equal(valid.isValid, true);
+  assert.equal(valid.data.email, 'admin@dreamtechkashmirsolutions.studio');
+
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'RATE_LIMITED', statusCode: 429 }, 'forgot'),
+    /Too many password recovery attempts/i
+  );
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'EMAIL_PROVIDER_UNAVAILABLE', statusCode: 503 }, 'forgot'),
+    /mail delivery issue/i
+  );
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'MISSING_RESET_TOKEN', statusCode: 400 }, 'reset'),
+    /missing a valid token/i
+  );
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'TOKEN_ALREADY_USED', statusCode: 400 }, 'reset'),
+    /already been used/i
+  );
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'TOKEN_REVOKED', statusCode: 400 }, 'reset'),
+    /revoked/i
+  );
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'TOKEN_EXPIRED', statusCode: 400 }, 'reset'),
+    /expired/i
+  );
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'INVALID_RESET_TOKEN', statusCode: 400 }, 'reset'),
+    /invalid or no longer active/i
+  );
+  assert.match(
+    formatAdminRecoveryError({ statusCode: 500, message: 'SQLITE_ERROR: stack trace' }, 'reset'),
+    /temporarily unavailable/i
   );
 });

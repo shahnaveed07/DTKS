@@ -10,6 +10,7 @@
  */
 
 import { API_ENDPOINTS, API_PREFIX } from '../models/backendModels.js';
+import { isValidEmailAddress } from '../../utils/authValidation.js';
 
 export const DEFAULT_API_TIMEOUT_MS = 15000;
 const SESSION_STORAGE_AUTH_KEY = 'dtks_admin_auth_session_v1';
@@ -630,7 +631,9 @@ export async function apiRequest(endpoint, options = {}) {
       normalizedEndpoint.includes('/auth/login') ||
       normalizedEndpoint.includes('/auth/refresh') ||
       normalizedEndpoint.includes('/auth/logout') ||
-      normalizedEndpoint.includes('/auth/accept-invite');
+      normalizedEndpoint.includes('/auth/accept-invite') ||
+      normalizedEndpoint.includes('/auth/forgot-password') ||
+      normalizedEndpoint.includes('/auth/reset-password');
 
     if (
       response.status === 401 &&
@@ -1004,4 +1007,158 @@ export async function refreshAdminSession() {
     });
   }
   return createServiceResponse(refreshed, 'Session token refreshed.');
+}
+
+/**
+ * Requests an administrator password reset email via POST /api/v1/auth/forgot-password.
+ * Strictly isolated from client auth endpoints and never creates fake recovery flows in production.
+ */
+export async function requestAdminPasswordReset({ email } = {}) {
+  const policy = getAdminAccessPolicy();
+  if (policy === 'blocked_production_local') {
+    return createServiceError(
+      'Secure Admin password recovery will be enabled after backend authentication is configured.',
+      null,
+      {
+        errorType: 'BackendNotConfiguredError',
+        errorCode: 'ADMIN_AUTH_UNCONFIGURED',
+        statusCode: 503,
+      }
+    );
+  }
+
+  if (policy !== 'session_required') {
+    return createServiceError(
+      'Password recovery requires an active backend API connection. Configure VITE_DATA_ADAPTER=api and VITE_API_BASE_URL.',
+      null,
+      {
+        errorType: 'LocalAdapterAuthUnavailableError',
+        errorCode: 'LOCAL_ADAPTER_AUTH_UNAVAILABLE',
+        statusCode: 400,
+      }
+    );
+  }
+
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!isValidEmailAddress(cleanEmail)) {
+    return createServiceError(
+      'Please enter a valid administrator email address.',
+      null,
+      {
+        errorType: 'VALIDATION_ERROR',
+        errorCode: 'VALIDATION_ERROR',
+        statusCode: 400,
+        details: { email: 'Please enter a valid administrator email address.' },
+      }
+    );
+  }
+
+  const res = await apiRequest(API_ENDPOINTS.authForgotPassword, {
+    method: 'POST',
+    body: { email: cleanEmail },
+    skipAuthRefresh: true,
+  });
+
+  if (!res.success) {
+    return res;
+  }
+
+  return createServiceResponse(
+    { requested: true },
+    'If an eligible administrator account exists for this email address, a secure password recovery link has been sent.'
+  );
+}
+
+/**
+ * Completes an administrator password reset via POST /api/v1/auth/reset-password.
+ * Clears any stale admin session on success so the administrator signs in fresh with their new password.
+ */
+export async function resetAdminPassword({ token, newPassword, confirmPassword } = {}) {
+  const policy = getAdminAccessPolicy();
+  if (policy === 'blocked_production_local') {
+    return createServiceError(
+      'Secure Admin password reset will be enabled after backend authentication is configured.',
+      null,
+      {
+        errorType: 'BackendNotConfiguredError',
+        errorCode: 'ADMIN_AUTH_UNCONFIGURED',
+        statusCode: 503,
+      }
+    );
+  }
+
+  if (policy !== 'session_required') {
+    return createServiceError(
+      'Password reset requires an active backend API connection. Configure VITE_DATA_ADAPTER=api and VITE_API_BASE_URL.',
+      null,
+      {
+        errorType: 'LocalAdapterAuthUnavailableError',
+        errorCode: 'LOCAL_ADAPTER_AUTH_UNAVAILABLE',
+        statusCode: 400,
+      }
+    );
+  }
+
+  const cleanToken = String(token || '').trim();
+  const rawPassword = String(newPassword || '');
+  const rawConfirmPassword = String(confirmPassword ?? '');
+
+  if (!cleanToken) {
+    return createServiceError(
+      'A valid password reset token is required.',
+      null,
+      {
+        errorType: 'VALIDATION_ERROR',
+        errorCode: 'MISSING_RESET_TOKEN',
+        statusCode: 400,
+      }
+    );
+  }
+
+  if (!rawPassword) {
+    return createServiceError(
+      'New password is required.',
+      null,
+      {
+        errorType: 'VALIDATION_ERROR',
+        errorCode: 'VALIDATION_ERROR',
+        statusCode: 400,
+        details: { newPassword: 'New password is required.' },
+      }
+    );
+  }
+
+  if (rawPassword !== rawConfirmPassword) {
+    return createServiceError(
+      'Passwords do not match.',
+      null,
+      {
+        errorType: 'VALIDATION_ERROR',
+        errorCode: 'PASSWORD_MISMATCH',
+        statusCode: 400,
+        details: { confirmPassword: 'Passwords do not match.' },
+      }
+    );
+  }
+
+  const res = await apiRequest(API_ENDPOINTS.authResetPassword, {
+    method: 'POST',
+    body: {
+      token: cleanToken,
+      newPassword: rawPassword,
+      confirmPassword: rawConfirmPassword,
+    },
+    skipAuthRefresh: true,
+  });
+
+  if (!res.success) {
+    return res;
+  }
+
+  clearAdminAuthSession();
+
+  return createServiceResponse(
+    { reset: true },
+    res.message || 'Your administrator password has been reset. Please sign in with your new password.'
+  );
 }

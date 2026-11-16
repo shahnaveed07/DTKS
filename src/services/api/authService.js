@@ -10,6 +10,8 @@ import {
   loginAdmin,
   logoutAdmin,
   refreshAdminSession,
+  requestAdminPasswordReset,
+  resetAdminPassword,
   setAdminAuthSession,
   subscribeAdminAuth,
   verifyAdminSession,
@@ -189,6 +191,8 @@ export const authService = {
   logout: logoutAdmin,
   refresh: refreshAdminSession,
   verifySession: verifyAdminSession,
+  requestPasswordReset: requestAdminPasswordReset,
+  resetPassword: resetAdminPassword,
 
   async getMe() {
     if (getDataAdapterMode() !== 'api') {

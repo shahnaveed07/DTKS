@@ -422,3 +422,132 @@ export function formatAdminAuthError(errorOrRes) {
 
   return rawMessage || 'Unable to sign in right now. Please try again.';
 }
+
+export function validateAdminForgotPasswordInput({ email = '' } = {}) {
+  const errors = {};
+  const cleanEmail = String(email || '').trim().toLowerCase();
+
+  if (!isValidEmailAddress(cleanEmail)) {
+    errors.email = 'Please enter a valid administrator email address.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    data: { email: cleanEmail },
+  };
+}
+
+/**
+ * Maps backend admin password recovery error codes and HTTP statuses to clear,
+ * neutral, and safe user messages without exposing tokens or internal traces.
+ */
+export function formatAdminRecoveryError(errorOrRes, context = 'reset') {
+  const defaultMsg =
+    context === 'forgot'
+      ? 'Unable to process password recovery right now. Please try again shortly.'
+      : 'Unable to reset your password right now. Please request a new reset link and try again.';
+
+  if (!errorOrRes) return defaultMsg;
+  if (typeof errorOrRes === 'string') {
+    return errorOrRes.trim() || defaultMsg;
+  }
+
+  const code = String(errorOrRes.errorCode || errorOrRes.code || '').toUpperCase();
+  const status = Number(errorOrRes.statusCode || 0);
+  const rawMessage = String(errorOrRes.message || '').trim();
+  const lower = rawMessage.toLowerCase();
+
+  if (code === 'RATE_LIMITED' || code === 'TOO_MANY_REQUESTS' || status === 429) {
+    return 'Too many password recovery attempts. Please wait a few minutes before trying again.';
+  }
+
+  if (
+    code === 'EMAIL_PROVIDER_UNAVAILABLE' ||
+    code === 'EMAIL_DELIVERY_FAILED' ||
+    code === 'MAILER_UNAVAILABLE' ||
+    code === 'SMTP_ERROR' ||
+    lower.includes('email delivery') ||
+    lower.includes('email provider') ||
+    lower.includes('mail service')
+  ) {
+    return 'Password recovery emails are temporarily unavailable due to a mail delivery issue. Please try again shortly.';
+  }
+
+  if (code === 'MISSING_RESET_TOKEN' || (context === 'reset' && code === 'TOKEN_REQUIRED')) {
+    return 'This password reset link is missing a valid token. Please request a new reset link.';
+  }
+
+  if (
+    code === 'TOKEN_ALREADY_USED' ||
+    code === 'RESET_TOKEN_USED' ||
+    code === 'TOKEN_USED' ||
+    (lower.includes('already') && lower.includes('used'))
+  ) {
+    return 'This password reset link has already been used. Request a new reset link if you still need to update your password.';
+  }
+
+  if (code === 'TOKEN_REVOKED' || code === 'RESET_TOKEN_REVOKED' || lower.includes('revoked')) {
+    return 'This password reset link is no longer active because it was revoked or superseded. Please request a new reset link.';
+  }
+
+  if (
+    code === 'TOKEN_EXPIRED' ||
+    code === 'RESET_TOKEN_EXPIRED' ||
+    code === 'EXPIRED_TOKEN' ||
+    lower.includes('expired')
+  ) {
+    return 'This password reset link has expired. Please request a new reset link.';
+  }
+
+  if (
+    code === 'INVALID_TOKEN' ||
+    code === 'INVALID_RESET_TOKEN' ||
+    lower.includes('invalid token') ||
+    lower.includes('invalid reset') ||
+    (context === 'reset' && status === 400 && lower.includes('token'))
+  ) {
+    return 'This password reset link is invalid or no longer active. Please request a new reset link.';
+  }
+
+  if (code === 'PASSWORD_MISMATCH') {
+    return 'Passwords do not match.';
+  }
+
+  if (
+    code === 'ACCOUNT_DISABLED' ||
+    code === 'ACCOUNT_INACTIVE' ||
+    code === 'ADMIN_DEACTIVATED' ||
+    code === 'ACCOUNT_DEACTIVATED'
+  ) {
+    return 'Administrator access for this account has been disabled. Contact a Super Admin for assistance.';
+  }
+
+  if (code === 'NETWORK_ERROR' || code === 'TIMEOUT_ERROR') {
+    return 'Temporary network connectivity issue while contacting the authentication server. Please check your connection and try again.';
+  }
+
+  if (code === 'LOCAL_ADAPTER_AUTH_UNAVAILABLE') {
+    return 'Password recovery requires an active backend API connection. Configure VITE_DATA_ADAPTER=api and VITE_API_BASE_URL.';
+  }
+
+  if (
+    code === 'INVALID_API_BASE_URL' ||
+    code === 'ADMIN_AUTH_UNCONFIGURED' ||
+    code === 'SERVICE_UNAVAILABLE' ||
+    status >= 500
+  ) {
+    return 'Password recovery service is temporarily unavailable. Please try again shortly.';
+  }
+
+  if (
+    lower.includes('sql') ||
+    lower.includes('stack') ||
+    lower.includes('exception') ||
+    lower.includes('syntaxerror')
+  ) {
+    return 'Password recovery service encountered an unexpected error. Please try again shortly.';
+  }
+
+  return rawMessage || defaultMsg;
+}

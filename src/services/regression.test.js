@@ -24,12 +24,15 @@ import {
   apiRequest,
   loginAdmin,
   logoutAdmin,
+  requestAdminPasswordReset,
+  resetAdminPassword,
   setAdminAuthSession,
   getAdminAuthSession,
   clearAdminAuthSession,
   getCsrfToken,
   resolveBackendAssetUrl,
 } from './api/apiClient.js';
+import { API_ENDPOINTS } from './models/backendModels.js';
 import {
   getClientAccessPolicy,
   getClientAuthSession,
@@ -3086,6 +3089,305 @@ test('Admin Auth Policy & loginAdmin separation: blocks HTTP in allowed_dev, blo
     setRuntimeEnvOverrides(null);
   }
 });
+
+test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthRefresh, enforce policy, validate inputs, and clear stale sessions on reset', async () => {
+  createMockLocalStorage();
+  clearAdminAuthSession();
+  clearClientAuthSession();
+
+  assert.equal(API_ENDPOINTS.authForgotPassword, '/api/v1/auth/forgot-password');
+  assert.equal(API_ENDPOINTS.authResetPassword, '/api/v1/auth/reset-password');
+  assert.notEqual(API_ENDPOINTS.authForgotPassword, API_ENDPOINTS.clientAuthForgotPassword);
+  assert.notEqual(API_ENDPOINTS.authResetPassword, API_ENDPOINTS.clientAuthResetPassword);
+
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let forgotScenario = 'ok';
+  let resetScenario = 'ok';
+
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url);
+    const body = init.body ? JSON.parse(init.body) : {};
+    calls.push({ url: u, method: init.method || 'GET', body });
+
+    if (u === 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/forgot-password') {
+      if (forgotScenario === 'rate_limited') {
+        return {
+          ok: false,
+          status: 429,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'RATE_LIMITED', message: 'Too many requests.' },
+          }),
+        };
+      }
+      if (forgotScenario === 'provider_unavailable') {
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'EMAIL_PROVIDER_UNAVAILABLE', message: 'Email delivery failed.' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          message: 'If an eligible administrator account exists, a reset link has been sent.',
+          data: { requested: true },
+        }),
+      };
+    }
+
+    if (u === 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/reset-password') {
+      if (resetScenario === 'invalid_token') {
+        return {
+          ok: false,
+          status: 400,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'INVALID_RESET_TOKEN', message: 'Invalid token.' },
+          }),
+        };
+      }
+      if (resetScenario === 'expired_token') {
+        return {
+          ok: false,
+          status: 400,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'TOKEN_EXPIRED', message: 'Reset token expired.' },
+          }),
+        };
+      }
+      if (resetScenario === 'used_token') {
+        return {
+          ok: false,
+          status: 400,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'TOKEN_ALREADY_USED', message: 'Token already used.' },
+          }),
+        };
+      }
+      if (resetScenario === 'revoked_token') {
+        return {
+          ok: false,
+          status: 400,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'TOKEN_REVOKED', message: 'Token revoked.' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { reset: true },
+          message: 'Password updated successfully.',
+        }),
+      };
+    }
+
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: false }),
+    };
+  };
+
+  try {
+    // 1. Blocked production local and allowed_dev never call fetch or fake recovery
+    setRuntimeEnvOverrides({ isProd: true, dataAdapter: 'local', apiBaseUrl: '' });
+    const blockedForgot = await requestAdminPasswordReset({ email: 'admin@dreamtechkashmirsolutions.studio' });
+    assert.equal(blockedForgot.success, false);
+    assert.equal(blockedForgot.errorCode, 'ADMIN_AUTH_UNCONFIGURED');
+
+    const blockedReset = await resetAdminPassword({
+      token: 'tok-123',
+      newPassword: 'StrongPassword#2026',
+      confirmPassword: 'StrongPassword#2026',
+    });
+    assert.equal(blockedReset.success, false);
+    assert.equal(blockedReset.errorCode, 'ADMIN_AUTH_UNCONFIGURED');
+
+    setRuntimeEnvOverrides({ isProd: false, dataAdapter: 'local', apiBaseUrl: '' });
+    const localForgot = await requestAdminPasswordReset({ email: 'admin@dreamtechkashmirsolutions.studio' });
+    assert.equal(localForgot.success, false);
+    assert.equal(localForgot.errorCode, 'LOCAL_ADAPTER_AUTH_UNAVAILABLE');
+    assert.equal(calls.length, 0);
+
+    // 2. API mode validation prevents bad calls before network
+    setRuntimeEnvOverrides({
+      isProd: true,
+      dataAdapter: 'api',
+      apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio/api/v1',
+    });
+
+    const invalidEmailForgot = await requestAdminPasswordReset({ email: 'invalid-email' });
+    assert.equal(invalidEmailForgot.success, false);
+    assert.equal(invalidEmailForgot.errorCode, 'VALIDATION_ERROR');
+
+    const missingTokReset = await resetAdminPassword({
+      token: '   ',
+      newPassword: 'StrongPassword#2026',
+      confirmPassword: 'StrongPassword#2026',
+    });
+    assert.equal(missingTokReset.success, false);
+    assert.equal(missingTokReset.errorCode, 'MISSING_RESET_TOKEN');
+
+    const mismatchReset = await resetAdminPassword({
+      token: 'valid-reset-tok',
+      newPassword: 'StrongPassword#2026',
+      confirmPassword: 'OtherPassword#2026',
+    });
+    assert.equal(mismatchReset.success, false);
+    assert.equal(mismatchReset.errorCode, 'PASSWORD_MISMATCH');
+    assert.equal(calls.length, 0);
+
+    // 3. Forgot password calls /api/v1/auth/forgot-password with normalized email & neutral response
+    const okForgot = await requestAdminPasswordReset({
+      email: '  ADMIN@DreamTechKashmirSolutions.Studio ',
+    });
+    assert.equal(okForgot.success, true);
+    assert.equal(calls[0].url, 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/forgot-password');
+    assert.equal(calls[0].body.email, 'admin@dreamtechkashmirsolutions.studio');
+    assert.equal(okForgot.data.token, undefined);
+
+    forgotScenario = 'rate_limited';
+    const rateLimitedForgot = await requestAdminPasswordReset({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+    });
+    assert.equal(rateLimitedForgot.success, false);
+    assert.equal(rateLimitedForgot.statusCode, 429);
+
+    forgotScenario = 'provider_unavailable';
+    const providerErrForgot = await requestAdminPasswordReset({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+    });
+    assert.equal(providerErrForgot.success, false);
+    assert.equal(providerErrForgot.errorCode, 'EMAIL_PROVIDER_UNAVAILABLE');
+
+    // 4. Reset password error codes (invalid, expired, already used, revoked)
+    for (const [mode, expectedCode] of [
+      ['invalid_token', 'INVALID_RESET_TOKEN'],
+      ['expired_token', 'TOKEN_EXPIRED'],
+      ['used_token', 'TOKEN_ALREADY_USED'],
+      ['revoked_token', 'TOKEN_REVOKED'],
+    ]) {
+      resetScenario = mode;
+      const errRes = await resetAdminPassword({
+        token: 'tok-abc',
+        newPassword: 'NewPassword#2026',
+        confirmPassword: 'NewPassword#2026',
+      });
+      assert.equal(errRes.success, false);
+      assert.equal(errRes.errorCode, expectedCode);
+    }
+
+    // 5. Valid reset clears stale admin session (no auto-login) and leaves client session isolated
+    setAdminAuthSession({
+      accessToken: 'stale-admin-access',
+      refreshToken: 'stale-admin-refresh',
+      csrfToken: 'stale-admin-csrf',
+      admin: { id: 'adm-1', email: 'admin@dtks.studio', role: 'super_admin' },
+    });
+    setClientAuthSession({
+      accessToken: 'client-access',
+      csrfToken: 'client-csrf',
+      client: { id: 'cli-1', email: 'client@dtks.studio' },
+    });
+
+    resetScenario = 'ok';
+    const okReset = await resetAdminPassword({
+      token: 'valid-tok-999',
+      newPassword: 'NewStrongPassword#2026',
+      confirmPassword: 'NewStrongPassword#2026',
+    });
+    assert.equal(okReset.success, true);
+    assert.equal(
+      calls[calls.length - 1].url,
+      'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/reset-password'
+    );
+    assert.deepEqual(calls[calls.length - 1].body, {
+      token: 'valid-tok-999',
+      newPassword: 'NewStrongPassword#2026',
+      confirmPassword: 'NewStrongPassword#2026',
+    });
+    assert.equal(getAdminAuthSession(), null, 'Successful password reset must clear stale admin session');
+    assert.equal(getClientAuthSession()?.accessToken, 'client-access');
+
+    // 6. Ensure no client endpoints or /auth/refresh were triggered
+    assert.equal(
+      calls.some((c) => c.url.includes('/client/auth/')),
+      false,
+      'Admin recovery must never hit client auth endpoints'
+    );
+    assert.equal(
+      calls.some((c) => c.url.includes('/auth/refresh')),
+      false,
+      'Admin recovery must never trigger token refresh'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    clearClientAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
+test('Admin Login & App routing configure Forgot/Reset Password publicly and strictly isolate from Client Auth UI', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const [appSrc, loginSrc, forgotSrc, resetSrc] = await Promise.all([
+    readFile(new URL('../App.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Admin/AdminLoginPage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Admin/AdminForgotPasswordPage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../pages/Admin/AdminResetPasswordPage.jsx', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(loginSrc, /to="\/admin\/forgot-password"/);
+  assert.match(loginSrc, /Forgot Password\?/);
+  assert.equal(loginSrc.includes('to="/forgot-password"'), false);
+
+  assert.match(appSrc, /path="\/admin\/forgot-password"/);
+  assert.match(appSrc, /path="\/admin\/reset-password"/);
+  const forgotRouteMatch = appSrc.match(/<Route\s+path="\/admin\/forgot-password"[\s\S]*?<\/Suspense>\s*\}\s*\/>/);
+  const resetRouteMatch = appSrc.match(/<Route\s+path="\/admin\/reset-password"[\s\S]*?<\/Suspense>\s*\}\s*\/>/);
+  assert.ok(forgotRouteMatch && forgotRouteMatch[0].includes('<AdminForgotPasswordPage'));
+  assert.ok(resetRouteMatch && resetRouteMatch[0].includes('<AdminResetPasswordPage'));
+  assert.equal(/RequireAdmin|renderAdmin/.test(forgotRouteMatch[0]), false);
+  assert.equal(/RequireAdmin|renderAdmin/.test(resetRouteMatch[0]), false);
+
+  assert.match(forgotSrc, /Forgot Admin Password\?/);
+  assert.match(forgotSrc, /Send Reset Link/);
+  assert.match(forgotSrc, /requestAdminPasswordReset/);
+  assert.equal(forgotSrc.includes('clientAuth'), false);
+  assert.equal(forgotSrc.includes('ClientAuth'), false);
+
+  assert.match(resetSrc, /Reset Administrator Password/);
+  assert.match(resetSrc, /useSearchParams/);
+  assert.match(resetSrc, /PasswordInput/);
+  assert.match(resetSrc, /resetAdminPassword/);
+  assert.match(resetSrc, /navigate\(['"]\/admin\/login['"]/);
+  assert.equal(resetSrc.includes('clientAuth'), false);
+  assert.equal(resetSrc.includes('ClientAuth'), false);
+  assert.equal(resetSrc.includes('console.log'), false);
+});
+
 
 
 
