@@ -30,6 +30,7 @@ import {
   getAdminAuthSession,
   clearAdminAuthSession,
   getCsrfToken,
+  bootstrapAdminCsrf,
   resolveBackendAssetUrl,
   validateApiRequestUrl,
 } from './api/apiClient.js';
@@ -40,6 +41,7 @@ import {
   setClientAuthSession,
   clearClientAuthSession,
   getClientCsrfToken,
+  bootstrapClientCsrf,
   clientApiRequest,
 } from './api/clientApiClient.js';
 import { authService } from './api/authService.js';
@@ -1017,37 +1019,89 @@ test('API Auth Client supports HttpOnly refresh cookies, X-CSRF-Token headers, a
 // SUITE 6: ADMIN USERS CRUD, TRACK ORDER CONTRACT & SESSION ISOLATION
 // ============================================================================
 
-test('Order tracking in API mode uses GET /api/v1/orders/track with query params and surfaces errors', async () => {
+test('Order tracking in API mode uses POST /api/v1/orders/track with JSON token, never leaks token in URL, and maps errors cleanly', async () => {
   createMockLocalStorage();
+  clearAdminAuthSession();
+  clearClientAuthSession();
   setRuntimeEnvOverrides({
     isProd: true,
     dataAdapter: 'api',
     apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
   });
+  setAdminAuthSession({
+    accessToken: 'admin-bearer-should-not-leak',
+    csrfToken: 'admin-csrf-should-not-leak',
+    admin: { id: 'adm-1', role: 'admin' },
+  });
 
   const captured = [];
   const originalFetch = globalThis.fetch;
+  let scenario = 'ok';
   globalThis.fetch = async (url, init = {}) => {
-    captured.push({ url: String(url), method: init.method || 'GET' });
+    captured.push({
+      url: String(url),
+      method: init.method || 'GET',
+      headers: init.headers || {},
+      body: init.body ? JSON.parse(init.body) : null,
+    });
+    if (scenario === 'legacy_disabled') {
+      return {
+        ok: false,
+        status: 410,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: false,
+          error: { code: 'LEGACY_TRACKING_DISABLED', message: 'Legacy tracking disabled.' },
+        }),
+      };
+    }
     return {
       ok: true,
       status: 200,
       headers: { get: () => 'application/json' },
       json: async () => ({
         success: true,
-        data: { order: { referenceId: 'DKS-2026-0042', status: 'In Progress' } },
+        data: {
+          order: {
+            referenceId: 'DKS-2026-0042',
+            status: 'In Progress',
+            urgency: 'Priority',
+            statusHistory: [
+              { id: 'h-1', previousStatus: 'Confirmed', newStatus: 'In Progress', notes: 'Build started' },
+            ],
+          },
+        },
       }),
     };
   };
 
   try {
-    const res = await orderService.trackOrder('DKS-2026-0042', 'client@kashmir.in');
+    const emptyRes = await orderService.trackOrder({ token: '   ' });
+    assert.equal(emptyRes.success, false);
+    assert.equal(emptyRes.errorCode, 'VALIDATION_ERROR');
+    assert.equal(captured.length, 0);
+
+    const res = await orderService.trackOrder({ token: 'secret-track-token-256' });
     assert.equal(res.success, true);
     assert.equal(res.data.referenceId, 'DKS-2026-0042');
-    assert.equal(captured[0].method, 'GET');
-    assert.ok(captured[0].url.includes('/api/v1/orders/track?ref=DKS-2026-0042&email=client%40kashmir.in'));
+    assert.equal(res.data.urgency, 'Priority');
+    assert.equal(res.data.statusHistory.length, 1);
+    assert.equal(captured[0].method, 'POST');
+    assert.equal(captured[0].url, 'https://api.dreamtechkashmirsolutions.studio/api/v1/orders/track');
+    assert.deepEqual(captured[0].body, { token: 'secret-track-token-256' });
+    assert.equal(captured[0].url.includes('secret-track-token-256'), false);
+    assert.equal(captured[0].headers.Authorization, undefined);
+    assert.equal(captured[0].headers['X-CSRF-Token'], undefined);
+
+    scenario = 'legacy_disabled';
+    const disabledRes = await orderService.trackOrder('old-token');
+    assert.equal(disabledRes.success, false);
+    assert.equal(disabledRes.statusCode, 410);
+    assert.equal(disabledRes.errorCode, 'LEGACY_TRACKING_DISABLED');
   } finally {
     globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    clearClientAuthSession();
     setRuntimeEnvOverrides(null);
   }
 });
@@ -3526,7 +3580,7 @@ test('Security Remediation: origin pinning, HTTPS transport enforcement, trackin
 
   // 4. trackOrder strips PII in API mode and blocks local lookup in unconfigured production
   setRuntimeEnvOverrides({ isProd: true, dataAdapter: 'local', apiBaseUrl: '' });
-  const unconfiguredTrack = await orderService.trackOrder('DKS-2026-0001', 'u@example.com');
+  const unconfiguredTrack = await orderService.trackOrder({ token: 'secret-track-tok' });
   assert.equal(unconfiguredTrack.success, false);
   assert.equal(unconfiguredTrack.errorCode, 'BACKEND_NOT_CONFIGURED');
 
@@ -3542,31 +3596,46 @@ test('Security Remediation: origin pinning, HTTPS transport enforcement, trackin
     apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
   });
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({
-    ok: true,
-    status: 200,
-    headers: { get: () => 'application/json' },
-    json: async () => ({
-      success: true,
-      data: {
-        order: {
-          referenceId: 'DKS-2026-0009',
-          projectName: 'Secured Site',
-          status: 'Under Review',
-          customerEmail: 'private@example.com',
-          customerPhone: '+91 9999999999',
-          adminNotes: 'Internal staff note',
+  const trackCalls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    trackCalls.push({ url: String(url), method: init.method || 'GET', body: init.body });
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({
+        success: true,
+        data: {
+          order: {
+            referenceId: 'DKS-2026-0009',
+            projectName: 'Secured Site',
+            status: 'Under Review',
+            urgency: 'Urgent',
+            trackingToken: 'raw-token-must-be-stripped',
+            customerEmail: 'private@example.com',
+            customerPhone: '+91 9999999999',
+            adminNotes: 'Internal staff note',
+            statusHistory: [
+              { id: 'sh-1', previousStatus: 'New Request', newStatus: 'Under Review', notes: 'Assigned', adminEmail: 'staff@dtks.in' },
+            ],
+          },
         },
-      },
-    }),
-  });
+      }),
+    };
+  };
   try {
-    const tracked = await orderService.trackOrder('DKS-2026-0009', 'private@example.com');
+    const tracked = await orderService.trackOrder({ token: 'secret-track-tok' });
     assert.equal(tracked.success, true);
     assert.equal(tracked.data.referenceId, 'DKS-2026-0009');
+    assert.equal(tracked.data.urgency, 'Urgent');
+    assert.equal(tracked.data.statusHistory.length, 1);
+    assert.equal('adminEmail' in tracked.data.statusHistory[0], false);
+    assert.equal('trackingToken' in tracked.data, false);
     assert.equal('customerEmail' in tracked.data, false);
     assert.equal('customerPhone' in tracked.data, false);
     assert.equal('adminNotes' in tracked.data, false);
+    assert.equal(trackCalls[0].method, 'POST');
+    assert.equal(trackCalls[0].url, 'https://api.dreamtechkashmirsolutions.studio/api/v1/orders/track');
   } finally {
     globalThis.fetch = originalFetch;
     setRuntimeEnvOverrides(null);
@@ -3621,9 +3690,207 @@ test('Security Remediation: origin pinning, HTTPS transport enforcement, trackin
     assert.match(pageSrc, /history\.replaceState/);
     assert.match(pageSrc, /referrerPolicy="no-referrer"/);
   }
+  assert.equal(invitePage.includes('allowQueryFallback: true'), false);
+  assert.equal(clientResetPage.includes('allowQueryFallback: true'), false);
+  assert.equal(verifyPage.includes('allowQueryFallback: true'), false);
   assert.equal(quotePage.includes('/track-order?ref='), false);
-  assert.match(quotePage, /prefillReferenceId/);
+  assert.match(quotePage, /_discardedTrackingToken/);
 });
+
+test('CSRF bootstrap endpoints (/auth/csrf and /client/auth/csrf) hydrate cookie-only reloads, 401 refresh, and isolated order submissions', async () => {
+  createMockLocalStorage();
+  clearAdminAuthSession();
+  clearClientAuthSession();
+  setRuntimeEnvOverrides({
+    isProd: true,
+    dataAdapter: 'api',
+    apiBaseUrl: 'https://api.dreamtechkashmirsolutions.studio',
+  });
+
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  let adminMeAttempts = 0;
+  let clientMeAttempts = 0;
+  let orderPostAttempts = 0;
+
+  globalThis.fetch = async (url, init = {}) => {
+    const req = {
+      url: String(url),
+      method: String(init.method || 'GET').toUpperCase(),
+      credentials: init.credentials,
+      headers: init.headers || {},
+      body: typeof init.body === 'string' ? JSON.parse(init.body) : null,
+    };
+    requests.push(req);
+
+    if (req.url.endsWith('/api/v1/auth/csrf')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { csrfToken: 'boot-adm-csrf-1' } }),
+      };
+    }
+
+    if (req.url.endsWith('/api/v1/auth/me')) {
+      adminMeAttempts += 1;
+      if (adminMeAttempts === 1) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ success: false, error: { code: 'UNAUTHORIZED', message: 'Access cookie expired' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            admin: { id: 'adm-cookie-1', email: 'admin@dtks.in', role: 'super_admin', isActive: true },
+          },
+        }),
+      };
+    }
+
+    if (req.url.endsWith('/api/v1/auth/refresh')) {
+      assert.equal(req.headers['X-CSRF-Token'], 'boot-adm-csrf-1');
+      assert.equal(req.credentials, 'include');
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: {
+            authenticated: true,
+            csrfToken: 'rotated-adm-csrf-2',
+            admin: { id: 'adm-cookie-1', email: 'admin@dtks.in', role: 'super_admin', isActive: true },
+          },
+        }),
+      };
+    }
+
+    if (req.url.endsWith('/api/v1/client/auth/csrf')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { csrfToken: 'boot-cli-csrf-1' } }),
+      };
+    }
+
+    if (req.url.endsWith('/api/v1/client/auth/me')) {
+      clientMeAttempts += 1;
+      if (clientMeAttempts === 1) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: true,
+            data: {
+              client: { id: 'cli-cookie-1', email: 'client@dtks.in', fullName: 'Cookie Client', emailVerified: true },
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { client: { id: 'cli-cookie-1', email: 'client@dtks.in' } } }),
+      };
+    }
+
+    if (req.url.endsWith('/api/v1/orders') && req.method === 'POST') {
+      orderPostAttempts += 1;
+      if (orderPostAttempts === 1 && req.headers['X-CSRF-Token'] !== 'boot-cli-csrf-1') {
+        return {
+          ok: false,
+          status: 403,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'CSRF_VALIDATION_FAILED', message: 'Missing or invalid CSRF token' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          success: true,
+          data: { order: { id: 'ord-new-1', referenceId: 'DKS-2026-0999', customerEmail: 'client@dtks.in' } },
+        }),
+      };
+    }
+
+    if (req.url.endsWith('/api/v1/contact') && req.method === 'POST') {
+      return {
+        ok: true,
+        status: 201,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { inquiry: { id: 'inq-1' } } }),
+      };
+    }
+
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: false }),
+    };
+  };
+
+  try {
+    // 1. Cookie-only admin reload bootstraps /auth/csrf, recovers via 401 -> /auth/refresh, and populates session
+    const adminVerify = await verifyAdminSession();
+    assert.equal(adminVerify.authenticated, true);
+    assert.equal(adminVerify.admin.email, 'admin@dtks.in');
+    assert.equal(getCsrfToken(), 'rotated-adm-csrf-2');
+    assert.equal(getClientCsrfToken(), '', 'Admin CSRF bootstrap must never touch Client CSRF state');
+
+    // 2. Cookie-only client reload hydrates memoryClientSession even when /client/auth/me returns 200 directly
+    const clientVerify = await clientAuthService.verifySession();
+    assert.equal(clientVerify.authenticated, true);
+    assert.equal(clientVerify.client.id, 'cli-cookie-1');
+    assert.equal(getClientCsrfToken(), 'boot-cli-csrf-1');
+    assert.ok(getClientAuthSession()?.client, 'Cookie-only /client/auth/me must hydrate client session in memory');
+    assert.equal(getCsrfToken(), 'rotated-adm-csrf-2', 'Client CSRF bootstrap must never alter Admin CSRF');
+
+    // 3. Submit order while both Admin and Client sessions exist:
+    // Clear client CSRF temporarily to exercise lazy client CSRF bootstrap + 403 retry without Admin header leakage
+    setClientAuthSession({ accessToken: '', csrfToken: '', client: { id: 'cli-cookie-1', email: 'client@dtks.in' } });
+    const orderRes = await orderService.submitOrder({ projectName: 'CSRF Test Site' });
+    assert.equal(orderRes.success, true);
+    assert.equal(orderRes.data.referenceId, 'DKS-2026-0999');
+    const orderPostReq = requests.find((r) => r.url.endsWith('/api/v1/orders') && r.method === 'POST');
+    assert.equal(orderPostReq.headers['X-CSRF-Token'], 'boot-cli-csrf-1');
+    assert.equal(orderPostReq.headers.Authorization, undefined, 'submitOrder must never send Admin Bearer token');
+
+    // 4. Public contact inquiry never leaks Admin Bearer or Admin CSRF headers
+    const inquiryRes = await inquiryService.submitInquiry({
+      name: 'Visitor',
+      email: 'visitor@example.com',
+      subject: 'Hello',
+      message: 'Need a business website.',
+    });
+    assert.equal(inquiryRes.success, true);
+    const contactPostReq = requests.find((r) => r.url.endsWith('/api/v1/contact') && r.method === 'POST');
+    assert.equal(contactPostReq.headers.Authorization, undefined);
+    assert.notEqual(contactPostReq.headers['X-CSRF-Token'], 'rotated-adm-csrf-2');
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearAdminAuthSession();
+    clearClientAuthSession();
+    setRuntimeEnvOverrides(null);
+  }
+});
+
 
 
 

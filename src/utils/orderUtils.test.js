@@ -396,7 +396,7 @@ test('sanitizeSafeMediaUrl allows safe assets/idb/blob and rejects SVG, HTML, an
   assert.equal(sanitizeSafeMediaUrl('/%2fevil.example/a.png'), '');
 });
 
-test('sanitizeTrackedOrder strips customer PII and internal notes while retaining safe status fields', () => {
+test('sanitizeTrackedOrder strips customer PII and internal notes while retaining safe status fields and history', () => {
   const sanitized = sanitizeTrackedOrder({
     id: 'ord-1',
     referenceId: 'DKS-2026-0001',
@@ -405,6 +405,7 @@ test('sanitizeTrackedOrder strips customer PII and internal notes while retainin
     packageId: 'pkg-business',
     packageTitle: 'Business Growth Website',
     status: 'Quotation Sent',
+    urgency: 'Priority',
     quotationAmount: 35000,
     quotationCurrency: 'INR',
     quotationNotes: 'Includes booking inquiry module',
@@ -415,6 +416,17 @@ test('sanitizeTrackedOrder strips customer PII and internal notes while retainin
     maintenanceInterest: 'Interested',
     maintenancePlanSelected: 'Essential',
     estimatedBudget: 'INR 20,000 – 45,000',
+    statusHistory: [
+      {
+        id: 'hist-1',
+        previousStatus: 'New Request',
+        newStatus: 'Quotation Sent',
+        notes: 'Quotation prepared and emailed',
+        createdAt: '2026-10-02T10:00:00Z',
+        adminEmail: 'internal-admin@dtks.in',
+        actorId: 'adm-99',
+      },
+    ],
     createdAt: '2026-10-01T00:00:00Z',
     customerName: 'Sensitive Name',
     customerEmail: 'sensitive@example.com',
@@ -424,10 +436,17 @@ test('sanitizeTrackedOrder strips customer PII and internal notes while retainin
     internalNotes: 'Private staff note',
     hostingNotes: 'Internal infra detail',
     clientId: 'cli-secret-1',
+    trackingToken: 'raw-256-bit-tracking-token',
   });
 
   assert.equal(sanitized.referenceId, 'DKS-2026-0001');
   assert.equal(sanitized.quotationAmount, 35000);
+  assert.equal(sanitized.urgency, 'Priority');
+  assert.equal(sanitized.statusHistory.length, 1);
+  assert.equal(sanitized.statusHistory[0].newStatus, 'Quotation Sent');
+  assert.equal(sanitized.statusHistory[0].notes, 'Quotation prepared and emailed');
+  assert.equal('adminEmail' in sanitized.statusHistory[0], false);
+  assert.equal('actorId' in sanitized.statusHistory[0], false);
   assert.equal('customerName' in sanitized, false);
   assert.equal('customerEmail' in sanitized, false);
   assert.equal('customerPhone' in sanitized, false);
@@ -436,6 +455,7 @@ test('sanitizeTrackedOrder strips customer PII and internal notes while retainin
   assert.equal('internalNotes' in sanitized, false);
   assert.equal('hostingNotes' in sanitized, false);
   assert.equal('clientId' in sanitized, false);
+  assert.equal('trackingToken' in sanitized, false);
   assert.equal(sanitizeTrackedOrder(null), null);
 });
 

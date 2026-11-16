@@ -12,6 +12,7 @@ import {
   getDataAdapterMode,
   getSubmissionMode,
 } from './apiClient.js';
+import { clientApiRequest } from './clientApiClient.js';
 
 export const inquiryService = {
   getAll() {
@@ -94,7 +95,12 @@ export const inquiryService = {
 
   async submitInquiry(payload) {
     if (getDataAdapterMode() === 'api') {
-      const res = await apiRequest(API_ENDPOINTS.inquiries, { method: 'POST', body: payload });
+      const res = await clientApiRequest(API_ENDPOINTS.inquiries, {
+        method: 'POST',
+        body: payload,
+        token: '',
+        skipAuthRefresh: true,
+      });
       if (!res.success) return res;
       return createServiceResponse(
         res.data?.inquiry || res.data?.message || res.data,

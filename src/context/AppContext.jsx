@@ -15,7 +15,6 @@ import { settingsService } from '../services/api/settingsService.js';
 import {
   getAdminAccessPolicy,
   getAdminAuthSession,
-  getCsrfToken,
   getDataAdapterMode,
   getSubmissionMode,
 } from '../services/api/apiClient.js';
@@ -131,7 +130,7 @@ export function AppProvider({ children }) {
 
       const seq = ++refreshSeqRef.current;
       const shouldLoadAdmin =
-        includeAdmin || Boolean(getAdminAuthSession()?.accessToken || getCsrfToken());
+        includeAdmin || Boolean(getAdminAuthSession()?.admin || getAdminAuthSession()?.accessToken);
 
       setIsLoading(true);
       setError(null);
@@ -302,8 +301,8 @@ export function AppProvider({ children }) {
     [runAsyncMutation]
   );
 
-  const trackOrder = useCallback(async (referenceId, email) => {
-    return orderService.trackOrder(referenceId, email);
+  const trackOrder = useCallback(async (tokenOrRef, legacyEmail) => {
+    return orderService.trackOrder(tokenOrRef, legacyEmail);
   }, []);
 
   // Inquiries

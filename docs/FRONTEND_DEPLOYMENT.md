@@ -36,8 +36,8 @@ VITE_BING_SITE_VERIFICATION=
 
 - Ensure `VITE_DATA_ADAPTER=api` and `VITE_API_BASE_URL=https://api.dreamtechkashmirsolutions.studio/api/v1` are configured in Cloudflare before building.
 - `VITE_ENABLE_LOCAL_ADMIN` cannot override production security restrictions (`getAdminAccessPolicy()` always enforces `'blocked_production_local'` in production builds unless `VITE_DATA_ADAPTER=api`).
-- In API mode, `RequireAdmin` and `AdminLoginPage` enforce `session_required` (`POST /api/v1/auth/login` followed by `GET /api/v1/auth/me`).
-- Administrators access sign-in at `/admin/login` (linked discreetly in the Footer as **Admin Login**). New administrators activate via `/admin/accept-invite#token=...` (with temporary `?token=` fallback and immediate URL scrubbing).
+- In API mode, `RequireAdmin` and `AdminLoginPage` enforce `session_required` (`GET /api/v1/auth/csrf`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me`).
+- Administrators access sign-in at `/admin/login` (linked discreetly in the Footer as **Admin Login**). New administrators activate strictly via `/admin/accept-invite#token=...` with immediate URL fragment scrubbing.
 
 ## HTTP Security & Indexing Headers (`public/_headers`)
 

@@ -284,7 +284,7 @@ export default function AdminResetPasswordPage() {
                 label="New Password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
+                placeholder="Minimum 12 characters"
                 autoComplete="new-password"
                 required
                 showStrength

@@ -17,6 +17,8 @@ const SESSION_STORAGE_AUTH_KEY = 'dtks_admin_auth_session_v1';
 
 let runtimeEnvOverrides = null;
 let memoryAuthSession = null;
+let bootstrappedAdminCsrfToken = '';
+let activeAdminCsrfPromise = null;
 const authListeners = new Set();
 
 export function setRuntimeEnvOverrides(overrides = null) {
@@ -398,6 +400,7 @@ export function setAdminAuthSession(sessionData) {
 
 export function clearAdminAuthSession() {
   memoryAuthSession = null;
+  bootstrappedAdminCsrfToken = '';
   purgeLegacyAdminStorageTokens();
   notifyAuthListeners();
 }
@@ -410,29 +413,76 @@ export function getRefreshToken() {
   return getAdminAuthSession()?.refreshToken || '';
 }
 
-function readCookieValue(name) {
-  try {
-    if (typeof document === 'undefined' || typeof document.cookie !== 'string') return '';
-    const prefix = `${name}=`;
-    for (const part of document.cookie.split(';')) {
-      const trimmed = part.trim();
-      if (trimmed.startsWith(prefix)) {
-        const raw = trimmed.slice(prefix.length);
-        try {
-          return decodeURIComponent(raw);
-        } catch {
-          return raw;
-        }
-      }
-    }
-  } catch {
-    // Ignore cookie access errors
-  }
-  return '';
+export function getCsrfToken() {
+  return getAdminAuthSession()?.csrfToken || bootstrappedAdminCsrfToken || '';
 }
 
-export function getCsrfToken() {
-  return getAdminAuthSession()?.csrfToken || readCookieValue('dtks_csrf_token') || '';
+export async function bootstrapAdminCsrf() {
+  if (getDataAdapterMode() !== 'api') return '';
+  if (activeAdminCsrfPromise) return activeAdminCsrfPromise;
+
+  activeAdminCsrfPromise = (async () => {
+    try {
+      const url = buildApiUrl(API_ENDPOINTS.authCsrf);
+      const urlCheck = validateApiRequestUrl(url);
+      if (!urlCheck.ok) return '';
+
+      const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      const contentType = response.headers?.get?.('content-type') || '';
+      let payload = null;
+      if (contentType.includes('application/json')) {
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+      } else {
+        try {
+          const text = await response.text();
+          if (text && text.trim().startsWith('{')) {
+            payload = JSON.parse(text);
+          }
+        } catch {
+          payload = null;
+        }
+      }
+
+      const token = String(
+        payload?.data?.csrfToken ||
+          payload?.data?.csrf_token ||
+          payload?.csrfToken ||
+          payload?.csrf_token ||
+          ''
+      ).trim();
+
+      if (!response.ok || !token) {
+        return '';
+      }
+
+      bootstrappedAdminCsrfToken = token;
+      const current = getAdminAuthSession();
+      if (current && !current.csrfToken) {
+        setAdminAuthSession({
+          ...current,
+          csrfToken: token,
+        });
+      }
+      return token;
+    } catch {
+      return '';
+    } finally {
+      activeAdminCsrfPromise = null;
+    }
+  })();
+
+  return activeAdminCsrfPromise;
 }
 
 function hasRefreshableSession() {
@@ -662,9 +712,29 @@ export async function apiRequest(endpoint, options = {}) {
     ArrayBuffer.isView(options.body);
 
   const method = String(options.method || 'GET').toUpperCase();
+  const isMutatingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  const isAuthPublicEndpoint =
+    normalizedEndpoint.includes('/auth/login') ||
+    normalizedEndpoint.includes('/auth/refresh') ||
+    normalizedEndpoint.includes('/auth/csrf') ||
+    normalizedEndpoint.includes('/auth/accept-invite') ||
+    normalizedEndpoint.includes('/auth/forgot-password') ||
+    normalizedEndpoint.includes('/auth/reset-password');
+  const isAuthEndpoint =
+    isAuthPublicEndpoint || normalizedEndpoint.includes('/auth/logout');
+
+  if (
+    isMutatingMethod &&
+    !isAuthPublicEndpoint &&
+    !getCsrfToken() &&
+    getAdminAuthSession() &&
+    getDataAdapterMode() === 'api'
+  ) {
+    await bootstrapAdminCsrf();
+  }
+
   const accessToken = options.token ?? getAccessToken();
   const csrfToken = getCsrfToken();
-  const isMutatingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method);
   const headers = {
     ...(isBinaryBody
       ? { Accept: 'application/json' }
@@ -678,6 +748,7 @@ export async function apiRequest(endpoint, options = {}) {
     timeoutMs: _ignoredTimeout,
     token: _ignoredToken,
     _isRetry,
+    _isCsrfRetry,
     skipAuthRefresh,
     ...restFetchOptions
   } = options;
@@ -717,15 +788,6 @@ export async function apiRequest(endpoint, options = {}) {
       }
     }
 
-    // Attempt automatic token refresh once on 401 when refreshToken is present
-    const isAuthEndpoint =
-      normalizedEndpoint.includes('/auth/login') ||
-      normalizedEndpoint.includes('/auth/refresh') ||
-      normalizedEndpoint.includes('/auth/logout') ||
-      normalizedEndpoint.includes('/auth/accept-invite') ||
-      normalizedEndpoint.includes('/auth/forgot-password') ||
-      normalizedEndpoint.includes('/auth/reset-password');
-
     if (
       response.status === 401 &&
       !_isRetry &&
@@ -745,6 +807,23 @@ export async function apiRequest(endpoint, options = {}) {
 
     if (!response.ok || (payload && typeof payload === 'object' && payload.success === false)) {
       const parsedErr = parseApiErrorPayload(payload, response.status);
+      if (
+        response.status === 403 &&
+        parsedErr.code === 'CSRF_VALIDATION_FAILED' &&
+        !_isCsrfRetry &&
+        !isAuthPublicEndpoint &&
+        isMutatingMethod &&
+        getAdminAuthSession() &&
+        getDataAdapterMode() === 'api'
+      ) {
+        const refreshedCsrf = await bootstrapAdminCsrf();
+        if (refreshedCsrf) {
+          return apiRequest(endpoint, {
+            ...options,
+            _isCsrfRetry: true,
+          });
+        }
+      }
       const isNotFound =
         response.status === 404 ||
         parsedErr.code === 'NOT_FOUND' ||
@@ -817,7 +896,10 @@ export async function verifyAdminSession() {
     };
   }
 
-  // policy === 'session_required' -> GET /api/v1/auth/me
+  // policy === 'session_required' -> bootstrap CSRF if missing, then GET /api/v1/auth/me
+  if (!getCsrfToken()) {
+    await bootstrapAdminCsrf();
+  }
   const res = await apiRequest(API_ENDPOINTS.authMe, { method: 'GET' });
   const rawAdmin =
     res.data?.admin ||
@@ -877,7 +959,7 @@ export async function verifyAdminSession() {
   setAdminAuthSession({
     accessToken: existing?.accessToken || '',
     refreshToken: existing?.refreshToken || '',
-    csrfToken: res.data?.csrfToken || res.data?.csrf_token || existing?.csrfToken || '',
+    csrfToken: res.data?.csrfToken || res.data?.csrf_token || getCsrfToken() || '',
     expiresIn: existing?.expiresIn || 900,
     expiresAt: existing?.expiresAt,
     admin: rawAdmin,
@@ -946,7 +1028,9 @@ export async function loginAdmin({ email, password } = {}) {
   const payloadData = res.data && typeof res.data === 'object' ? res.data : {};
   const accessToken = String(payloadData.accessToken || payloadData.access_token || '').trim();
   const refreshToken = String(payloadData.refreshToken || payloadData.refresh_token || '').trim();
-  const csrfToken = String(payloadData.csrfToken || payloadData.csrf_token || '').trim();
+  const csrfToken = String(
+    payloadData.csrfToken || payloadData.csrf_token || getCsrfToken() || ''
+  ).trim();
   const rawExpiresIn = payloadData.expiresIn ?? payloadData.expires_in;
   const expiresIn =
     rawExpiresIn === undefined || rawExpiresIn === null || rawExpiresIn === ''
@@ -963,7 +1047,7 @@ export async function loginAdmin({ email, password } = {}) {
     !admin ||
     !admin.email ||
     !admin.role ||
-    (!accessToken && !csrfToken && !refreshToken) ||
+    (!accessToken && !csrfToken && !refreshToken && payloadData.authMode !== 'cookie') ||
     !Number.isFinite(expiresIn) ||
     expiresIn <= 0
   ) {
@@ -1040,6 +1124,9 @@ export async function logoutAdmin() {
 
   try {
     if (isApi && hadSession) {
+      if (!getCsrfToken()) {
+        await bootstrapAdminCsrf();
+      }
       serverRes = await apiRequest(API_ENDPOINTS.authLogout, {
         method: 'POST',
         body: refreshToken ? { refreshToken } : {},

@@ -29,7 +29,7 @@ export default function AdminAcceptInvitePage() {
       extractTokenDetailsFromUrl({
         hash: location.hash,
         search: location.search,
-        allowQueryFallback: true,
+        allowQueryFallback: false,
       }).token
   );
   const [hasTokenFromUrl, setHasTokenFromUrl] = useState(() =>
@@ -37,7 +37,7 @@ export default function AdminAcceptInvitePage() {
       extractTokenDetailsFromUrl({
         hash: location.hash,
         search: location.search,
-        allowQueryFallback: true,
+        allowQueryFallback: false,
       }).token
     )
   );
@@ -54,7 +54,7 @@ export default function AdminAcceptInvitePage() {
     const { token: incomingToken } = extractTokenDetailsFromUrl({
       hash: location.hash,
       search: location.search,
-      allowQueryFallback: true,
+      allowQueryFallback: false,
     });
     if (incomingToken) {
       setToken(incomingToken);
@@ -244,7 +244,7 @@ export default function AdminAcceptInvitePage() {
                 label="New Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
+                placeholder="Minimum 12 characters"
                 autoComplete="new-password"
                 required
                 showStrength

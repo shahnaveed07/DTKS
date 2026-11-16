@@ -261,6 +261,18 @@ export function sanitizeSafeMediaUrl(
  */
 export function sanitizeTrackedOrder(order) {
   if (!order || typeof order !== 'object' || Array.isArray(order)) return null;
+  const rawHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+  const statusHistory = rawHistory
+    .filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => ({
+      id: entry.id ?? null,
+      previousStatus: entry.previousStatus ?? entry.previous_status ?? '',
+      newStatus: entry.newStatus ?? entry.new_status ?? '',
+      notes: entry.notes ?? '',
+      createdAt: entry.createdAt ?? entry.created_at ?? null,
+    }))
+    .filter((entry) => entry.newStatus || entry.notes || entry.createdAt);
+
   const safeFields = {
     id: order.id ?? null,
     referenceId: order.referenceId ?? '',
@@ -269,6 +281,7 @@ export function sanitizeTrackedOrder(order) {
     packageId: order.packageId ?? '',
     packageTitle: order.packageTitle ?? '',
     status: order.status ?? '',
+    urgency: order.urgency ?? '',
     quotationAmount: order.quotationAmount ?? null,
     quotationCurrency: order.quotationCurrency ?? 'INR',
     quotationNotes: order.quotationNotes ?? '',
@@ -280,6 +293,7 @@ export function sanitizeTrackedOrder(order) {
     maintenanceInterest: order.maintenanceInterest ?? '',
     maintenancePlanSelected: order.maintenancePlanSelected ?? '',
     estimatedBudget: order.estimatedBudget ?? '',
+    statusHistory,
     createdAt: order.createdAt ?? null,
     updatedAt: order.updatedAt ?? null,
   };

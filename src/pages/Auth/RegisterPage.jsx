@@ -331,7 +331,7 @@ export default function RegisterPage() {
                 label="Password"
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="At least 8 characters"
+                placeholder="At least 12 characters"
                 autoComplete="new-password"
                 required
                 showStrength

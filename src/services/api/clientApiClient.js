@@ -24,6 +24,8 @@ import {
 export const CLIENT_SESSION_STORAGE_KEY = 'dtks_client_auth_session_v1';
 
 let memoryClientSession = null;
+let bootstrappedClientCsrfToken = '';
+let activeClientCsrfPromise = null;
 const clientAuthListeners = new Set();
 let activeClientRefreshPromise = null;
 
@@ -104,6 +106,7 @@ export function setClientAuthSession(sessionData) {
 
 export function clearClientAuthSession() {
   memoryClientSession = null;
+  bootstrappedClientCsrfToken = '';
   purgeLegacyClientStorageTokens();
   notifyClientAuthListeners();
 }
@@ -116,33 +119,76 @@ export function getClientRefreshToken() {
   return getClientAuthSession()?.refreshToken || '';
 }
 
-function readClientCookieValue(name) {
-  try {
-    if (typeof document === 'undefined' || typeof document.cookie !== 'string') return '';
-    const prefix = `${name}=`;
-    for (const part of document.cookie.split(';')) {
-      const trimmed = part.trim();
-      if (trimmed.startsWith(prefix)) {
-        const raw = trimmed.slice(prefix.length);
-        try {
-          return decodeURIComponent(raw);
-        } catch {
-          return raw;
-        }
-      }
-    }
-  } catch {
-    // Ignore
-  }
-  return '';
+export function getClientCsrfToken() {
+  return getClientAuthSession()?.csrfToken || bootstrappedClientCsrfToken || '';
 }
 
-export function getClientCsrfToken() {
-  return (
-    getClientAuthSession()?.csrfToken ||
-    readClientCookieValue('dtks_client_csrf_token') ||
-    ''
-  );
+export async function bootstrapClientCsrf() {
+  if (getDataAdapterMode() !== 'api') return '';
+  if (activeClientCsrfPromise) return activeClientCsrfPromise;
+
+  activeClientCsrfPromise = (async () => {
+    try {
+      const url = buildApiUrl(API_ENDPOINTS.clientAuthCsrf);
+      const urlCheck = validateApiRequestUrl(url);
+      if (!urlCheck.ok) return '';
+
+      const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      const contentType = response.headers?.get?.('content-type') || '';
+      let payload = null;
+      if (contentType.includes('application/json')) {
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+      } else {
+        try {
+          const text = await response.text();
+          if (text && text.trim().startsWith('{')) {
+            payload = JSON.parse(text);
+          }
+        } catch {
+          payload = null;
+        }
+      }
+
+      const token = String(
+        payload?.data?.csrfToken ||
+          payload?.data?.csrf_token ||
+          payload?.csrfToken ||
+          payload?.csrf_token ||
+          ''
+      ).trim();
+
+      if (!response.ok || !token) {
+        return '';
+      }
+
+      bootstrappedClientCsrfToken = token;
+      const current = getClientAuthSession();
+      if (current && !current.csrfToken) {
+        setClientAuthSession({
+          ...current,
+          csrfToken: token,
+        });
+      }
+      return token;
+    } catch {
+      return '';
+    } finally {
+      activeClientCsrfPromise = null;
+    }
+  })();
+
+  return activeClientCsrfPromise;
 }
 
 function hasRefreshableClientSession() {
@@ -263,9 +309,29 @@ export async function clientApiRequest(endpoint, options = {}) {
 
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const method = String(options.method || 'GET').toUpperCase();
+  const isMutatingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  const isClientAuthPublicEndpoint =
+    normalizedEndpoint.includes('/client/auth/login') ||
+    normalizedEndpoint.includes('/client/auth/register') ||
+    normalizedEndpoint.includes('/client/auth/verify-email') ||
+    normalizedEndpoint.includes('/client/auth/resend-verification') ||
+    normalizedEndpoint.includes('/client/auth/refresh') ||
+    normalizedEndpoint.includes('/client/auth/csrf') ||
+    normalizedEndpoint.includes('/client/auth/forgot-password') ||
+    normalizedEndpoint.includes('/client/auth/reset-password');
+
+  if (
+    isMutatingMethod &&
+    !isClientAuthPublicEndpoint &&
+    !getClientCsrfToken() &&
+    getClientAuthSession() &&
+    getDataAdapterMode() === 'api'
+  ) {
+    await bootstrapClientCsrf();
+  }
+
   const accessToken = options.token ?? getClientAccessToken();
   const csrfToken = getClientCsrfToken();
-  const isMutatingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method);
 
   const headers = {
     ...(isFormData
@@ -280,6 +346,7 @@ export async function clientApiRequest(endpoint, options = {}) {
     timeoutMs: _ignoredTimeout,
     token: _ignoredToken,
     _isRetry,
+    _isCsrfRetry,
     skipAuthRefresh,
     ...restFetchOptions
   } = options;
@@ -319,15 +386,6 @@ export async function clientApiRequest(endpoint, options = {}) {
       }
     }
 
-    const isClientAuthPublicEndpoint =
-      normalizedEndpoint.includes('/client/auth/login') ||
-      normalizedEndpoint.includes('/client/auth/register') ||
-      normalizedEndpoint.includes('/client/auth/verify-email') ||
-      normalizedEndpoint.includes('/client/auth/resend-verification') ||
-      normalizedEndpoint.includes('/client/auth/refresh') ||
-      normalizedEndpoint.includes('/client/auth/forgot-password') ||
-      normalizedEndpoint.includes('/client/auth/reset-password');
-
     if (
       response.status === 401 &&
       !_isRetry &&
@@ -347,6 +405,23 @@ export async function clientApiRequest(endpoint, options = {}) {
 
     if (!response.ok || (payload && typeof payload === 'object' && payload.success === false)) {
       const parsedErr = parseApiErrorPayload(payload, response.status);
+      if (
+        response.status === 403 &&
+        parsedErr.code === 'CSRF_VALIDATION_FAILED' &&
+        !_isCsrfRetry &&
+        !isClientAuthPublicEndpoint &&
+        isMutatingMethod &&
+        getClientAuthSession() &&
+        getDataAdapterMode() === 'api'
+      ) {
+        const refreshedCsrf = await bootstrapClientCsrf();
+        if (refreshedCsrf) {
+          return clientApiRequest(endpoint, {
+            ...options,
+            _isCsrfRetry: true,
+          });
+        }
+      }
       return createServiceError(parsedErr.message, payload?.data ?? null, {
         errorType: response.status === 404 ? 'NotFoundError' : parsedErr.code || 'HttpError',
         errorCode: parsedErr.code,

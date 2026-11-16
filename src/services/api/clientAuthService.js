@@ -5,11 +5,13 @@ import {
   getDataAdapterMode,
 } from './apiClient.js';
 import {
+  bootstrapClientCsrf,
   clearClientAuthSession,
   clientApiRequest,
   getClientAccessPolicy,
   getClientAccessToken,
   getClientAuthSession,
+  getClientCsrfToken,
   getClientRefreshToken,
   setClientAuthSession,
   subscribeClientAuth,
@@ -101,7 +103,10 @@ export const clientAuthService = {
       return { authenticated: true, client: profile, policy, message: 'Local demo client session active.' };
     }
 
-    // API mode -> verify strictly via backend
+    // API mode -> bootstrap CSRF if missing, then verify strictly via backend
+    if (!getClientCsrfToken()) {
+      await bootstrapClientCsrf();
+    }
     const res = await clientApiRequest(API_ENDPOINTS.clientAuthMe, { method: 'GET' });
     const rawClient =
       res.data?.client ||
@@ -113,9 +118,14 @@ export const clientAuthService = {
     if (authenticated) {
       const profile = sanitizeClientProfile(rawClient);
       const existing = getClientAuthSession();
-      if (existing) {
-        setClientAuthSession({ ...existing, client: profile });
-      }
+      setClientAuthSession({
+        accessToken: existing?.accessToken || '',
+        refreshToken: existing?.refreshToken || '',
+        csrfToken: res.data?.csrfToken || res.data?.csrf_token || existing?.csrfToken || getClientCsrfToken() || '',
+        expiresIn: existing?.expiresIn || 900,
+        expiresAt: existing?.expiresAt,
+        client: profile,
+      });
       return {
         authenticated: true,
         client: profile,
@@ -385,7 +395,7 @@ export const clientAuthService = {
       const session = setClientAuthSession({
         accessToken: payloadData.accessToken || payloadData.access_token || '',
         refreshToken: payloadData.refreshToken || payloadData.refresh_token || '',
-        csrfToken: payloadData.csrfToken || payloadData.csrf_token || '',
+        csrfToken: payloadData.csrfToken || payloadData.csrf_token || getClientCsrfToken() || '',
         expiresIn: Number(payloadData.expiresIn ?? payloadData.expires_in ?? 900),
         client,
       });
@@ -449,6 +459,9 @@ export const clientAuthService = {
 
     try {
       if (isApi && hadSession) {
+        if (!getClientCsrfToken()) {
+          await bootstrapClientCsrf();
+        }
         serverRes = await clientApiRequest(API_ENDPOINTS.clientAuthLogout, {
           method: 'POST',
           body: {
@@ -700,6 +713,9 @@ export const clientAuthService = {
 
   async revokeAllSessions() {
     if (getDataAdapterMode() === 'api') {
+      if (!getClientCsrfToken()) {
+        await bootstrapClientCsrf();
+      }
       const res = await clientApiRequest(API_ENDPOINTS.clientAuthLogout, {
         method: 'POST',
         body: { allDevices: true },

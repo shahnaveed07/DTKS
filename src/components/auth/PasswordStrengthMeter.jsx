@@ -92,7 +92,7 @@ export function PasswordInput({
           </p>
           <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-[#64756B]">
             {[
-              { ok: strength.checks.minLength, text: '8+ characters' },
+              { ok: strength.checks.minLength, text: '12+ characters' },
               { ok: strength.checks.hasLower && strength.checks.hasUpper, text: 'Upper & lowercase' },
               { ok: strength.checks.hasNumber, text: 'At least 1 number' },
               { ok: strength.checks.hasSymbol, text: 'Special symbol' },

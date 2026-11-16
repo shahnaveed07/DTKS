@@ -21,7 +21,7 @@ export default function VerifyEmailPage() {
       extractTokenDetailsFromUrl({
         hash: location.hash,
         search: location.search,
-        allowQueryFallback: true,
+        allowQueryFallback: false,
       }).token
   );
   const { settings, addToast } = useApp();
@@ -77,7 +77,7 @@ export default function VerifyEmailPage() {
     const { token: incomingToken } = extractTokenDetailsFromUrl({
       hash: location.hash,
       search: location.search,
-      allowQueryFallback: true,
+      allowQueryFallback: false,
     });
 
     if (typeof window !== 'undefined' && window.history?.replaceState) {

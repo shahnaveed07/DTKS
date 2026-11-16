@@ -138,6 +138,7 @@ export default function ClientSecurityPage() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
+            placeholder="Minimum 12 characters"
             required
             showStrength
             error={errors.newPassword}

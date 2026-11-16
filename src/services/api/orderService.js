@@ -17,6 +17,12 @@ import {
   getDataAdapterMode,
   getSubmissionMode,
 } from './apiClient.js';
+import {
+  bootstrapClientCsrf,
+  clientApiRequest,
+  getClientAuthSession,
+  getClientCsrfToken,
+} from './clientApiClient.js';
 
 export const orderService = {
   getAll() {
@@ -129,7 +135,24 @@ export const orderService = {
 
   async submitOrder(payload) {
     if (getDataAdapterMode() === 'api') {
-      const res = await apiRequest(API_ENDPOINTS.orders, { method: 'POST', body: payload });
+      if (getClientAuthSession() && !getClientCsrfToken()) {
+        await bootstrapClientCsrf();
+      }
+      let res = await clientApiRequest(API_ENDPOINTS.orders, {
+        method: 'POST',
+        body: payload,
+        skipAuthRefresh: true,
+      });
+      if (!res.success && res.statusCode === 403 && res.errorCode === 'CSRF_VALIDATION_FAILED') {
+        const refreshedCsrf = await bootstrapClientCsrf();
+        if (refreshedCsrf) {
+          res = await clientApiRequest(API_ENDPOINTS.orders, {
+            method: 'POST',
+            body: payload,
+            skipAuthRefresh: true,
+          });
+        }
+      }
       if (!res.success) return res;
       return createServiceResponse(res.data?.order || res.data, res.message || 'Order submitted.');
     }
@@ -191,14 +214,30 @@ export const orderService = {
     return createServiceResponse(res, 'Order deleted.');
   },
 
-  async trackOrder(referenceId, email) {
+  async trackOrder(tokenOrRef, legacyEmail) {
     if (getDataAdapterMode() === 'api') {
-      const refParam = encodeURIComponent(String(referenceId || '').trim());
-      const emailParam = encodeURIComponent(String(email || '').trim());
-      const res = await apiRequest(
-        `${API_ENDPOINTS.orderTrack}?ref=${refParam}&email=${emailParam}`,
-        { method: 'GET' }
-      );
+      const rawToken =
+        tokenOrRef && typeof tokenOrRef === 'object'
+          ? tokenOrRef.token ?? tokenOrRef.trackingToken ?? ''
+          : tokenOrRef;
+      const cleanToken = String(rawToken || '').trim();
+      if (!cleanToken) {
+        return createServiceError(
+          'Please enter the tracking token from your order confirmation email.',
+          null,
+          {
+            errorType: 'VALIDATION_ERROR',
+            errorCode: 'VALIDATION_ERROR',
+            statusCode: 400,
+            details: { token: 'Tracking token is required.' },
+          }
+        );
+      }
+      const res = await clientApiRequest(API_ENDPOINTS.orderTrack, {
+        method: 'POST',
+        body: { token: cleanToken },
+        skipAuthRefresh: true,
+      });
       if (!res.success) return res;
       const sanitized = sanitizeTrackedOrder(res.data?.order || res.data);
       return createServiceResponse(sanitized, res.message);
@@ -214,7 +253,7 @@ export const orderService = {
         }
       );
     }
-    const found = this.track(referenceId, email);
+    const found = this.track(tokenOrRef, legacyEmail);
     if (!found) {
       return createServiceError(
         'No matching website order found for this Reference ID and Email.',

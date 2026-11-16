@@ -30,7 +30,7 @@ export function isValidPhoneNumber(value) {
 export function evaluatePasswordStrength(password = '') {
   const raw = String(password || '');
   const checks = {
-    minLength: raw.length >= 8,
+    minLength: raw.length >= 12,
     hasLower: /[a-z]/.test(raw),
     hasUpper: /[A-Z]/.test(raw),
     hasNumber: /\d/.test(raw),
@@ -41,7 +41,7 @@ export function evaluatePasswordStrength(password = '') {
   if (checks.minLength) metCount += 1;
   if (checks.hasLower && checks.hasUpper) metCount += 1;
   if (checks.hasNumber) metCount += 1;
-  if (checks.hasSymbol || raw.length >= 12) metCount += 1;
+  if (checks.hasSymbol || raw.length >= 16) metCount += 1;
 
   let label = 'Too short';
   let tone = 'weak';
@@ -49,7 +49,7 @@ export function evaluatePasswordStrength(password = '') {
     label = 'Enter a password';
     tone = 'empty';
   } else if (!checks.minLength) {
-    label = 'Weak — minimum 8 characters';
+    label = 'Weak — minimum 12 characters';
     tone = 'weak';
   } else if (metCount <= 2) {
     label = 'Fair — add uppercase, numbers, or symbols';
@@ -98,7 +98,7 @@ export function validateClientRegistrationInput({
   if (!password) {
     errors.password = 'Password is required.';
   } else if (!strength.checks.minLength) {
-    errors.password = 'Password must be at least 8 characters long.';
+    errors.password = 'Password must be at least 12 characters long.';
   } else if (!strength.isAcceptable) {
     errors.password = 'Include lowercase letters with at least one uppercase letter or number.';
   }
@@ -162,7 +162,7 @@ export function validateResetPasswordInput({
   if (!newPassword) {
     errors.newPassword = 'New password is required.';
   } else if (!strength.checks.minLength) {
-    errors.newPassword = 'New password must be at least 8 characters long.';
+    errors.newPassword = 'New password must be at least 12 characters long.';
   } else if (!strength.isAcceptable) {
     errors.newPassword = 'Include lowercase letters with at least one uppercase letter or number.';
   }
@@ -200,7 +200,7 @@ export function validateAcceptInviteInput({
   if (!password) {
     errors.password = 'Password is required.';
   } else if (!strength.checks.minLength) {
-    errors.password = 'Password must be at least 8 characters long.';
+    errors.password = 'Password must be at least 12 characters long.';
   } else if (!strength.isAcceptable) {
     errors.password = 'Include lowercase letters with at least one uppercase letter or number.';
   }
@@ -235,7 +235,7 @@ export function validateChangePasswordInput({
   if (!newPassword) {
     errors.newPassword = 'New password is required.';
   } else if (!strength.checks.minLength) {
-    errors.newPassword = 'New password must be at least 8 characters long.';
+    errors.newPassword = 'New password must be at least 12 characters long.';
   } else if (!strength.isAcceptable) {
     errors.newPassword = 'Include lowercase letters with at least one uppercase letter or number.';
   } else if (currentPassword && newPassword === currentPassword) {

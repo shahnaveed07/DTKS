@@ -188,8 +188,13 @@ export default function RequestQuotePage() {
       return;
     }
 
-    const orderRecord = res.data || res;
-    setSubmittedOrder(orderRecord);
+    const rawOrder = res.data || res;
+    if (rawOrder && typeof rawOrder === 'object') {
+      const { trackingToken: _discardedTrackingToken, ...safeOrderRecord } = rawOrder;
+      setSubmittedOrder(safeOrderRecord);
+    } else {
+      setSubmittedOrder(rawOrder);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -223,7 +228,7 @@ export default function RequestQuotePage() {
               </h1>
               <p className="mt-2 text-sm text-[#64756B] leading-relaxed">
                 {submissionMode === 'api'
-                  ? 'Your website development request has been received by DreamTech Kashmir Solutions. Save your Reference ID below to track project status.'
+                  ? 'Your website development request has been received by DreamTech Kashmir Solutions. Save your Reference ID below for support inquiries, and check your email for your confidential order tracking link.'
                   : 'Local development mode: this website request is stored only inside your current browser’s LocalStorage and has not been transmitted to a remote server.'}
               </p>
 
@@ -251,14 +256,31 @@ export default function RequestQuotePage() {
                 <ol className="list-decimal list-inside space-y-1.5 text-xs sm:text-sm text-[#64756B]">
                   <li>Your website request enters <strong className="text-[#17231C]">New Request</strong> status.</li>
                   <li>Our team reviews your pages, design style, domain/hosting setup, and expected delivery date ({submittedOrder.expectedDeliveryDate}).</li>
-                  <li>Track updates anytime using Reference ID and email ({submittedOrder.customerEmail}).</li>
+                  <li>
+                    {submissionMode === 'api' ? (
+                      <>
+                        Track live updates anytime using the confidential tracking link emailed to{' '}
+                        <strong className="text-[#17231C]">{submittedOrder.customerEmail}</strong>, or sign in to your{' '}
+                        <Link to="/login" className="text-[#16834A] hover:underline font-medium">
+                          Client Portal
+                        </Link>
+                        .
+                      </>
+                    ) : (
+                      <>Track updates anytime using Reference ID and email ({submittedOrder.customerEmail}).</>
+                    )}
+                  </li>
                 </ol>
               </div>
 
               <div className="mt-8 pt-6 border-t border-[#E3EBE5] flex flex-wrap gap-3">
                 <Link
                   to="/track-order"
-                  state={{ prefillReferenceId: submittedOrder.referenceId }}
+                  state={
+                    submissionMode === 'api'
+                      ? undefined
+                      : { prefillReferenceId: submittedOrder.referenceId }
+                  }
                   className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-[#16834A] hover:bg-[#116438] text-white transition-colors whitespace-nowrap"
                 >
                   Track This Request
@@ -848,7 +870,9 @@ export default function RequestQuotePage() {
                     Step 6: Customer Contact Details
                   </h2>
                   <p className="mt-1 text-sm text-[#64756B]">
-                    Your email is also used alongside your order reference ID on the Order Tracking page.
+                    {submissionMode === 'api'
+                      ? 'We send project confirmation, quotation updates, and your confidential order tracking link to this email address.'
+                      : 'Your email is also used alongside your order reference ID on the Order Tracking page.'}
                   </p>
                 </div>
 

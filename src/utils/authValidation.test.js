@@ -28,12 +28,15 @@ test('evaluatePasswordStrength scores empty, weak, fair, good, and strong passwo
   assert.equal(evaluatePasswordStrength('').score, 0);
   assert.equal(evaluatePasswordStrength('abc').checks.minLength, false);
   assert.equal(evaluatePasswordStrength('abc').isAcceptable, false);
+  assert.equal(evaluatePasswordStrength('Abcdefg1').checks.minLength, false);
+  assert.equal(evaluatePasswordStrength('Abcdefg1').isAcceptable, false);
 
-  const fair = evaluatePasswordStrength('abcdefgh');
+  const fair = evaluatePasswordStrength('abcdefghijkl');
   assert.equal(fair.checks.minLength, true);
   assert.equal(fair.isAcceptable, false);
 
-  const good = evaluatePasswordStrength('Abcdefg1');
+  const good = evaluatePasswordStrength('Abcdefg12345');
+  assert.equal(good.checks.minLength, true);
   assert.equal(good.isAcceptable, true);
   assert.ok(good.score >= 3);
 
@@ -42,12 +45,12 @@ test('evaluatePasswordStrength scores empty, weak, fair, good, and strong passwo
   assert.equal(strong.label, 'Strong');
 });
 
-test('validateClientRegistrationInput enforces all required fields, password match, terms, and preserves confirmPassword', () => {
+test('validateClientRegistrationInput enforces all required fields, 12-char password floor, password match, terms, and preserves confirmPassword', () => {
   const invalid = validateClientRegistrationInput({
     fullName: 'A',
     email: 'not-an-email',
     phone: '123',
-    password: 'weak',
+    password: 'Password1!',
     confirmPassword: 'different',
     acceptTerms: false,
   });
@@ -56,7 +59,7 @@ test('validateClientRegistrationInput enforces all required fields, password mat
   assert.ok(invalid.errors.fullName);
   assert.ok(invalid.errors.email);
   assert.ok(invalid.errors.phone);
-  assert.ok(invalid.errors.password);
+  assert.match(invalid.errors.password, /12 characters/);
   assert.ok(invalid.errors.confirmPassword);
   assert.ok(invalid.errors.acceptTerms);
 
@@ -81,6 +84,14 @@ test('validateLoginCredentials, validateResetPasswordInput, validateAcceptInvite
     true
   );
 
+  const shortReset = validateResetPasswordInput({
+    token: 'reset-tok-1',
+    newPassword: 'ShortPass1!',
+    confirmPassword: 'ShortPass1!',
+  });
+  assert.equal(shortReset.isValid, false);
+  assert.match(shortReset.errors.newPassword, /12 characters/);
+
   const badReset = validateResetPasswordInput({
     token: '',
     newPassword: 'Password123!',
@@ -100,12 +111,12 @@ test('validateLoginCredentials, validateResetPasswordInput, validateAcceptInvite
 
   const badInvite = validateAcceptInviteInput({
     token: '',
-    password: 'weak',
+    password: 'ShortPass1!',
     confirmPassword: 'other',
   });
   assert.equal(badInvite.isValid, false);
   assert.ok(badInvite.errors.token);
-  assert.ok(badInvite.errors.password);
+  assert.match(badInvite.errors.password, /12 characters/);
   assert.ok(badInvite.errors.confirmPassword);
 
   const goodInvite = validateAcceptInviteInput({
@@ -119,6 +130,14 @@ test('validateLoginCredentials, validateResetPasswordInput, validateAcceptInvite
     password: 'Password123!',
     confirmPassword: 'Password123!',
   });
+
+  const shortChange = validateChangePasswordInput({
+    currentPassword: 'Password123!',
+    newPassword: 'ShortPass1!',
+    confirmPassword: 'ShortPass1!',
+  });
+  assert.equal(shortChange.isValid, false);
+  assert.match(shortChange.errors.newPassword, /12 characters/);
 
   const sameChange = validateChangePasswordInput({
     currentPassword: 'Password123!',

@@ -22,7 +22,7 @@ export default function ResetPasswordPage() {
       extractTokenDetailsFromUrl({
         hash: location.hash,
         search: location.search,
-        allowQueryFallback: true,
+        allowQueryFallback: false,
       }).token
   );
   const [hasTokenFromUrl, setHasTokenFromUrl] = useState(() =>
@@ -30,7 +30,7 @@ export default function ResetPasswordPage() {
       extractTokenDetailsFromUrl({
         hash: location.hash,
         search: location.search,
-        allowQueryFallback: true,
+        allowQueryFallback: false,
       }).token
     )
   );
@@ -47,7 +47,7 @@ export default function ResetPasswordPage() {
     const { token: incomingToken } = extractTokenDetailsFromUrl({
       hash: location.hash,
       search: location.search,
-      allowQueryFallback: true,
+      allowQueryFallback: false,
     });
     if (incomingToken) {
       setToken(incomingToken);
@@ -184,7 +184,7 @@ export default function ResetPasswordPage() {
                   label="New Password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
+                  placeholder="Minimum 12 characters"
                   autoComplete="new-password"
                   required
                   showStrength
