@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -12,6 +12,8 @@ import {
 import { getAdminAccessPolicy, resetAdminPassword } from '../../services/api/apiClient.js';
 import { useApp } from '../../context/AppContext.jsx';
 import {
+  buildSanitizedAdminResetUrl,
+  extractAdminResetTokenFromUrl,
   formatAdminRecoveryError,
   validateResetPasswordInput,
 } from '../../utils/authValidation.js';
@@ -20,12 +22,15 @@ import BrandLogo from '../../components/common/BrandLogo.jsx';
 import SEO from '../../components/common/SEO.jsx';
 
 export default function AdminResetPasswordPage() {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { addToast } = useApp();
   const policy = getAdminAccessPolicy();
 
-  const token = String(searchParams.get('token') || '').trim();
+  // Hold token strictly in volatile component state; never persist in web storage or URL history.
+  const [token, setToken] = useState(() =>
+    extractAdminResetTokenFromUrl({ hash: location.hash })
+  );
   const hasToken = Boolean(token);
 
   const [newPassword, setNewPassword] = useState('');
@@ -36,6 +41,24 @@ export default function AdminResetPasswordPage() {
   const [resetComplete, setResetComplete] = useState(false);
   const inFlightRef = useRef(false);
   const redirectTimerRef = useRef(null);
+
+  useEffect(() => {
+    const incomingToken = extractAdminResetTokenFromUrl({ hash: location.hash });
+    if (incomingToken) {
+      setToken(incomingToken);
+    }
+
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      const { nextUrl, hadTokenInUrl } = buildSanitizedAdminResetUrl({
+        pathname: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+      });
+      if (hadTokenInUrl) {
+        window.history.replaceState(window.history.state, document.title, nextUrl);
+      }
+    }
+  }, [location.hash, location.search]);
 
   useEffect(() => {
     return () => {
@@ -90,6 +113,7 @@ export default function AdminResetPasswordPage() {
         return;
       }
 
+      setToken('');
       setNewPassword('');
       setConfirmPassword('');
       setResetComplete(true);
@@ -108,7 +132,11 @@ export default function AdminResetPasswordPage() {
   if (policy === 'blocked_production_local') {
     return (
       <div className="min-h-screen bg-[#F7FAF7] flex flex-col justify-center items-center p-6">
-        <SEO noindex fullTitle="Reset Administrator Password | DreamTech Kashmir Solutions (DTKS)" />
+        <SEO
+          noindex
+          referrerPolicy="no-referrer"
+          fullTitle="Reset Administrator Password | DreamTech Kashmir Solutions (DTKS)"
+        />
         <div className="max-w-lg w-full rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-5">
           <div className="flex items-center justify-between">
             <BrandLogo variant="header" />
@@ -139,7 +167,11 @@ export default function AdminResetPasswordPage() {
 
   return (
     <div className="min-h-screen bg-[#F7FAF7] flex flex-col justify-center items-center p-6">
-      <SEO noindex fullTitle="Reset Administrator Password | DreamTech Kashmir Solutions (DTKS)" />
+      <SEO
+        noindex
+        referrerPolicy="no-referrer"
+        fullTitle="Reset Administrator Password | DreamTech Kashmir Solutions (DTKS)"
+      />
 
       <div className="max-w-md w-full rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-6">
         <div className="flex items-center justify-between">
@@ -191,7 +223,7 @@ export default function AdminResetPasswordPage() {
             >
               <p className="font-semibold">Invalid or Missing Recovery Link</p>
               <p>
-                No valid password reset token was found in this URL. Please request a fresh administrator password reset link from the recovery page.
+                No active password reset token was found. Open the link directly from your email, or request a new administrator password reset link below.
               </p>
             </div>
 

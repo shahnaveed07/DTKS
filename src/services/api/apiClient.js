@@ -1009,9 +1009,13 @@ export async function refreshAdminSession() {
   return createServiceResponse(refreshed, 'Session token refreshed.');
 }
 
+export const ADMIN_FORGOT_PASSWORD_NEUTRAL_MESSAGE =
+  'If an eligible administrator account exists for this email address, a secure password recovery link has been sent.';
+
 /**
  * Requests an administrator password reset email via POST /api/v1/auth/forgot-password.
- * Strictly isolated from client auth endpoints and never creates fake recovery flows in production.
+ * Strictly isolated from client auth endpoints, enforces HTTPS in production, and prevents
+ * account enumeration by normalizing delivery-failure signals into uniform responses.
  */
 export async function requestAdminPasswordReset({ email } = {}) {
   const policy = getAdminAccessPolicy();
@@ -1039,6 +1043,19 @@ export async function requestAdminPasswordReset({ email } = {}) {
     );
   }
 
+  const endpointUrl = buildApiUrl(API_ENDPOINTS.authForgotPassword);
+  if (isProductionEnvironment() && /^http:\/\//i.test(endpointUrl)) {
+    return createServiceError(
+      'Administrator password recovery requires a secure HTTPS API endpoint.',
+      null,
+      {
+        errorType: 'InsecureTransportError',
+        errorCode: 'INSECURE_API_TRANSPORT',
+        statusCode: 503,
+      }
+    );
+  }
+
   const cleanEmail = String(email || '').trim().toLowerCase();
   if (!isValidEmailAddress(cleanEmail)) {
     return createServiceError(
@@ -1060,18 +1077,25 @@ export async function requestAdminPasswordReset({ email } = {}) {
   });
 
   if (!res.success) {
+    const code = String(res.errorCode || '').toUpperCase();
+    // Defense-in-depth anti-enumeration: never surface delivery-failure clues to the public caller.
+    if (
+      code === 'EMAIL_DELIVERY_FAILED' ||
+      code === 'EMAIL_PROVIDER_UNAVAILABLE' ||
+      code === 'MAILER_UNAVAILABLE' ||
+      code === 'SMTP_ERROR'
+    ) {
+      return createServiceResponse({ requested: true }, ADMIN_FORGOT_PASSWORD_NEUTRAL_MESSAGE);
+    }
     return res;
   }
 
-  return createServiceResponse(
-    { requested: true },
-    'If an eligible administrator account exists for this email address, a secure password recovery link has been sent.'
-  );
+  return createServiceResponse({ requested: true }, ADMIN_FORGOT_PASSWORD_NEUTRAL_MESSAGE);
 }
 
 /**
  * Completes an administrator password reset via POST /api/v1/auth/reset-password.
- * Clears any stale admin session on success so the administrator signs in fresh with their new password.
+ * Sends the token exclusively in the HTTPS POST body and clears any stale admin session on success.
  */
 export async function resetAdminPassword({ token, newPassword, confirmPassword } = {}) {
   const policy = getAdminAccessPolicy();
@@ -1095,6 +1119,19 @@ export async function resetAdminPassword({ token, newPassword, confirmPassword }
         errorType: 'LocalAdapterAuthUnavailableError',
         errorCode: 'LOCAL_ADAPTER_AUTH_UNAVAILABLE',
         statusCode: 400,
+      }
+    );
+  }
+
+  const endpointUrl = buildApiUrl(API_ENDPOINTS.authResetPassword);
+  if (isProductionEnvironment() && /^http:\/\//i.test(endpointUrl)) {
+    return createServiceError(
+      'Administrator password reset requires a secure HTTPS API endpoint.',
+      null,
+      {
+        errorType: 'InsecureTransportError',
+        errorCode: 'INSECURE_API_TRANSPORT',
+        statusCode: 503,
       }
     );
   }

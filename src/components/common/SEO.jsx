@@ -116,5 +116,14 @@ export default function SEO(props) {
     jsonLd,
   ]);
 
+  useEffect(() => {
+    if (!props.referrerPolicy) return undefined;
+    setMetaTag('meta[name="referrer"]', 'name', 'referrer', props.referrerPolicy);
+    return () => {
+      const el = document.head.querySelector('meta[name="referrer"]');
+      if (el) el.remove();
+    };
+  }, [props.referrerPolicy]);
+
   return null;
 }

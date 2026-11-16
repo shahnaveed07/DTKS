@@ -463,15 +463,25 @@ export function formatAdminRecoveryError(errorOrRes, context = 'reset') {
   }
 
   if (
-    code === 'EMAIL_PROVIDER_UNAVAILABLE' ||
-    code === 'EMAIL_DELIVERY_FAILED' ||
-    code === 'MAILER_UNAVAILABLE' ||
-    code === 'SMTP_ERROR' ||
-    lower.includes('email delivery') ||
-    lower.includes('email provider') ||
-    lower.includes('mail service')
+    code === 'EMAIL_PROVIDER_UNCONFIGURED' ||
+    code === 'ADMIN_AUTH_UNCONFIGURED' ||
+    code === 'INSECURE_API_TRANSPORT' ||
+    code === 'INVALID_API_BASE_URL'
   ) {
-    return 'Password recovery emails are temporarily unavailable due to a mail delivery issue. Please try again shortly.';
+    return 'Administrator password recovery is temporarily unavailable because email recovery is not configured.';
+  }
+
+  if (
+    context === 'forgot' &&
+    (code === 'EMAIL_PROVIDER_UNAVAILABLE' ||
+      code === 'EMAIL_DELIVERY_FAILED' ||
+      code === 'MAILER_UNAVAILABLE' ||
+      code === 'SMTP_ERROR' ||
+      lower.includes('email delivery') ||
+      lower.includes('email provider') ||
+      lower.includes('mail service'))
+  ) {
+    return 'Password recovery service is temporarily unavailable. Please try again shortly.';
   }
 
   if (code === 'MISSING_RESET_TOKEN' || (context === 'reset' && code === 'TOKEN_REQUIRED')) {
@@ -520,7 +530,9 @@ export function formatAdminRecoveryError(errorOrRes, context = 'reset') {
     code === 'ADMIN_DEACTIVATED' ||
     code === 'ACCOUNT_DEACTIVATED'
   ) {
-    return 'Administrator access for this account has been disabled. Contact a Super Admin for assistance.';
+    return context === 'forgot'
+      ? 'If an eligible administrator account exists for this email address, a secure password recovery link has been sent.'
+      : 'This password reset request cannot be completed. Please contact a Super Admin for assistance.';
   }
 
   if (code === 'NETWORK_ERROR' || code === 'TIMEOUT_ERROR') {
@@ -531,12 +543,7 @@ export function formatAdminRecoveryError(errorOrRes, context = 'reset') {
     return 'Password recovery requires an active backend API connection. Configure VITE_DATA_ADAPTER=api and VITE_API_BASE_URL.';
   }
 
-  if (
-    code === 'INVALID_API_BASE_URL' ||
-    code === 'ADMIN_AUTH_UNCONFIGURED' ||
-    code === 'SERVICE_UNAVAILABLE' ||
-    status >= 500
-  ) {
+  if (code === 'SERVICE_UNAVAILABLE' || status >= 500) {
     return 'Password recovery service is temporarily unavailable. Please try again shortly.';
   }
 
@@ -550,4 +557,56 @@ export function formatAdminRecoveryError(errorOrRes, context = 'reset') {
   }
 
   return rawMessage || defaultMsg;
+}
+
+/**
+ * Extracts the Admin password-reset token strictly from the URL fragment (#token=...).
+ * Never falls back to query-string tokens so secrets are kept out of server logs and Referer headers.
+ */
+export function extractAdminResetTokenFromUrl({ hash = '' } = {}) {
+  const rawHash = String(hash || '').replace(/^#/, '').trim();
+  if (!rawHash) return '';
+
+  const paramString = rawHash.includes('?') ? rawHash.slice(rawHash.indexOf('?') + 1) : rawHash;
+  try {
+    const params = new URLSearchParams(paramString);
+    return String(params.get('token') || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Removes any token parameter from both fragment and query string so the browser URL bar
+ * and session history do not retain sensitive reset tokens.
+ */
+export function buildSanitizedAdminResetUrl({
+  pathname = '/admin/reset-password',
+  search = '',
+  hash = '',
+} = {}) {
+  const searchParams = new URLSearchParams(String(search || '').replace(/^\?/, ''));
+  const hadQueryToken = searchParams.has('token');
+  searchParams.delete('token');
+  const cleanSearch = searchParams.toString();
+
+  const rawHash = String(hash || '').replace(/^#/, '');
+  let hadHashToken = false;
+  let cleanHash = rawHash;
+
+  if (rawHash.includes('=')) {
+    const hashParams = new URLSearchParams(rawHash);
+    hadHashToken = hashParams.has('token');
+    hashParams.delete('token');
+    cleanHash = hashParams.toString();
+  }
+
+  const nextUrl = `${pathname || '/admin/reset-password'}${cleanSearch ? `?${cleanSearch}` : ''}${
+    cleanHash ? `#${cleanHash}` : ''
+  }`;
+
+  return {
+    nextUrl,
+    hadTokenInUrl: hadHashToken || hadQueryToken,
+  };
 }

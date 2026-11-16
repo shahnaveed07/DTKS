@@ -3129,7 +3129,18 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
           headers: { get: () => 'application/json' },
           json: async () => ({
             success: false,
-            error: { code: 'EMAIL_PROVIDER_UNAVAILABLE', message: 'Email delivery failed.' },
+            error: { code: 'EMAIL_DELIVERY_FAILED', message: 'Email delivery failed.' },
+          }),
+        };
+      }
+      if (forgotScenario === 'provider_unconfigured') {
+        return {
+          ok: false,
+          status: 503,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            success: false,
+            error: { code: 'EMAIL_PROVIDER_UNCONFIGURED', message: 'Not configured.' },
           }),
         };
       }
@@ -3139,8 +3150,8 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
         headers: { get: () => 'application/json' },
         json: async () => ({
           success: true,
-          message: 'If an eligible administrator account exists, a reset link has been sent.',
-          data: { requested: true },
+          message: 'Account matched.',
+          data: { requested: true, resetEmailSent: true, deliveryStatus: 'sent' },
         }),
       };
     }
@@ -3231,6 +3242,26 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
     assert.equal(localForgot.errorCode, 'LOCAL_ADAPTER_AUTH_UNAVAILABLE');
     assert.equal(calls.length, 0);
 
+    // 1b. Production blocks plain HTTP API base URL before transmitting email or token
+    setRuntimeEnvOverrides({
+      isProd: true,
+      dataAdapter: 'api',
+      apiBaseUrl: 'http://insecure.dreamtechkashmirsolutions.studio/api/v1',
+    });
+    const insecureForgot = await requestAdminPasswordReset({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+    });
+    assert.equal(insecureForgot.success, false);
+    assert.equal(insecureForgot.errorCode, 'INSECURE_API_TRANSPORT');
+    const insecureReset = await resetAdminPassword({
+      token: 'tok-123',
+      newPassword: 'StrongPassword#2026',
+      confirmPassword: 'StrongPassword#2026',
+    });
+    assert.equal(insecureReset.success, false);
+    assert.equal(insecureReset.errorCode, 'INSECURE_API_TRANSPORT');
+    assert.equal(calls.length, 0);
+
     // 2. API mode validation prevents bad calls before network
     setRuntimeEnvOverrides({
       isProd: true,
@@ -3259,13 +3290,16 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
     assert.equal(mismatchReset.errorCode, 'PASSWORD_MISMATCH');
     assert.equal(calls.length, 0);
 
-    // 3. Forgot password calls /api/v1/auth/forgot-password with normalized email & neutral response
+    // 3. Forgot password calls /api/v1/auth/forgot-password with normalized email & anti-enumeration response
     const okForgot = await requestAdminPasswordReset({
       email: '  ADMIN@DreamTechKashmirSolutions.Studio ',
     });
     assert.equal(okForgot.success, true);
     assert.equal(calls[0].url, 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/forgot-password');
     assert.equal(calls[0].body.email, 'admin@dreamtechkashmirsolutions.studio');
+    assert.deepEqual(okForgot.data, { requested: true });
+    assert.equal(okForgot.data.resetEmailSent, undefined);
+    assert.equal(okForgot.data.deliveryStatus, undefined);
     assert.equal(okForgot.data.token, undefined);
 
     forgotScenario = 'rate_limited';
@@ -3275,12 +3309,22 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
     assert.equal(rateLimitedForgot.success, false);
     assert.equal(rateLimitedForgot.statusCode, 429);
 
+    // EMAIL_DELIVERY_FAILED from an upstream response must normalize identically to success (no enumeration)
     forgotScenario = 'provider_unavailable';
-    const providerErrForgot = await requestAdminPasswordReset({
+    const deliveryFailedForgot = await requestAdminPasswordReset({
       email: 'admin@dreamtechkashmirsolutions.studio',
     });
-    assert.equal(providerErrForgot.success, false);
-    assert.equal(providerErrForgot.errorCode, 'EMAIL_PROVIDER_UNAVAILABLE');
+    assert.equal(deliveryFailedForgot.success, true);
+    assert.deepEqual(deliveryFailedForgot.data, { requested: true });
+    assert.equal(deliveryFailedForgot.message, okForgot.message);
+
+    // Unconfigured provider remains explicitly reported uniformly
+    forgotScenario = 'provider_unconfigured';
+    const unconfiguredForgot = await requestAdminPasswordReset({
+      email: 'admin@dreamtechkashmirsolutions.studio',
+    });
+    assert.equal(unconfiguredForgot.success, false);
+    assert.equal(unconfiguredForgot.errorCode, 'EMAIL_PROVIDER_UNCONFIGURED');
 
     // 4. Reset password error codes (invalid, expired, already used, revoked)
     for (const [mode, expectedCode] of [
@@ -3299,7 +3343,7 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
       assert.equal(errRes.errorCode, expectedCode);
     }
 
-    // 5. Valid reset clears stale admin session (no auto-login) and leaves client session isolated
+    // 5. Valid reset clears stale admin session (no auto-login), sends token only in POST body, never touches storage
     setAdminAuthSession({
       accessToken: 'stale-admin-access',
       refreshToken: 'stale-admin-refresh',
@@ -3319,17 +3363,24 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
       confirmPassword: 'NewStrongPassword#2026',
     });
     assert.equal(okReset.success, true);
-    assert.equal(
-      calls[calls.length - 1].url,
-      'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/reset-password'
-    );
-    assert.deepEqual(calls[calls.length - 1].body, {
+    const resetCall = calls[calls.length - 1];
+    assert.equal(resetCall.url, 'https://api.dreamtechkashmirsolutions.studio/api/v1/auth/reset-password');
+    assert.equal(resetCall.url.includes('valid-tok-999'), false);
+    assert.deepEqual(resetCall.body, {
       token: 'valid-tok-999',
       newPassword: 'NewStrongPassword#2026',
       confirmPassword: 'NewStrongPassword#2026',
     });
     assert.equal(getAdminAuthSession(), null, 'Successful password reset must clear stale admin session');
     assert.equal(getClientAuthSession()?.accessToken, 'client-access');
+
+    // Ensure token never appears in localStorage
+    const storedPairs = [];
+    for (let i = 0; i < globalThis.localStorage.length; i += 1) {
+      const k = globalThis.localStorage.key(i);
+      if (k) storedPairs.push([k, globalThis.localStorage.getItem(k)]);
+    }
+    assert.equal(JSON.stringify(storedPairs).includes('valid-tok-999'), false);
 
     // 6. Ensure no client endpoints or /auth/refresh were triggered
     assert.equal(
@@ -3350,13 +3401,14 @@ test('Admin Password Recovery APIs call dedicated admin endpoints with skipAuthR
   }
 });
 
-test('Admin Login & App routing configure Forgot/Reset Password publicly and strictly isolate from Client Auth UI', async () => {
+test('Admin Login & App routing configure Forgot/Reset Password publicly, read fragment tokens, scrub URL history, and enforce no-referrer', async () => {
   const { readFile } = await import('node:fs/promises');
-  const [appSrc, loginSrc, forgotSrc, resetSrc] = await Promise.all([
+  const [appSrc, loginSrc, forgotSrc, resetSrc, headersSrc] = await Promise.all([
     readFile(new URL('../App.jsx', import.meta.url), 'utf8'),
     readFile(new URL('../pages/Admin/AdminLoginPage.jsx', import.meta.url), 'utf8'),
     readFile(new URL('../pages/Admin/AdminForgotPasswordPage.jsx', import.meta.url), 'utf8'),
     readFile(new URL('../pages/Admin/AdminResetPasswordPage.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../public/_headers', import.meta.url), 'utf8'),
   ]);
 
   assert.match(loginSrc, /to="\/admin\/forgot-password"/);
@@ -3375,17 +3427,27 @@ test('Admin Login & App routing configure Forgot/Reset Password publicly and str
   assert.match(forgotSrc, /Forgot Admin Password\?/);
   assert.match(forgotSrc, /Send Reset Link/);
   assert.match(forgotSrc, /requestAdminPasswordReset/);
+  assert.match(forgotSrc, /referrerPolicy="no-referrer"/);
   assert.equal(forgotSrc.includes('clientAuth'), false);
   assert.equal(forgotSrc.includes('ClientAuth'), false);
 
   assert.match(resetSrc, /Reset Administrator Password/);
-  assert.match(resetSrc, /useSearchParams/);
+  assert.match(resetSrc, /extractAdminResetTokenFromUrl/);
+  assert.match(resetSrc, /buildSanitizedAdminResetUrl/);
+  assert.match(resetSrc, /history\.replaceState/);
+  assert.match(resetSrc, /referrerPolicy="no-referrer"/);
+  assert.equal(resetSrc.includes('useSearchParams'), false);
   assert.match(resetSrc, /PasswordInput/);
   assert.match(resetSrc, /resetAdminPassword/);
   assert.match(resetSrc, /navigate\(['"]\/admin\/login['"]/);
   assert.equal(resetSrc.includes('clientAuth'), false);
   assert.equal(resetSrc.includes('ClientAuth'), false);
   assert.equal(resetSrc.includes('console.log'), false);
+  assert.equal(resetSrc.includes('localStorage'), false);
+  assert.equal(resetSrc.includes('sessionStorage'), false);
+
+  assert.match(headersSrc, /\/admin\/reset-password[\s\S]*Referrer-Policy:\s*no-referrer/);
+  assert.match(headersSrc, /\/admin\/forgot-password[\s\S]*Referrer-Policy:\s*no-referrer/);
 });
 
 

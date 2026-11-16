@@ -4,6 +4,14 @@
 /admin/*
   X-Robots-Tag: noindex, nofollow
 
+/admin/forgot-password
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+
+/admin/reset-password
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+
 /account
   X-Robots-Tag: noindex, nofollow
 

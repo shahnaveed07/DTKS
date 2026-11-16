@@ -58,7 +58,11 @@ export default function AdminForgotPasswordPage() {
   if (policy === 'blocked_production_local') {
     return (
       <div className="min-h-screen bg-[#F7FAF7] flex flex-col justify-center items-center p-6">
-        <SEO noindex fullTitle="Forgot Admin Password | DreamTech Kashmir Solutions (DTKS)" />
+        <SEO
+          noindex
+          referrerPolicy="no-referrer"
+          fullTitle="Forgot Admin Password | DreamTech Kashmir Solutions (DTKS)"
+        />
         <div className="max-w-lg w-full rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-5">
           <div className="flex items-center justify-between">
             <BrandLogo variant="header" />
@@ -89,7 +93,11 @@ export default function AdminForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-[#F7FAF7] flex flex-col justify-center items-center p-6">
-      <SEO noindex fullTitle="Forgot Admin Password | DreamTech Kashmir Solutions (DTKS)" />
+      <SEO
+        noindex
+        referrerPolicy="no-referrer"
+        fullTitle="Forgot Admin Password | DreamTech Kashmir Solutions (DTKS)"
+      />
 
       <div className="max-w-md w-full rounded-xl border border-[#E3EBE5] bg-white p-8 shadow-xs space-y-6">
         <div className="flex items-center justify-between">

@@ -17,6 +17,8 @@ import {
   formatAdminAuthError,
   validateAdminForgotPasswordInput,
   formatAdminRecoveryError,
+  extractAdminResetTokenFromUrl,
+  buildSanitizedAdminResetUrl,
 } from './authValidation.js';
 
 test('evaluatePasswordStrength scores empty, weak, fair, good, and strong passwords accurately', () => {
@@ -248,7 +250,17 @@ test('validateAdminForgotPasswordInput and formatAdminRecoveryError validate ema
   );
   assert.match(
     formatAdminRecoveryError({ errorCode: 'EMAIL_PROVIDER_UNAVAILABLE', statusCode: 503 }, 'forgot'),
-    /mail delivery issue/i
+    /temporarily unavailable/i
+  );
+  assert.equal(
+    /mail delivery|email delivery|email provider/i.test(
+      formatAdminRecoveryError({ errorCode: 'EMAIL_DELIVERY_FAILED', statusCode: 503 }, 'forgot')
+    ),
+    false
+  );
+  assert.match(
+    formatAdminRecoveryError({ errorCode: 'EMAIL_PROVIDER_UNCONFIGURED', statusCode: 503 }, 'forgot'),
+    /not configured/i
   );
   assert.match(
     formatAdminRecoveryError({ errorCode: 'MISSING_RESET_TOKEN', statusCode: 400 }, 'reset'),
@@ -274,4 +286,40 @@ test('validateAdminForgotPasswordInput and formatAdminRecoveryError validate ema
     formatAdminRecoveryError({ statusCode: 500, message: 'SQLITE_ERROR: stack trace' }, 'reset'),
     /temporarily unavailable/i
   );
+});
+
+test('extractAdminResetTokenFromUrl reads strictly from fragment (#token=...) and buildSanitizedAdminResetUrl removes tokens', () => {
+  assert.equal(extractAdminResetTokenFromUrl({ hash: '#token=abc123_xyz' }), 'abc123_xyz');
+  assert.equal(extractAdminResetTokenFromUrl({ hash: '#foo=1&token=tok%2B99&bar=2' }), 'tok+99');
+  assert.equal(extractAdminResetTokenFromUrl({ hash: '', search: '?token=query-secret' }), '');
+
+  const cleanedFrag = buildSanitizedAdminResetUrl({
+    pathname: '/admin/reset-password',
+    search: '',
+    hash: '#token=secret123',
+  });
+  assert.deepEqual(cleanedFrag, {
+    nextUrl: '/admin/reset-password',
+    hadTokenInUrl: true,
+  });
+
+  const cleanedMixed = buildSanitizedAdminResetUrl({
+    pathname: '/admin/reset-password',
+    search: '?token=query-secret&keep=1',
+    hash: '#token=frag-secret&section=form',
+  });
+  assert.deepEqual(cleanedMixed, {
+    nextUrl: '/admin/reset-password?keep=1#section=form',
+    hadTokenInUrl: true,
+  });
+
+  const noToken = buildSanitizedAdminResetUrl({
+    pathname: '/admin/reset-password',
+    search: '',
+    hash: '',
+  });
+  assert.deepEqual(noToken, {
+    nextUrl: '/admin/reset-password',
+    hadTokenInUrl: false,
+  });
 });
