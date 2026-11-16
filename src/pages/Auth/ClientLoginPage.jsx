@@ -193,12 +193,18 @@ export default function ClientLoginPage() {
                   required
                   error={fieldErrors.password}
                 />
-                <div className="flex justify-end pt-1">
+                <div className="flex items-center justify-between gap-3 pt-1">
                   <Link
                     to="/forgot-password"
                     className="text-xs font-medium text-[#16834A] hover:underline"
                   >
                     Forgot password?
+                  </Link>
+                  <Link
+                    to="/admin/login"
+                    className="text-xs font-medium text-[#64756B] hover:text-[#16834A] hover:underline transition-colors"
+                  >
+                    Admin Login
                   </Link>
                 </div>
               </div>
